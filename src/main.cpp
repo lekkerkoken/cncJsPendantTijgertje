@@ -154,47 +154,22 @@ void loop()
     // INPUT
     // --------------------------------------------------------
 
-    matrix.update();
-
-    encoder.update();
-
     input.update();
-
-
-    /*
-        Eén nieuw event per update.
-    */
 
     if(input.available())
     {
         Event event =
             input.read();
 
-
-        /*
-            Encoder-pulsen gaan naar de JogPlanner.
-
-            Alle overige events gaan naar
-            de PendantController.
-        */
-
-        if(
-            event.type ==
-            EVENT_ENCODER_PULSE
-        )
+        if(event.type == EVENT_ENCODER_PULSE)
         {
-            jogPlanner.encoder(
-                event
-            );
+            jogPlanner.encoder(event);
         }
         else
         {
-            controller.handle(
-                event
-            );
+            controller.handle(event);
         }
     }
-
 
     // --------------------------------------------------------
     // PENDANT CONTROLLER

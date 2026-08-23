@@ -54,12 +54,67 @@ void ButtonMatrix::begin()
     }
 
 
+    currentKeyState =
+        -1;
+
+    stableKey =
+        -1;
+
+    candidateKey =
+        -1;
+
+    candidateSince =
+        millis();
+
     lastKey =
         -1;
 
 
-    currentKeyState =
-        -1;
+    // --------------------------------------------------------
+    // Event queue
+    // --------------------------------------------------------
+
+    eventQueue =
+        xQueueCreate(
+            EVENT_QUEUE_LENGTH,
+            sizeof(int)
+        );
+
+
+    if(eventQueue == nullptr)
+    {
+        Serial.println(
+            "[ButtonMatrix] ERROR: Could not create event queue"
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // Matrix task
+    // --------------------------------------------------------
+
+    BaseType_t result =
+        xTaskCreate(
+            ButtonMatrix::taskEntry,
+            "ButtonMatrix",
+            TASK_STACK_SIZE,
+            this,
+            TASK_PRIORITY,
+            &taskHandle
+        );
+
+
+    if(result != pdPASS)
+    {
+        taskHandle =
+            nullptr;
+
+        Serial.println(
+            "[ButtonMatrix] ERROR: Could not create task"
+        );
+    }
 }
 
 
@@ -69,6 +124,23 @@ void ButtonMatrix::begin()
 // ============================================================
 
 void ButtonMatrix::update()
+{
+    /*
+        Matrix wordt nu zelfstandig gescand door
+        de FreeRTOS task.
+
+        Deze functie blijft voorlopig bestaan als
+        compatibility interface.
+    */
+}
+
+
+
+// ============================================================
+// SCAN
+// ============================================================
+
+int ButtonMatrix::scan()
 {
     int detectedKey =
         -1;
@@ -109,20 +181,140 @@ void ButtonMatrix::update()
     }
 
 
-    currentKeyState =
-        detectedKey;
+    return detectedKey;
+}
 
 
-    /*
-        lastKey is alleen bedoeld voor
-        backwards-compatible available/read.
 
-        InputManager gebruikt voor de
-        debounce rechtstreeks currentKey().
-    */
+// ============================================================
+// TASK ENTRY
+// ============================================================
 
-    lastKey =
-        detectedKey;
+void ButtonMatrix::taskEntry(
+    void* parameter
+)
+{
+    ButtonMatrix* matrix =
+        static_cast<ButtonMatrix*>(parameter);
+
+
+    if(matrix != nullptr)
+    {
+        matrix->task();
+    }
+
+
+    vTaskDelete(nullptr);
+}
+
+
+
+// ============================================================
+// TASK
+// ============================================================
+
+void ButtonMatrix::task()
+{
+    for(;;)
+    {
+        int detectedKey =
+            scan();
+
+
+        currentKeyState =
+            detectedKey;
+
+
+        /*
+            Fysieke toestand is veranderd.
+            Start opnieuw met debouncen.
+        */
+
+        if(detectedKey != candidateKey)
+        {
+            candidateKey =
+                detectedKey;
+
+            candidateSince =
+                millis();
+
+            vTaskDelay(
+                pdMS_TO_TICKS(TASK_DELAY_MS)
+            );
+
+            continue;
+        }
+
+
+        /*
+            Toestand moet lang genoeg stabiel zijn.
+        */
+
+        if(
+            millis() - candidateSince <
+            DEBOUNCE_TIME
+        )
+        {
+            vTaskDelay(
+                pdMS_TO_TICKS(TASK_DELAY_MS)
+            );
+
+            continue;
+        }
+
+
+        /*
+            Toestand is stabiel, maar niet veranderd
+            ten opzichte van de laatst geaccepteerde
+            toestand.
+        */
+
+        if(candidateKey == stableKey)
+        {
+            vTaskDelay(
+                pdMS_TO_TICKS(TASK_DELAY_MS)
+            );
+
+            continue;
+        }
+
+
+        /*
+            Nieuwe toestand accepteren.
+        */
+
+        stableKey =
+            candidateKey;
+
+
+        /*
+            Alleen een overgang van
+            geen toets → toets genereert
+            een event.
+        */
+
+        if(stableKey != -1)
+        {
+            int key =
+                stableKey;
+
+
+            xQueueSend(
+                eventQueue,
+                &key,
+                0
+            );
+
+
+            lastKey =
+                key;
+        }
+
+
+        vTaskDelay(
+            pdMS_TO_TICKS(TASK_DELAY_MS)
+        );
+    }
 }
 
 
@@ -133,7 +325,13 @@ void ButtonMatrix::update()
 
 bool ButtonMatrix::available()
 {
-    return lastKey != -1;
+    if(eventQueue == nullptr)
+        return false;
+
+
+    return uxQueueMessagesWaiting(
+        eventQueue
+    ) > 0;
 }
 
 
@@ -145,7 +343,18 @@ bool ButtonMatrix::available()
 int ButtonMatrix::read()
 {
     int key =
-        lastKey;
+        -1;
+
+
+    if(eventQueue == nullptr)
+        return key;
+
+
+    xQueueReceive(
+        eventQueue,
+        &key,
+        0
+    );
 
 
     lastKey =

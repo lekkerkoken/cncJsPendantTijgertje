@@ -42,7 +42,7 @@ void JogPlanner::encoder(const Event& event)
     {
         case EVENT_ENCODER_PULSE:
 
-            horizon += STEP_SIZE;
+            horizon += STEP_SIZE*event.value;
 
             break;
 

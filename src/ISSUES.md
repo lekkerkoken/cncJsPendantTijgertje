@@ -1,7 +1,22 @@
-ISS-001 — De Encoder wordt de bron van EncoderEvent. Voor ontwikkeling kan een tijdelijke seriële testinput events in de Encoder injecteren. Hierdoor blijft de volledige productieketen intact en hoeft main.cpp geen Event-objecten te manipuleren.
+ISS-001 — Encoder als volwaardige InputManager-bron ✅ — De Encoder wordt de bron van EncoderEvent. Voor ontwikkeling kan een tijdelijke seriële testinput events in de Encoder injecteren. Hierdoor blijft de volledige productieketen intact en hoeft main.cpp geen Event-objecten te manipuleren.
 
-ISS-002 — InputManager coalescing
-Meerdere encoderpulsen kunnen worden samengevoegd voordat ze naar de JogPlanner gaan.
+ISS-002 — ISS-002 — InputManager coalescing
+De fysieke input wordt asynchroon verzameld. Encoderpulsen worden samengevoegd tot één delta voordat ze als InputEvent naar de PendantController worden gestuurd.
+
+Met deze verantwoordelijkheden:
+
+Class	Verantwoordelijkheid
+Encoder	Quadrature via ISR + encoder button
+ButtonMatrix	Matrix scanning + debounce
+InputManager	Input queues lezen + events normaliseren + encoder coalescing
+PendantController	InputEvents interpreteren
+JogPlanner	Joggedrag uitvoeren
+
+En voorlopig:
+
+geen core pinning.
+
+FreeRTOS mag zelf bepalen waar de tasks draaien.
 
 ISS-003 — Echte encoder testen
 De tijdelijke KEY_1 → LEFT / KEY_3 → RIGHT simulatie vervangen zodra de echte encoder beschikbaar is.

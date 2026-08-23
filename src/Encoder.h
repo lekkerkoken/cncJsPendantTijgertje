@@ -3,6 +3,11 @@
 
 #include <Arduino.h>
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+
+
 enum EncoderEventType
 {
     ENCODER_NONE,
@@ -29,10 +34,16 @@ public:
         int buttonPin
     );
 
+    // --------------------------------------------------------
+    // Compatibility
+    // --------------------------------------------------------
+
     void update();
 
-
     bool available();
+//nu kan input ook zijn llllll
+//of lllr
+//of rrrrrr
 
     EncoderEvent read();
 
@@ -42,7 +53,8 @@ public:
 
     void injectPulse(
         int value
-    );    
+    );
+
 
 private:
 
@@ -51,18 +63,49 @@ private:
     int buttonPin = -1;
 
 
-    EncoderEvent lastEvent;
-//nu kan input ook zijn llllll
-//of lllr
-//of rrrrrr
+    // --------------------------------------------------------
+    // FreeRTOS
+    // --------------------------------------------------------
+
+    QueueHandle_t eventQueue = nullptr;
+
+    TaskHandle_t taskHandle = nullptr;
+
+
+    static constexpr int EVENT_QUEUE_LENGTH = 16;
+
+    static constexpr uint32_t TASK_STACK_SIZE = 2048;
+
+    static constexpr UBaseType_t TASK_PRIORITY = 3;
+
+    static constexpr uint32_t TASK_DELAY_MS = 1;
+
+
+    static void taskEntry(
+        void* parameter
+    );
+
+    void task();
+
 
     // --------------------------------------------------------
     // Rotary encoder
     // --------------------------------------------------------
 
+    volatile int encoderAccumulator = 0;
+
     uint8_t lastEncoderState = 0;
 
-    int encoderAccumulator = 0;
+
+    portMUX_TYPE encoderMux =
+        portMUX_INITIALIZER_UNLOCKED;
+
+
+    static void ARDUINO_ISR_ATTR encoderISR(
+        void* parameter
+    );
+
+    void handleEncoderTransition();
 
 
     // --------------------------------------------------------
@@ -76,6 +119,9 @@ private:
     bool candidateButtonState = HIGH;
 
     unsigned long candidateButtonSince = 0;
+
+
+    void updateButton();
 };
 
 

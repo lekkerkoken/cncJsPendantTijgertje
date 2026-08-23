@@ -2,6 +2,13 @@
 #define INPUT_MANAGER_H
 
 
+#include <Arduino.h>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+
+
 #include "Event.h"
 #include "ButtonMatrix.h"
 #include "Encoder.h"
@@ -16,6 +23,10 @@ public:
         Encoder& encoder
     );
 
+    // --------------------------------------------------------
+    // Compatibility
+    // --------------------------------------------------------
+
     void update();
 
     bool available();
@@ -26,30 +37,54 @@ public:
 private:
 
     ButtonMatrix* matrix = nullptr;
+
     Encoder* encoder = nullptr;
 
 
-    Event lastEvent;
+    // --------------------------------------------------------
+    // FreeRTOS
+    // --------------------------------------------------------
+
+    QueueHandle_t eventQueue = nullptr;
+
+    TaskHandle_t taskHandle = nullptr;
+
+
+    static constexpr int EVENT_QUEUE_LENGTH = 16;
+
+    static constexpr uint32_t TASK_STACK_SIZE = 2048;
+
+    static constexpr UBaseType_t TASK_PRIORITY = 2;
+
+    static constexpr uint32_t TASK_DELAY_MS = 1;
+
+
+    static void taskEntry(
+        void* parameter
+    );
+
+    void task();
 
 
     // --------------------------------------------------------
-    // Button debounce
+    // Encoder coalescing
     // --------------------------------------------------------
 
-    static constexpr unsigned long DEBOUNCE_TIME = 10;
+    int encoderCoalescedDelta = 0;
 
-    int stableKey = -1;
+    int encoderDirection = 0;
 
-    int candidateKey = -1;
 
-    unsigned long candidateSince = 0;
+    void flushEncoderDelta();
 
 
     // --------------------------------------------------------
     // Event creation
     // --------------------------------------------------------
 
-    Event buttonEvent(int key);
+    Event buttonEvent(
+        int key
+    );
 
     Event encoderEvent(
         EncoderEvent event

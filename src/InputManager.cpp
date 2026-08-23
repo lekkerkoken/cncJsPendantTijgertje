@@ -19,25 +19,62 @@ void InputManager::begin(
         &encoder;
 
 
-    lastEvent.type =
-        EVENT_NONE;
+    // --------------------------------------------------------
+    // Output event queue
+    // --------------------------------------------------------
 
-    lastEvent.value =
+    eventQueue =
+        xQueueCreate(
+            EVENT_QUEUE_LENGTH,
+            sizeof(Event)
+        );
+
+
+    if(eventQueue == nullptr)
+    {
+        Serial.println(
+            "[InputManager] ERROR: Could not create event queue"
+        );
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // Encoder coalescing state
+    // --------------------------------------------------------
+
+    encoderCoalescedDelta =
+        0;
+
+    encoderDirection =
         0;
 
 
     // --------------------------------------------------------
-    // Button state
+    // InputManager task
     // --------------------------------------------------------
 
-    stableKey =
-        -1;
+    BaseType_t result =
+        xTaskCreate(
+            InputManager::taskEntry,
+            "InputManager",
+            TASK_STACK_SIZE,
+            this,
+            TASK_PRIORITY,
+            &taskHandle
+        );
 
-    candidateKey =
-        -1;
 
-    candidateSince =
-        0;
+    if(result != pdPASS)
+    {
+        taskHandle =
+            nullptr;
+
+        Serial.println(
+            "[InputManager] ERROR: Could not create task"
+        );
+    }
 }
 
 
@@ -48,129 +85,310 @@ void InputManager::begin(
 
 void InputManager::update()
 {
-    lastEvent.type =
-        EVENT_NONE;
+    /*
+        InputManager wordt nu zelfstandig verwerkt door
+        de FreeRTOS task.
 
-    lastEvent.value =
-        0;
+        Deze functie blijft voorlopig bestaan als
+        compatibility interface.
+
+        Hierdoor hoeft de bestaande main loop niet
+        meteen aangepast te worden.
+    */
+}
 
 
-    // ========================================================
-    // ENCODER
-    // ========================================================
 
-    if(encoder != nullptr)
+// ============================================================
+// TASK ENTRY
+// ============================================================
+
+void InputManager::taskEntry(
+    void* parameter
+)
+{
+    InputManager* inputManager =
+        static_cast<InputManager*>(parameter);
+
+
+    if(inputManager != nullptr)
     {
-        encoder->update();
+        inputManager->task();
+    }
 
-        if(encoder->available())
+
+    vTaskDelete(nullptr);
+}
+
+
+
+// ============================================================
+// TASK
+// ============================================================
+
+void InputManager::task()
+{
+    for(;;)
+    {
+        bool didWork =
+            false;
+
+
+        // ====================================================
+        // ENCODER
+        // ====================================================
+
+        if(encoder != nullptr)
         {
-            EncoderEvent event =
-                encoder->read();
+            while(
+                encoder->available()
+            )
+            {
+                EncoderEvent encoderEventData =
+                    encoder->read();
 
-            lastEvent =
-                encoderEvent(event);
 
-            return;
+                switch(
+                    encoderEventData.type
+                )
+                {
+                    // ========================================
+                    // ROTARY PULSE
+                    // ========================================
+
+                    case ENCODER_PULSE:
+                    {
+                        int pulse =
+                            encoderEventData.value;
+
+
+                        if(pulse == 0)
+                            break;
+
+
+                        int direction =
+                            pulse > 0
+                                ? +1
+                                : -1;
+
+
+                        /*
+                            Een richtingsverandering is een
+                            expliciete grens tussen twee
+                            bedieningsintenties.
+
+                            De bestaande batch wordt daarom
+                            eerst gepubliceerd.
+                        */
+
+                        if(
+                            encoderDirection != 0 &&
+                            direction != encoderDirection
+                        )
+                        {
+                            flushEncoderDelta();
+                        }
+
+
+                        /*
+                            Start een nieuwe batch wanneer
+                            nodig.
+                        */
+
+                        encoderDirection =
+                            direction;
+
+
+                        /*
+                            Meerdere pulsen in dezelfde
+                            richting worden samengevoegd.
+                        */
+
+                        encoderCoalescedDelta +=
+                            pulse;
+
+
+                        didWork =
+                            true;
+
+                        break;
+                    }
+
+
+                    // ========================================
+                    // ENCODER PRESS
+                    // ========================================
+
+                    case ENCODER_PRESS:
+                    {
+                        /*
+                            Een press is een afzonderlijk
+                            event en wordt nooit met een
+                            encoder-delta gecombineerd.
+                        */
+
+                        flushEncoderDelta();
+
+
+                        Event event =
+                            encoderEvent(
+                                encoderEventData
+                            );
+
+
+                        if(event.type != EVENT_NONE)
+                        {
+                            xQueueSend(
+                                eventQueue,
+                                &event,
+                                0
+                            );
+                        }
+
+
+                        didWork =
+                            true;
+
+                        break;
+                    }
+
+
+                    case ENCODER_NONE:
+
+                        break;
+                }
+            }
+
+
+            /*
+                Publiceer de laatst verzamelde encoderbatch.
+
+                Een volgende task-run kan daarna opnieuw
+                dezelfde richting verzamelen.
+
+                Een richtingsverandering wordt hierboven
+                al onmiddellijk als batch-grens behandeld.
+            */
+
+            flushEncoderDelta();
+        }
+
+
+        // ====================================================
+        // BUTTON MATRIX
+        // ====================================================
+
+        if(matrix != nullptr)
+        {
+            while(
+                matrix->available()
+            )
+            {
+                int key =
+                    matrix->read();
+
+
+                Event event =
+                    buttonEvent(key);
+
+
+                if(event.type != EVENT_NONE)
+                {
+                    xQueueSend(
+                        eventQueue,
+                        &event,
+                        0
+                    );
+
+
+                    didWork =
+                        true;
+
+
+                    // ------------------------------------------------
+                    // DEBUG
+                    // ------------------------------------------------
+
+                    Serial.print(
+                        "[InputManager] Key event: "
+                    );
+
+                    Serial.print(
+                        key
+                    );
+
+                    Serial.print(
+                        " -> event type "
+                    );
+
+                    Serial.println(
+                        event.type
+                    );
+                }
+            }
+        }
+
+
+        /*
+            Bij input blijven we direct opnieuw kijken.
+            Zonder input geven we de CPU weer vrij.
+        */
+
+        if(!didWork)
+        {
+            vTaskDelay(
+                pdMS_TO_TICKS(TASK_DELAY_MS)
+            );
+        }
+        else
+        {
+            taskYIELD();
         }
     }
+}
 
 
-    // ========================================================
-    // BUTTON MATRIX
-    // ========================================================
 
-    if(matrix == nullptr)
-        return;
+// ============================================================
+// FLUSH ENCODER DELTA
+// ============================================================
 
-
-    matrix->update();
-
-    int currentKey =
-        matrix->currentKey();
-
-    /*
-        Fysieke toestand is veranderd.
-
-        Start opnieuw met debouncen.
-    */
-
-    if(currentKey != candidateKey)
+void InputManager::flushEncoderDelta()
+{
+    if(encoderCoalescedDelta == 0)
     {
-        candidateKey =
-            currentKey;
-
-        candidateSince =
-            millis();
+        encoderDirection =
+            0;
 
         return;
     }
 
 
-    /*
-        Toestand moet DEBOUNCE_TIME
-        stabiel blijven.
-    */
+    Event event;
 
-    if(
-        millis() - candidateSince <
-        DEBOUNCE_TIME
-    )
-    {
-        return;
-    }
+    event.type =
+        EVENT_ENCODER_PULSE;
+
+    event.value =
+        encoderCoalescedDelta;
 
 
-    /*
-        Toestand is stabiel, maar is niet
-        veranderd ten opzichte van de
-        laatst geaccepteerde toestand.
-    */
-
-    if(candidateKey == stableKey)
-        return;
+    xQueueSend(
+        eventQueue,
+        &event,
+        0
+    );
 
 
     /*
-        Nieuwe toestand accepteren.
+        Batch is gepubliceerd.
     */
 
-    stableKey =
-        candidateKey;
+    encoderCoalescedDelta =
+        0;
 
-
-    /*
-        Alleen een overgang van
-        geen toets → toets genereert
-        een event.
-    */
-
-    if(stableKey != -1)
-    {
-        lastEvent =
-            buttonEvent(stableKey);
-
-
-        // ----------------------------------------------------
-        // DEBUG
-        // ----------------------------------------------------
-
-        Serial.print(
-            "[InputManager] Key event: "
-        );
-
-        Serial.print(
-            stableKey
-        );
-
-        Serial.print(
-            " -> event type "
-        );
-
-        Serial.println(
-            lastEvent.type
-        );
-    }
+    encoderDirection =
+        0;
 }
 
 
@@ -329,7 +547,13 @@ Event InputManager::encoderEvent(
 
 bool InputManager::available()
 {
-    return lastEvent.type != EVENT_NONE;
+    if(eventQueue == nullptr)
+        return false;
+
+
+    return uxQueueMessagesWaiting(
+        eventQueue
+    ) > 0;
 }
 
 
@@ -340,16 +564,25 @@ bool InputManager::available()
 
 Event InputManager::read()
 {
-    Event result =
-        lastEvent;
+    Event event;
 
-
-    lastEvent.type =
+    event.type =
         EVENT_NONE;
 
-    lastEvent.value =
+    event.value =
         0;
 
 
-    return result;
+    if(eventQueue == nullptr)
+        return event;
+
+
+    xQueueReceive(
+        eventQueue,
+        &event,
+        0
+    );
+
+
+    return event;
 }

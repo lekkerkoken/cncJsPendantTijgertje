@@ -39,11 +39,25 @@ void Encoder::begin(
     );
 
 
-    lastEvent.type =
-        ENCODER_NONE;
+    // --------------------------------------------------------
+    // Event queue
+    // --------------------------------------------------------
 
-    lastEvent.value =
-        0;
+    eventQueue =
+        xQueueCreate(
+            EVENT_QUEUE_LENGTH,
+            sizeof(EncoderEvent)
+        );
+
+
+    if(eventQueue == nullptr)
+    {
+        Serial.println(
+            "[Encoder] ERROR: Could not create event queue"
+        );
+
+        return;
+    }
 
 
     // --------------------------------------------------------
@@ -55,8 +69,12 @@ void Encoder::begin(
          digitalRead(this->pinB);
 
 
+    portENTER_CRITICAL(&encoderMux);
+
     encoderAccumulator =
         0;
+
+    portEXIT_CRITICAL(&encoderMux);
 
 
     // --------------------------------------------------------
@@ -71,6 +89,51 @@ void Encoder::begin(
 
     candidateButtonSince =
         millis();
+
+
+    // --------------------------------------------------------
+    // Encoder interrupts
+    // --------------------------------------------------------
+
+    attachInterruptArg(
+        this->pinA,
+        Encoder::encoderISR,
+        this,
+        CHANGE
+    );
+
+    attachInterruptArg(
+        this->pinB,
+        Encoder::encoderISR,
+        this,
+        CHANGE
+    );
+
+
+    // --------------------------------------------------------
+    // Encoder task
+    // --------------------------------------------------------
+
+    BaseType_t result =
+        xTaskCreate(
+            Encoder::taskEntry,
+            "Encoder",
+            TASK_STACK_SIZE,
+            this,
+            TASK_PRIORITY,
+            &taskHandle
+        );
+
+
+    if(result != pdPASS)
+    {
+        taskHandle =
+            nullptr;
+
+        Serial.println(
+            "[Encoder] ERROR: Could not create task"
+        );
+    }
 }
 
 
@@ -82,105 +145,221 @@ void Encoder::begin(
 void Encoder::update()
 {
     /*
-        Eén event maximaal per update.
+        Encoder wordt nu zelfstandig verwerkt door
+        de FreeRTOS task en GPIO interrupts.
 
-        Als er al een event klaarstaat, wachten we
-        totdat dit event door read() is opgehaald.
+        Deze functie blijft voorlopig bestaan als
+        compatibility interface.
     */
+}
 
-    if(lastEvent.type != ENCODER_NONE)
+
+
+// ============================================================
+// ENCODER ISR
+// ============================================================
+
+void ARDUINO_ISR_ATTR Encoder::encoderISR(
+    void* parameter
+)
+{
+    Encoder* encoder =
+        static_cast<Encoder*>(parameter);
+
+
+    if(encoder == nullptr)
         return;
 
 
-    // ========================================================
-    // ROTARY ENCODER
-    // ========================================================
+    encoder->handleEncoderTransition();
+}
+
+
+
+// ============================================================
+// HANDLE ENCODER TRANSITION
+// ============================================================
+
+void Encoder::handleEncoderTransition()
+{
+    /*
+        Quadrature transition table.
+
+        Index:
+            previous state << 2 | current state
+
+        Geldige overgang:
+            0001, 0111, 1110, 1000 = +1
+
+        Tegengestelde richting:
+            0010, 1011, 1101, 0100 = -1
+    */
+
+    static const int8_t transitionTable[16] =
+    {
+         0, -1,  1,  0,
+         1,  0,  0, -1,
+        -1,  0,  0,  1,
+         0,  1, -1,  0
+    };
+
 
     uint8_t currentState =
         (digitalRead(pinA) << 1) |
          digitalRead(pinB);
 
 
-    if(currentState != lastEncoderState)
+    if(currentState == lastEncoderState)
+        return;
+
+
+    uint8_t transition =
+        (lastEncoderState << 2) |
+        currentState;
+
+
+    int8_t delta =
+        transitionTable[transition];
+
+
+    lastEncoderState =
+        currentState;
+
+
+    if(delta == 0)
+        return;
+
+
+    portENTER_CRITICAL_ISR(&encoderMux);
+
+    encoderAccumulator +=
+        delta;
+
+    portEXIT_CRITICAL_ISR(&encoderMux);
+}
+
+
+
+// ============================================================
+// TASK ENTRY
+// ============================================================
+
+void Encoder::taskEntry(
+    void* parameter
+)
+{
+    Encoder* encoder =
+        static_cast<Encoder*>(parameter);
+
+
+    if(encoder != nullptr)
     {
-        /*
-            Quadrature transition table.
-
-            Index:
-                previous state << 2 | current state
-
-            Geldige overgang:
-                0001, 0111, 1110, 1000 = +1
-
-            Tegengestelde richting:
-                0010, 1011, 1101, 0100 = -1
-        */
-
-        static const int8_t transitionTable[16] =
-        {
-             0, -1,  1,  0,
-             1,  0,  0, -1,
-            -1,  0,  0,  1,
-             0,  1, -1,  0
-        };
-
-
-        uint8_t transition =
-            (lastEncoderState << 2) |
-            currentState;
-
-
-        encoderAccumulator +=
-            transitionTable[transition];
-
-
-        lastEncoderState =
-            currentState;
-
-
-        /*
-            Een volledige quadrature cyclus bestaat uit
-            vier geldige transities.
-
-            We rapporteren daarom één pulse per volledige
-            encoderstap.
-        */
-
-        if(encoderAccumulator >= 4)
-        {
-            encoderAccumulator =
-                0;
-
-            lastEvent.type =
-                ENCODER_PULSE;
-
-            lastEvent.value =
-                +1;
-
-            return;
-        }
-
-
-        if(encoderAccumulator <= -4)
-        {
-            encoderAccumulator =
-                0;
-
-            lastEvent.type =
-                ENCODER_PULSE;
-
-            lastEvent.value =
-                -1;
-
-            return;
-        }
+        encoder->task();
     }
 
 
-    // ========================================================
-    // ENCODER BUTTON
-    // ========================================================
+    vTaskDelete(nullptr);
+}
 
+
+
+// ============================================================
+// TASK
+// ============================================================
+
+void Encoder::task()
+{
+    for(;;)
+    {
+        // ====================================================
+        // ROTARY ENCODER
+        // ====================================================
+
+        int delta =
+            0;
+
+
+        portENTER_CRITICAL(&encoderMux);
+
+        /*
+            Eén volledige quadrature cyclus bestaat uit
+            vier geldige transities.
+
+            De ISR verzamelt de transities.
+            De task vertaalt volledige cycli naar
+            fysieke encoderpulsen.
+        */
+
+        while(encoderAccumulator >= 4)
+        {
+            delta++;
+
+            encoderAccumulator -=
+                4;
+        }
+
+
+        while(encoderAccumulator <= -4)
+        {
+            delta--;
+
+            encoderAccumulator +=
+                4;
+        }
+
+
+        portEXIT_CRITICAL(&encoderMux);
+
+
+        /*
+            Meerdere fysieke stappen die sinds de vorige
+            task-run zijn gemaakt worden hier samengevoegd.
+
+            Dit is nog steeds een EncoderEvent-stream:
+            de echte applicatie-coalescing gebeurt later
+            in InputManager.
+        */
+
+        if(delta != 0)
+        {
+            EncoderEvent event;
+
+            event.type =
+                ENCODER_PULSE;
+
+            event.value =
+                delta;
+
+
+            xQueueSend(
+                eventQueue,
+                &event,
+                0
+            );
+        }
+
+
+        // ====================================================
+        // BUTTON
+        // ====================================================
+
+        updateButton();
+
+
+        vTaskDelay(
+            pdMS_TO_TICKS(TASK_DELAY_MS)
+        );
+    }
+}
+
+
+
+// ============================================================
+// UPDATE BUTTON
+// ============================================================
+
+void Encoder::updateButton()
+{
     bool currentButtonState =
         digitalRead(buttonPin);
 
@@ -235,15 +414,24 @@ void Encoder::update()
 
     if(stableButtonState == LOW)
     {
-        lastEvent.type =
+        EncoderEvent event;
+
+        event.type =
             ENCODER_PRESS;
 
-        lastEvent.value =
+        event.value =
             0;
 
-        return;
+
+        xQueueSend(
+            eventQueue,
+            &event,
+            0
+        );
     }
 }
+
+
 
 // ============================================================
 // INJECT PULSE
@@ -257,12 +445,27 @@ void Encoder::injectPulse(
         return;
 
 
-    lastEvent.type =
+    if(eventQueue == nullptr)
+        return;
+
+
+    EncoderEvent event;
+
+    event.type =
         ENCODER_PULSE;
 
-    lastEvent.value =
+    event.value =
         value;
+
+
+    xQueueSend(
+        eventQueue,
+        &event,
+        0
+    );
 }
+
+
 
 // ============================================================
 // AVAILABLE
@@ -270,7 +473,13 @@ void Encoder::injectPulse(
 
 bool Encoder::available()
 {
-    return lastEvent.type != ENCODER_NONE;
+    if(eventQueue == nullptr)
+        return false;
+
+
+    return uxQueueMessagesWaiting(
+        eventQueue
+    ) > 0;
 }
 
 
@@ -281,15 +490,24 @@ bool Encoder::available()
 
 EncoderEvent Encoder::read()
 {
-    EncoderEvent event =
-        lastEvent;
+    EncoderEvent event;
 
-
-    lastEvent.type =
+    event.type =
         ENCODER_NONE;
 
-    lastEvent.value =
+    event.value =
         0;
+
+
+    if(eventQueue == nullptr)
+        return event;
+
+
+    xQueueReceive(
+        eventQueue,
+        &event,
+        0
+    );
 
 
     return event;
