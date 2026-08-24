@@ -146,6 +146,27 @@ void loop()
             encoder.injectPulse(
                 1
             );
+        }else if(command == 's')
+        {
+            Serial.println();
+            Serial.println(
+                "[TEST] Sending CNCjs statusreport"
+            );
+
+            bool success =
+                cnc.sendCommand(
+                    "statusreport"
+                );
+
+            Serial.print(
+                "[TEST] statusreport: "
+            );
+
+            Serial.println(
+                success
+                    ? "SENT"
+                    : "FAILED"
+            );
         }
     }
 

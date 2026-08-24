@@ -1,6 +1,6 @@
-ISS-001 — Encoder als volwaardige InputManager-bron ✅ — De Encoder wordt de bron van EncoderEvent. Voor ontwikkeling kan een tijdelijke seriële testinput events in de Encoder injecteren. Hierdoor blijft de volledige productieketen intact en hoeft main.cpp geen Event-objecten te manipuleren.
+ISS-001 — Encoder als volwaardige InputManager-bron ✅ AFGEROND. — De Encoder wordt de bron van EncoderEvent. Voor ontwikkeling kan een tijdelijke seriële testinput events in de Encoder injecteren. Hierdoor blijft de volledige productieketen intact en hoeft main.cpp geen Event-objecten te manipuleren.
 
-ISS-002 — ISS-002 — InputManager coalescing
+ISS-002 — InputManager coalescing: ✅ AFGEROND.
 De fysieke input wordt asynchroon verzameld. Encoderpulsen worden samengevoegd tot één delta voordat ze als InputEvent naar de PendantController worden gestuurd.
 
 Met deze verantwoordelijkheden:
@@ -21,11 +21,45 @@ FreeRTOS mag zelf bepalen waar de tasks draaien.
 ISS-003 — Echte encoder testen
 De tijdelijke KEY_1 → LEFT / KEY_3 → RIGHT simulatie vervangen zodra de echte encoder beschikbaar is.
 
-ISS-004 — Async inputarchitectuur
-Bepalen hoe Encoder + ButtonMatrix + InputManager onafhankelijk van de rest blijven draaien.
+ISS-004 — Async inputarchitectuur: ✅ AFGEROND.
+
+De gewenste onafhankelijkheid bestaat al:
+
+✅ ButtonMatrix eigen task
+✅ Encoder onafhankelijk
+✅ InputManager eigen task
+✅ FreeRTOS queues tussen componenten
+✅ loop() hoeft input niet te pollen
+✅ ButtonMatrix en InputManager zijn losgekoppeld
+✅ Controller krijgt alleen abstracte Events
+
 
 ISS-005 — CNCjsClient async maken
-Socket.IO/reconnect/feedback mag de bediening nooit blokkeren.
+De pendant-loop mag nooit wachten op netwerk-I/O.
+CNCjsClient verwerkt netwerkverkeer opportunistisch en levert resultaten/events via een lokale, niet-blokkerende interface aan de rest van het systeem.
+Ik denk dat we nu klaar zijn voor de echte ISS-005-architectuur
+
+En ik zou die in twee delen splitsen:
+
+ISS-005a — Connection health
+
+Socket.IO non-blocking
+reconnect state
+heartbeat
+heartbeat timeout
+connection health beschikbaar maken
+geen heartbeat queue
+geen oude jogs uitvoeren na reconnect
+
+ISS-005b — Async startup/reconnect
+
+Want jouw huidige:
+
+connectWiFi();
+resolveCNCjs();
+authenticate();
+
+in begin() is nog steeds blokkerend. Dat is een apart probleem van de runtime-heartbeat.
 
 ISS-006 — Data-uitwisseling tussen tasks
 Waarschijnlijk queues/state snapshots/andere veilige mechanismen bepalen.
