@@ -78,7 +78,7 @@ void CNCjsClient::begin(
         0;
 
     lastCommandSendTime_ =
-    0;
+        0;
 
 
     if (
@@ -396,54 +396,55 @@ void CNCjsClient::updateConnection()
             break;
 
 
-// ----------------------------------------------------
-// SOCKET
-// ----------------------------------------------------
+        // ----------------------------------------------------
+        // SOCKET
+        // ----------------------------------------------------
 
-case ConnectionState::SocketConnecting:
+        case ConnectionState::SocketConnecting:
 
-    /*
-        Start Socket.IO slechts één keer.
+            /*
+                Start Socket.IO slechts één keer.
 
-        socketBeginRequested wordt bij iedere nieuwe
-        connection attempt gereset door de state-machine.
-    */
+                socketBeginRequested wordt bij iedere nieuwe
+                connection attempt gereset door de state-machine.
+            */
 
-    if (
-        !socketBeginRequested
-    )
-    {
-        connectSocket();
-    }
+            if (
+                !socketBeginRequested
+            )
+            {
+                connectSocket();
+            }
 
 
-    /*
-        Vanaf hier is Socket.IO volledig asynchroon.
+            /*
+                Vanaf hier is Socket.IO volledig asynchroon.
 
-        De socket callback zet socketConnectedState
-        zodra sIOtype_CONNECT wordt ontvangen.
-    */
+                De socket callback zet socketConnectedState
+                zodra sIOtype_CONNECT wordt ontvangen.
+            */
 
-    if (
-        socketConnectedState
-    )
-    {
-        enterConnectionState(
-            ConnectionState::WaitingForLists
-        );
-    }
+            if (
+                socketConnectedState
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::WaitingForLists
+                );
+            }
 
-    else if (
-        millis() - stateStartedAt >=
-        SOCKET_TIMEOUT
-    )
-    {
-        connectionFailed(
-            "Socket.IO timeout"
-        );
-    }
+            else if (
+                millis() - stateStartedAt >=
+                SOCKET_TIMEOUT
+            )
+            {
+                connectionFailed(
+                    "Socket.IO timeout"
+                );
+            }
 
-    break;
+            break;
+
 
         // ----------------------------------------------------
         // LISTS
@@ -1270,11 +1271,24 @@ void CNCjsClient::connectSocket()
         serverPort_
     );
 
-Serial.print("[Socket.IO] Host: ");
-Serial.println(host);
 
-Serial.print("[Socket.IO] Path: ");
-Serial.println(path);
+    Serial.print(
+        "[Socket.IO] Host: "
+    );
+
+    Serial.println(
+        host
+    );
+
+
+    Serial.print(
+        "[Socket.IO] Path: "
+    );
+
+    Serial.println(
+        path
+    );
+
 
     socketIO.begin(
         host.c_str(),
@@ -1664,6 +1678,34 @@ void CNCjsClient::handleSocketEvent(
 
         case sIOtype_DISCONNECT:
         {
+            /*
+                Belangrijk:
+
+                De Socket.IO library kan tijdens socketIO.begin()
+                eerst een DISCONNECT-event genereren voordat de
+                eerste CONNECT ontvangen is.
+
+                Dat is géén echte verbroken verbinding.
+
+                Alleen wanneer de socket al daadwerkelijk
+                verbonden was, behandelen we DISCONNECT als een
+                echte connection loss.
+            */
+
+            if (
+                !socketConnectedState &&
+                connectionState ==
+                    ConnectionState::SocketConnecting
+            )
+            {
+                Serial.println(
+                    "[Socket.IO] Initial disconnect ignored"
+                );
+
+                break;
+            }
+
+
             socketConnectedState =
                 false;
 
@@ -2217,6 +2259,238 @@ void CNCjsClient::handleSocketEvent(
                     status,
                     parserstate
                 );
+
+
+                break;
+            }
+
+
+            // =================================================
+            // SERIALPORT READ
+            // =================================================
+
+            if (
+                strcmp(
+                    eventName,
+                    "serialport:read"
+                ) == 0
+            )
+            {
+                /*
+                    CNCjs geeft hier de ruwe response van GRBL
+                    door.
+
+                    Bijvoorbeeld:
+
+                    <Idle|MPos:0.000,0.000,0.000|FS:0,0|Ov:100,100,100>
+
+                    Dit is belangrijk voor onze heartbeat:
+                    een ontvangen GRBL-status betekent dat de
+                    machine daadwerkelijk antwoordt.
+
+                    We gebruiken dit dus als teken dat de
+                    machine online is.
+                */
+
+                const char* response =
+                    array[1];
+
+
+                if (
+                    response == nullptr
+                )
+                {
+                    break;
+                }
+
+
+                /*
+                    Alleen echte GRBL statusresponses tellen
+                    mee als machine heartbeat.
+
+                    Andere serialport:read berichten kunnen
+                    bijvoorbeeld startup/output zijn.
+                */
+
+                if (
+                    response[0] != '<'
+                )
+                {
+                    break;
+                }
+
+
+                if (
+                    machineState_ != nullptr
+                )
+                {
+                    machineHeartbeatReceived();
+
+                    machineState_->connected =
+                        true;
+                }
+
+
+                /*
+                    Parse de belangrijkste informatie uit de
+                    ruwe GRBL statusregel.
+
+                    We houden dit bewust beperkt:
+                    de volledige CNCjs "Grbl:state" blijft de
+                    voorkeursbron voor de uitgebreide state.
+                */
+
+                const char* stateStart =
+                    response + 1;
+
+
+                const char* stateEnd =
+                    strchr(
+                        stateStart,
+                        '|'
+                    );
+
+
+                if (
+                    stateEnd != nullptr &&
+                    machineState_ != nullptr
+                )
+                {
+                    size_t stateLength =
+                        stateEnd -
+                        stateStart;
+
+
+                    if (
+                        stateLength < 20
+                    )
+                    {
+                        char activeState[20];
+
+
+                        memcpy(
+                            activeState,
+                            stateStart,
+                            stateLength
+                        );
+
+
+                        activeState[
+                            stateLength
+                        ] =
+                            '\0';
+
+
+                        machineState_->machineStatus =
+                            machineStatusFromCNCjs(
+                                activeState
+                            );
+                    }
+                }
+
+
+                /*
+                    Parse MPos.
+
+                    Voorbeeld:
+
+                    MPos:0.000,0.000,0.000
+                */
+
+                const char* mposStart =
+                    strstr(
+                        response,
+                        "MPos:"
+                    );
+
+
+                if (
+                    mposStart != nullptr &&
+                    machineState_ != nullptr
+                )
+                {
+                    mposStart +=
+                        5;
+
+
+                    float x;
+                    float y;
+                    float z;
+
+
+                    if (
+                        sscanf(
+                            mposStart,
+                            "%f,%f,%f",
+                            &x,
+                            &y,
+                            &z
+                        ) == 3
+                    )
+                    {
+                        machineState_->machinePosition.x =
+                            x;
+
+                        machineState_->machinePosition.y =
+                            y;
+
+                        machineState_->machinePosition.z =
+                            z;
+                    }
+                }
+
+
+                /*
+                    Parse feedrate.
+
+                    Bijvoorbeeld:
+
+                    FS:0,0
+
+                    Het eerste getal is de actuele feedrate.
+                */
+
+                const char* fsStart =
+                    strstr(
+                        response,
+                        "FS:"
+                    );
+
+
+                if (
+                    fsStart != nullptr &&
+                    machineState_ != nullptr
+                )
+                {
+                    fsStart +=
+                        3;
+
+
+                    float feedrate;
+
+
+                    if (
+                        sscanf(
+                            fsStart,
+                            "%f",
+                            &feedrate
+                        ) == 1
+                    )
+                    {
+                        machineState_->feedrate =
+                            feedrate;
+                    }
+                }
+
+
+                /*
+                    Parse spindle override / status indien
+                    later gewenst.
+
+                    Voor nu laten we spindleSpeed ongemoeid:
+                    de uitgebreide Grbl:state event is daarvoor
+                    de betrouwbare bron.
+                */
 
 
                 break;
