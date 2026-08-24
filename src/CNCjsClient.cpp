@@ -24,19 +24,16 @@ void CNCjsClient::begin(
     machineState_ =
         &machineState;
 
-    Serial.print(
-        "[CNCjs] MachineState attached: "
-    );
-
-    Serial.println(
-        (uintptr_t)machineState_
-    );
 
     Serial.println();
     Serial.println("================================");
     Serial.println(" CNCjsClient");
     Serial.println("================================");
 
+
+    /*
+        Reset runtime state.
+    */
 
     socketConnectedState =
         false;
@@ -59,6 +56,9 @@ void CNCjsClient::begin(
     listRequested =
         false;
 
+    socketBeginRequested =
+        false;
+
     numberOfControllers =
         0;
 
@@ -68,11 +68,17 @@ void CNCjsClient::begin(
     commandDirty_ =
         false;
 
-    lastCommandSendTime_ =
+    heartbeatWaiting =
+        false;
+
+    lastHeartbeatTime =
         0;
 
-    currentStatus =
-        CNCjsStatus::Offline;
+    lastMachineStateTime =
+        0;
+
+    lastCommandSendTime_ =
+    0;
 
 
     if (
@@ -87,43 +93,16 @@ void CNCjsClient::begin(
     loadServerSettings();
 
 
-    if (
-        !connectWiFi()
-    )
-    {
-        Serial.println(
-            "[CNCjs] WiFi failed"
-        );
+    /*
+        begin() doet vanaf nu GEEN netwerkoperatie.
 
-        return;
-    }
+        De verbinding wordt volledig vanuit update()
+        opgebouwd.
+    */
 
-
-    if (
-        !resolveCNCjs()
-    )
-    {
-        Serial.println(
-            "[CNCjs] CNCjs server not found"
-        );
-
-        return;
-    }
-
-
-    if (
-        !authenticate()
-    )
-    {
-        Serial.println(
-            "[CNCjs] Authentication failed"
-        );
-
-        return;
-    }
-
-
-    connectSocket();
+    enterConnectionState(
+        ConnectionState::Start
+    );
 }
 
 
@@ -134,28 +113,28 @@ void CNCjsClient::begin(
 void CNCjsClient::update()
 {
     /*
-        Socket.IO moet zeer regelmatig blijven draaien.
-
-        Dit verzorgt onder andere:
-        - ontvangen van events
-        - WebSocket verkeer
-        - reconnects
-        - daadwerkelijk verwerken van frames
+        Socket.IO moet altijd blijven draaien.
     */
 
     socketIO.loop();
 
 
     /*
-        Machine commands worden niet meer direct vanuit
-        execute() verzonden.
+        Eerst de verbinding/state machine.
+    */
 
-        execute() zet het commando dirty.
+    updateConnection();
 
-        Hier wordt maximaal iedere 50 ms één pending command
-        naar CNCjs gestuurd.
 
-        Dit is de 20 Hz verzendlaag uit de vorige architectuur.
+    /*
+        Vervolgens machine heartbeat.
+    */
+
+    updateHeartbeat();
+
+
+    /*
+        Tenslotte eventueel een queued machine command.
     */
 
     if (
@@ -184,25 +163,442 @@ void CNCjsClient::update()
 CNCjsClient::CNCjsStatus
 CNCjsClient::status() const
 {
-    return currentStatus;
+    return currentStatus_;
 }
 
 
 // ============================================================
-// WIFI
+// CONNECTION STATE
 // ============================================================
 
-bool CNCjsClient::connectWiFi()
+void CNCjsClient::enterConnectionState(
+    ConnectionState state
+)
 {
-    const int MAX_ATTEMPTS =
-        3;
+    connectionState =
+        state;
 
-    const unsigned long CONNECT_TIMEOUT =
-        15000;
+    stateStartedAt =
+        millis();
 
 
-    currentStatus =
-        CNCjsStatus::WiFiConnecting;
+    switch(state)
+    {
+        case ConnectionState::Start:
+
+            currentStatus_ =
+                CNCjsStatus::Offline;
+
+            break;
+
+
+        case ConnectionState::WiFiConnecting:
+
+            currentStatus_ =
+                CNCjsStatus::WiFiConnecting;
+
+            break;
+
+
+        case ConnectionState::Resolving:
+
+            currentStatus_ =
+                CNCjsStatus::Connecting;
+
+            break;
+
+
+        case ConnectionState::Authenticating:
+
+            currentStatus_ =
+                CNCjsStatus::Authenticating;
+
+            break;
+
+
+        case ConnectionState::SocketConnecting:
+
+            currentStatus_ =
+                CNCjsStatus::Connecting;
+
+            break;
+
+
+        case ConnectionState::WaitingForLists:
+
+            currentStatus_ =
+                CNCjsStatus::WaitingForLists;
+
+            break;
+
+
+        case ConnectionState::OpeningController:
+
+            currentStatus_ =
+                CNCjsStatus::OpeningController;
+
+            break;
+
+
+        case ConnectionState::Ready:
+
+            currentStatus_ =
+                CNCjsStatus::Ready;
+
+            break;
+
+
+        case ConnectionState::Backoff:
+
+            currentStatus_ =
+                CNCjsStatus::Offline;
+
+            retryAt =
+                millis() +
+                RECONNECT_DELAY;
+
+            break;
+    }
+}
+
+
+// ============================================================
+// CONNECTION UPDATE
+// ============================================================
+
+void CNCjsClient::updateConnection()
+{
+    switch(connectionState)
+    {
+        // ----------------------------------------------------
+        // START
+        // ----------------------------------------------------
+
+        case ConnectionState::Start:
+
+            if (
+                WiFi.status() ==
+                WL_CONNECTED
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::Resolving
+                );
+            }
+            else
+            {
+                startWiFiConnection();
+
+                enterConnectionState(
+                    ConnectionState::WiFiConnecting
+                );
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // WIFI
+        // ----------------------------------------------------
+
+        case ConnectionState::WiFiConnecting:
+
+            if (
+                updateWiFiConnection()
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::Resolving
+                );
+            }
+
+            else if (
+                millis() - stateStartedAt >=
+                WIFI_TIMEOUT
+            )
+            {
+                connectionFailed(
+                    "WiFi timeout"
+                );
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // DNS
+        // ----------------------------------------------------
+
+        case ConnectionState::Resolving:
+
+            /*
+                hostByName() is normally very short-lived for
+                cncjs.local. Once resolved, everything after
+                this point is asynchronous.
+
+                We deliberately perform it only once per
+                connection attempt.
+            */
+
+            if (
+                resolveCNCjs()
+            )
+            {
+                resetAuthentication();
+
+                enterConnectionState(
+                    ConnectionState::Authenticating
+                );
+            }
+            else
+            {
+                connectionFailed(
+                    "CNCjs resolution failed"
+                );
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // AUTHENTICATION
+        // ----------------------------------------------------
+
+        case ConnectionState::Authenticating:
+
+            if (
+                !authRequestSent
+            )
+            {
+                startAuthentication();
+            }
+
+
+            if (
+                updateAuthentication()
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::SocketConnecting
+                );
+            }
+
+            else if (
+                millis() - stateStartedAt >=
+                AUTH_TIMEOUT
+            )
+            {
+                connectionFailed(
+                    "Authentication timeout"
+                );
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // SOCKET
+        // ----------------------------------------------------
+
+        case ConnectionState::SocketConnecting:
+
+            if (
+                socketConnectedState
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::WaitingForLists
+                );
+            }
+
+            else if (
+                millis() - stateStartedAt >=
+                SOCKET_TIMEOUT
+            )
+            {
+                connectionFailed(
+                    "Socket.IO timeout"
+                );
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // LISTS
+        // ----------------------------------------------------
+
+        case ConnectionState::WaitingForLists:
+
+            if (
+                startupReceivedState &&
+                portListReceivedState
+            )
+            {
+                loadControllerList();
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // OPENING CONTROLLER
+        // ----------------------------------------------------
+
+        case ConnectionState::OpeningController:
+
+            /*
+                serialport:open moves us into this state.
+
+                controller:state subsequently makes the
+                controller ready.
+            */
+
+            if (
+                controllerReadyState
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::Ready
+                );
+
+
+                if (
+                    machineState_ != nullptr
+                )
+                {
+                    machineState_->connected =
+                        false;
+
+                    machineState_->machineStatus =
+                        MACHINE_DISCONNECTED;
+                }
+
+
+                lastMachineStateTime =
+                    millis();
+
+                lastHeartbeatTime =
+                    millis();
+
+                heartbeatWaiting =
+                    false;
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // READY
+        // ----------------------------------------------------
+
+        case ConnectionState::Ready:
+
+            /*
+                If Socket.IO disappears, the socket event
+                handler will move us back to Offline.
+            */
+
+            break;
+
+
+        // ----------------------------------------------------
+        // BACKOFF
+        // ----------------------------------------------------
+
+        case ConnectionState::Backoff:
+
+            if (
+                millis() >= retryAt
+            )
+            {
+                enterConnectionState(
+                    ConnectionState::Start
+                );
+            }
+
+            break;
+    }
+}
+
+
+// ============================================================
+// CONNECTION FAILED
+// ============================================================
+
+void CNCjsClient::connectionFailed(
+    const char* reason
+)
+{
+    Serial.print(
+        "[CNCjs] Connection failed: "
+    );
+
+    Serial.println(
+        reason
+    );
+
+
+    socketConnectedState =
+        false;
+
+    authenticatedState =
+        false;
+
+    controllerReadyState =
+        false;
+
+    controllerSelectionReadyState =
+        false;
+
+    startupReceivedState =
+        false;
+
+    portListReceivedState =
+        false;
+
+    listRequested =
+        false;
+
+    socketBeginRequested =
+        false;
+
+    commandDirty_ =
+        false;
+
+    heartbeatWaiting =
+        false;
+
+
+    if (
+        machineState_ != nullptr
+    )
+    {
+        machineState_->connected =
+            false;
+
+        machineState_->machineStatus =
+            MACHINE_DISCONNECTED;
+    }
+
+
+    enterConnectionState(
+        ConnectionState::Backoff
+    );
+}
+
+
+// ============================================================
+// WIFI START
+// ============================================================
+
+void CNCjsClient::startWiFiConnection()
+{
+    Serial.println();
+
+    Serial.println(
+        "[WiFi] Starting connection..."
+    );
 
 
     WiFi.mode(
@@ -210,106 +606,43 @@ bool CNCjsClient::connectWiFi()
     );
 
 
-    for (
-        int attempt = 1;
-        attempt <= MAX_ATTEMPTS;
-        attempt++
-    )
-    {
-        Serial.println();
-        Serial.print(
-            "[WiFi] Connecting (attempt "
-        );
-
-        Serial.print(
-            attempt
-        );
-
-        Serial.println(
-            ")"
-        );
-
-
-        WiFi.disconnect(
-            true
-        );
-
-        delay(500);
-
-
-        WiFi.begin(
-            WIFI_SSID,
-            WIFI_PASSWORD
-        );
-
-
-        unsigned long start =
-            millis();
-
-
-        while (
-            WiFi.status() != WL_CONNECTED
-        )
-        {
-            if (
-                millis() - start >=
-                CONNECT_TIMEOUT
-            )
-            {
-                break;
-            }
-
-
-            delay(250);
-
-            Serial.print(
-                "."
-            );
-        }
-
-
-        Serial.println();
-
-
-        if (
-            WiFi.status() == WL_CONNECTED
-        )
-        {
-            Serial.print(
-                "[WiFi] Connected: "
-            );
-
-            Serial.println(
-                WiFi.localIP()
-            );
-
-            return true;
-        }
-
-
-        Serial.println(
-            "[WiFi] Attempt failed, retrying..."
-        );
-
-
-        WiFi.disconnect(
-            true
-        );
-
-        delay(1000);
-    }
-
-
-    Serial.println(
-        "[WiFi] Failed after all attempts"
+    WiFi.disconnect(
+        false
     );
 
 
-    currentStatus =
-        CNCjsStatus::Offline;
+    WiFi.begin(
+        WIFI_SSID,
+        WIFI_PASSWORD
+    );
+}
 
 
-    return false;
+// ============================================================
+// WIFI UPDATE
+// ============================================================
+
+bool CNCjsClient::updateWiFiConnection()
+{
+    if (
+        WiFi.status() !=
+        WL_CONNECTED
+    )
+    {
+        return false;
+    }
+
+
+    Serial.print(
+        "[WiFi] Connected: "
+    );
+
+    Serial.println(
+        WiFi.localIP()
+    );
+
+
+    return true;
 }
 
 
@@ -473,252 +806,388 @@ void CNCjsClient::saveServerSettings(
 
     serverPort_ =
         port;
-
-
-    Serial.println();
-
-    Serial.println(
-        "[CNCjs] Server settings saved:"
-    );
-
-
-    Serial.print(
-        "  Host: "
-    );
-
-    Serial.println(
-        serverHost_
-    );
-
-
-    Serial.print(
-        "  Port: "
-    );
-
-    Serial.println(
-        serverPort_
-    );
 }
 
 
 // ============================================================
-// AUTHENTICATE
+// AUTHENTICATION RESET
 // ============================================================
 
-bool CNCjsClient::authenticate()
+void CNCjsClient::resetAuthentication()
 {
-    const int maxAttempts =
-        3;
+    authClient.stop();
 
+    authResponse =
+        "";
 
-    currentStatus =
-        CNCjsStatus::Authenticating;
+    authHeaderBuffer =
+        "";
 
-    authenticatedState =
+    authRequestSent =
         false;
+
+    authHeadersReceived =
+        false;
+
+    authContentLength =
+        -1;
+
+    authStartedAt =
+        0;
 
     token =
         "";
+}
 
 
-    for (
-        int attempt = 1;
-        attempt <= maxAttempts;
-        attempt++
+// ============================================================
+// AUTHENTICATION START
+// ============================================================
+
+bool CNCjsClient::startAuthentication()
+{
+    resetAuthentication();
+
+
+    Serial.println();
+    Serial.println(
+        "=== CNCjs signin ==="
+    );
+
+
+    if (
+        !authClient.connect(
+            serverIP_,
+            serverPort_
+        )
     )
     {
-        Serial.println();
         Serial.println(
-            "=== CNCjs signin ==="
+            "[CNCjs] Authentication TCP connection failed"
         );
 
-
-        String url =
-            String("http://") +
-            serverIP_.toString() +
-            ":" +
-            String(serverPort_) +
-            "/api/signin";
+        return false;
+    }
 
 
-        Serial.print(
-            "POST "
-        );
-
-        Serial.println(
-            url
-        );
+    String body =
+        "{\"token\":\"\"}";
 
 
-        HTTPClient http;
+    authClient.print(
+        "POST /api/signin HTTP/1.1\r\n"
+    );
 
 
-        http.begin(
-            url
-        );
+    authClient.print(
+        "Host: "
+    );
+
+    authClient.print(
+        serverHost_
+    );
+
+    authClient.print(
+        "\r\n"
+    );
 
 
-        http.addHeader(
-            "Content-Type",
-            "application/json"
-        );
+    authClient.print(
+        "Content-Type: application/json\r\n"
+    );
 
 
-        http.setConnectTimeout(
-            5000
-        );
+    authClient.print(
+        "Content-Length: "
+    );
 
-        http.setTimeout(
-            10000
-        );
+    authClient.print(
+        body.length()
+    );
+
+    authClient.print(
+        "\r\n"
+    );
 
 
-        String body =
-            "{\"token\":\"\"}";
+    authClient.print(
+        "Connection: close\r\n"
+    );
 
 
-        int httpCode =
-            http.POST(
-                body
+    authClient.print(
+        "\r\n"
+    );
+
+
+    authClient.print(
+        body
+    );
+
+
+    authRequestSent =
+        true;
+
+    authStartedAt =
+        millis();
+
+
+    Serial.println(
+        "[CNCjs] Authentication request sent"
+    );
+
+
+    return true;
+}
+
+
+// ============================================================
+// AUTHENTICATION UPDATE
+// ============================================================
+
+bool CNCjsClient::updateAuthentication()
+{
+    if (
+        !authRequestSent
+    )
+    {
+        return false;
+    }
+
+
+    while (
+        authClient.available()
+    )
+    {
+        char c =
+            static_cast<char>(
+                authClient.read()
             );
 
 
-        Serial.print(
-            "HTTP status: "
-        );
+        authResponse +=
+            c;
 
-        Serial.println(
-            httpCode
-        );
+
+        /*
+            Header terminator.
+        */
+
+        if (
+            !authHeadersReceived &&
+            authResponse.endsWith(
+                "\r\n\r\n"
+            )
+        )
+        {
+            authHeadersReceived =
+                true;
+
+
+            int contentLengthPosition =
+                authResponse.indexOf(
+                    "Content-Length:"
+                );
+
+
+            if (
+                contentLengthPosition >= 0
+            )
+            {
+                int lineEnd =
+                    authResponse.indexOf(
+                        "\r\n",
+                        contentLengthPosition
+                    );
+
+
+                if (
+                    lineEnd >= 0
+                )
+                {
+                    String line =
+                        authResponse.substring(
+                            contentLengthPosition,
+                            lineEnd
+                        );
+
+
+                    int colon =
+                        line.indexOf(
+                            ':'
+                        );
+
+
+                    if (
+                        colon >= 0
+                    )
+                    {
+                        authContentLength =
+                            line.substring(
+                                colon + 1
+                            ).toInt();
+                    }
+                }
+            }
+        }
+    }
+
+
+    if (
+        authHeadersReceived
+    )
+    {
+        String body;
 
 
         if (
-            httpCode == 200
+            extractAuthenticationBody(
+                body
+            )
         )
         {
-            String response =
-                http.getString();
-
-
-            Serial.println(
-                "Response:"
-            );
-
-            Serial.println(
-                response
-            );
-
-
-            DynamicJsonDocument doc(
-                2048
-            );
+            JsonDocument doc;
 
 
             DeserializationError error =
                 deserializeJson(
                     doc,
-                    response
+                    body
                 );
 
 
             if (
-                !error
+                error
             )
             {
-                if (
-                    doc["token"].is<const char*>()
-                )
-                {
-                    token =
-                        doc["token"].as<String>();
-                }
-                else if (
-                    doc["accessToken"].is<const char*>()
-                )
-                {
-                    token =
-                        doc["accessToken"].as<String>();
-                }
-
-
-                if (
-                    token.length() > 0
-                )
-                {
-                    Serial.println();
-                    Serial.println(
-                        "[CNCjs] JWT received"
-                    );
-
-
-                    authenticatedState =
-                        true;
-
-
-                    http.end();
-
-                    return true;
-                }
-
-
-                Serial.println(
-                    "[CNCjs] No token in response"
-                );
-            }
-            else
-            {
                 Serial.print(
-                    "[CNCjs] JSON error: "
+                    "[CNCjs] Authentication JSON error: "
                 );
 
                 Serial.println(
                     error.c_str()
                 );
+
+
+                authClient.stop();
+
+                return false;
             }
-        }
-        else
-        {
-            Serial.print(
-                "[CNCjs] HTTP error: "
-            );
+
+
+            if (
+                doc["token"].is<const char*>()
+            )
+            {
+                token =
+                    doc["token"].as<String>();
+            }
+            else if (
+                doc["accessToken"].is<const char*>()
+            )
+            {
+                token =
+                    doc["accessToken"].as<String>();
+            }
+
+
+            if (
+                token.length() > 0
+            )
+            {
+                authenticatedState =
+                    true;
+
+
+                authClient.stop();
+
+
+                Serial.println(
+                    "[CNCjs] JWT received"
+                );
+
+
+                return true;
+            }
+
 
             Serial.println(
-                http.errorToString(
-                    httpCode
-                )
-            );
-        }
-
-
-        http.end();
-
-
-        if (
-            attempt < maxAttempts
-        )
-        {
-            Serial.println(
-                "[CNCjs] Retrying authentication..."
+                "[CNCjs] Authentication response contained no token"
             );
 
-            delay(1000);
+
+            authClient.stop();
+
+            return false;
         }
     }
 
 
-    Serial.println(
-        "[CNCjs] Authentication failed"
-    );
-
-
-    authenticatedState =
-        false;
-
-    currentStatus =
-        CNCjsStatus::Error;
-
-
     return false;
+}
+
+
+// ============================================================
+// EXTRACT AUTHENTICATION BODY
+// ============================================================
+
+bool CNCjsClient::extractAuthenticationBody(
+    String& body
+)
+{
+    int separator =
+        authResponse.indexOf(
+            "\r\n\r\n"
+        );
+
+
+    if (
+        separator < 0
+    )
+    {
+        return false;
+    }
+
+
+    int bodyStart =
+        separator + 4;
+
+
+    int bodyLength =
+        authResponse.length() -
+        bodyStart;
+
+
+    if (
+        authContentLength >= 0 &&
+        bodyLength < authContentLength
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        authContentLength >= 0
+    )
+    {
+        body =
+            authResponse.substring(
+                bodyStart,
+                bodyStart +
+                authContentLength
+            );
+    }
+    else
+    {
+        body =
+            authResponse.substring(
+                bodyStart
+            );
+    }
+
+
+    return body.length() > 0;
 }
 
 
@@ -738,8 +1207,16 @@ bool CNCjsClient::authenticated() const
 
 void CNCjsClient::connectSocket()
 {
-    currentStatus =
-        CNCjsStatus::Connecting;
+    if (
+        socketBeginRequested
+    )
+    {
+        return;
+    }
+
+
+    socketBeginRequested =
+        true;
 
 
     String path =
@@ -752,14 +1229,35 @@ void CNCjsClient::connectSocket()
         "&EIO=3";
 
 
-    Serial.println(
-        "[Socket.IO] Connecting..."
+    String host =
+        serverIP_.toString();
+
+
+    Serial.print(
+        "[Socket.IO] Connecting to "
     );
 
+    Serial.print(
+        host
+    );
+
+    Serial.print(
+        ":"
+    );
+
+    Serial.println(
+        serverPort_
+    );
+
+Serial.print("[Socket.IO] Host: ");
+Serial.println(host);
+
+Serial.print("[Socket.IO] Path: ");
+Serial.println(path);
 
     socketIO.begin(
-        CNCJS_HOST,
-        CNCJS_PORT,
+        host.c_str(),
+        serverPort_,
         path.c_str()
     );
 
@@ -879,19 +1377,6 @@ void CNCjsClient::updateMachineState(
     JsonObject parserstate
 )
 {
-    Serial.println(
-        "[CNCjs] updateMachineState()"
-    );
-
-    Serial.print(
-        "[CNCjs] machineState pointer: "
-    );
-
-    Serial.println(
-        (uintptr_t)machineState_
-    );
-
-
     if (
         machineState_ == nullptr
     )
@@ -970,6 +1455,173 @@ void CNCjsClient::updateMachineState(
     machineState_->spindleSpeed =
         status["spindle"] |
         0;
+
+
+    machineHeartbeatReceived();
+}
+
+
+// ============================================================
+// MACHINE HEARTBEAT RECEIVED
+// ============================================================
+
+void CNCjsClient::machineHeartbeatReceived()
+{
+    lastMachineStateTime =
+        millis();
+
+    heartbeatWaiting =
+        false;
+}
+
+
+// ============================================================
+// HEARTBEAT UPDATE
+// ============================================================
+
+void CNCjsClient::updateHeartbeat()
+{
+    if (
+        connectionState !=
+        ConnectionState::Ready
+    )
+    {
+        return;
+    }
+
+
+    unsigned long now =
+        millis();
+
+
+    /*
+        Periodiek een GRBL statusreport vragen.
+    */
+
+    if (
+        now - lastHeartbeatTime >=
+        HEARTBEAT_INTERVAL
+    )
+    {
+        if (
+            sendStatusReport()
+        )
+        {
+            lastHeartbeatTime =
+                now;
+
+            heartbeatWaiting =
+                true;
+        }
+    }
+
+
+    /*
+        Geen machine-status ontvangen binnen de timeout:
+        machine is stale/disconnected.
+
+        De Socket.IO verbinding hoeft hiervoor niet
+        onmiddellijk verbroken te worden.
+    */
+
+    if (
+        now - lastMachineStateTime >=
+        HEARTBEAT_TIMEOUT
+    )
+    {
+        if (
+            machineState_ != nullptr
+        )
+        {
+            machineState_->connected =
+                false;
+
+            machineState_->machineStatus =
+                MACHINE_DISCONNECTED;
+        }
+    }
+}
+
+
+// ============================================================
+// STATUS REPORT
+// ============================================================
+
+bool CNCjsClient::sendStatusReport()
+{
+    if (
+        !socketConnectedState ||
+        !controllerReadyState
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        activeControllerPortState.length() == 0
+    )
+    {
+        return false;
+    }
+
+
+    /*
+        Dit is exact het CNCjs command dat we inmiddels
+        succesvol getest hebben:
+
+        ["command","/dev/ttyUSB0","statusreport"]
+
+        CNCjs vertaalt dit naar "?" richting GRBL.
+    */
+
+    JsonDocument doc;
+
+
+    JsonArray array =
+        doc.to<JsonArray>();
+
+
+    array.add(
+        "command"
+    );
+
+
+    array.add(
+        activeControllerPortState
+    );
+
+
+    array.add(
+        "statusreport"
+    );
+
+
+    String output;
+
+
+    serializeJson(
+        doc,
+        output
+    );
+
+
+    Serial.print(
+        "[CNCjs] HEARTBEAT: "
+    );
+
+    Serial.println(
+        output
+    );
+
+
+    bool sent =
+        socketIO.sendEVENT(
+            output
+        );
+
+
+    return sent;
 }
 
 
@@ -983,8 +1635,12 @@ void CNCjsClient::handleSocketEvent(
     size_t length
 )
 {
-    switch (type)
+    switch(type)
     {
+        // ----------------------------------------------------
+        // DISCONNECT
+        // ----------------------------------------------------
+
         case sIOtype_DISCONNECT:
         {
             socketConnectedState =
@@ -1002,11 +1658,17 @@ void CNCjsClient::handleSocketEvent(
             listRequested =
                 false;
 
+            socketBeginRequested =
+                false;
+
             commandDirty_ =
                 false;
 
+            heartbeatWaiting =
+                false;
 
-            currentStatus =
+
+            currentStatus_ =
                 CNCjsStatus::Offline;
 
 
@@ -1026,9 +1688,19 @@ void CNCjsClient::handleSocketEvent(
                 "[Socket.IO] Disconnected"
             );
 
+
+            enterConnectionState(
+                ConnectionState::Backoff
+            );
+
+
             break;
         }
 
+
+        // ----------------------------------------------------
+        // CONNECT
+        // ----------------------------------------------------
 
         case sIOtype_CONNECT:
         {
@@ -1048,20 +1720,8 @@ void CNCjsClient::handleSocketEvent(
                 false;
 
 
-            currentStatus =
+            currentStatus_ =
                 CNCjsStatus::WaitingForLists;
-
-
-            if (
-                machineState_ != nullptr
-            )
-            {
-                machineState_->connected =
-                    false;
-
-                machineState_->machineStatus =
-                    MACHINE_DISCONNECTED;
-            }
 
 
             Serial.print(
@@ -1075,9 +1735,14 @@ void CNCjsClient::handleSocketEvent(
 
             requestPortList();
 
+
             break;
         }
 
+
+        // ----------------------------------------------------
+        // EVENT
+        // ----------------------------------------------------
 
         case sIOtype_EVENT:
         {
@@ -1093,9 +1758,7 @@ void CNCjsClient::handleSocketEvent(
             Serial.println();
 
 
-            DynamicJsonDocument doc(
-                8192
-            );
+            JsonDocument doc;
 
 
             DeserializationError error =
@@ -1400,8 +2063,9 @@ void CNCjsClient::handleSocketEvent(
                         false;
 
 
-                    currentStatus =
-                        CNCjsStatus::OpeningController;
+                    enterConnectionState(
+                        ConnectionState::OpeningController
+                    );
 
 
                     if (
@@ -1447,11 +2111,6 @@ void CNCjsClient::handleSocketEvent(
 
                     Serial.println(
                         activeControllerBaudrateState
-                    );
-
-
-                    Serial.println(
-                        "[CNCjs] Waiting for controller initialization..."
                     );
                 }
 
@@ -1499,8 +2158,9 @@ void CNCjsClient::handleSocketEvent(
                     true;
 
 
-                currentStatus =
-                    CNCjsStatus::Ready;
+                enterConnectionState(
+                    ConnectionState::Ready
+                );
 
 
                 Serial.println();
@@ -1546,6 +2206,10 @@ void CNCjsClient::handleSocketEvent(
         }
 
 
+        // ----------------------------------------------------
+        // ACK
+        // ----------------------------------------------------
+
         case sIOtype_ACK:
         {
             Serial.print(
@@ -1562,6 +2226,10 @@ void CNCjsClient::handleSocketEvent(
             break;
         }
 
+
+        // ----------------------------------------------------
+        // ERROR
+        // ----------------------------------------------------
 
         case sIOtype_ERROR:
         {
@@ -1581,6 +2249,7 @@ void CNCjsClient::handleSocketEvent(
 
 
         default:
+
             break;
     }
 }
@@ -1600,9 +2269,7 @@ void CNCjsClient::requestPortList()
     }
 
 
-    DynamicJsonDocument doc(
-        256
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -1612,6 +2279,7 @@ void CNCjsClient::requestPortList()
     array.add(
         "list"
     );
+
 
     array.add(
         nullptr
@@ -2114,10 +2782,6 @@ void CNCjsClient::loadControllerList()
             !controllerReadyState
         )
         {
-            Serial.println(
-                "[CNCjs] Automatically opening restored controller..."
-            );
-
             openSelectedController();
         }
 
@@ -2136,8 +2800,12 @@ void CNCjsClient::loadControllerList()
         true;
 
 
-    currentStatus =
+    currentStatus_ =
         CNCjsStatus::SelectionRequired;
+
+
+    connectionState =
+        ConnectionState::WaitingForLists;
 }
 
 
@@ -2185,15 +2853,6 @@ void CNCjsClient::chooseController()
 
     controllerSelectionReadyState =
         false;
-
-
-    currentStatus =
-        CNCjsStatus::OpeningController;
-
-
-    Serial.println(
-        "[CNCjs] Automatically opening selected controller..."
-    );
 
 
     openSelectedController();
@@ -2258,39 +2917,6 @@ bool CNCjsClient::selectController(
 
     controllerSelectionReadyState =
         false;
-
-
-    currentStatus =
-        CNCjsStatus::OpeningController;
-
-
-    Serial.println();
-    Serial.println(
-        "[CNCjs] Selected controller:"
-    );
-
-
-    Serial.print(
-        "  Controller: "
-    );
-
-    Serial.println(
-        selectedControllerNameState
-    );
-
-
-    Serial.print(
-        "  Port: "
-    );
-
-    Serial.println(
-        selectedPortNameState
-    );
-
-
-    Serial.println(
-        "[CNCjs] Automatically opening selected controller..."
-    );
 
 
     return openSelectedController();
@@ -2419,7 +3045,8 @@ bool CNCjsClient::execute(
 )
 {
     if (
-        currentStatus != CNCjsStatus::Ready
+        connectionState !=
+        ConnectionState::Ready
     )
     {
         Serial.println(
@@ -2430,30 +3057,16 @@ bool CNCjsClient::execute(
     }
 
 
-    switch (
-        command.type
-    )
+    switch(command.type)
     {
         case MACHINE_COMMAND_GCODE:
         {
-            /*
-                Niet direct verzenden.
-
-                Bewaar het commando en markeer het dirty.
-
-                update() verzendt het vervolgens op 20 Hz.
-            */
-
             pendingCommand_ =
                 command;
 
+
             commandDirty_ =
                 true;
-
-
-            Serial.println(
-                "[CNCjs] MachineCommand queued"
-            );
 
 
             return true;
@@ -2461,36 +3074,23 @@ bool CNCjsClient::execute(
 
 
         case MACHINE_COMMAND_JOG_CANCEL:
-        {
-            /*
-                Jog cancel moet direct worden uitgevoerd.
-                Dit is een realtime/interrupt-achtig commando
-                en hoort niet achter een 50 ms plannerqueue.
-            */
 
             return jogCancel();
-        }
 
 
         case MACHINE_COMMAND_FEED_HOLD:
 
-            return sendRealtime(
-                '!'
-            );
+            return feedHold();
 
 
         case MACHINE_COMMAND_RESUME:
 
-            return sendRealtime(
-                '~'
-            );
+            return resume();
 
 
         case MACHINE_COMMAND_RESET:
 
-            return sendRealtime(
-                0x18
-            );
+            return reset();
 
 
         case MACHINE_COMMAND_NONE:
@@ -2517,35 +3117,13 @@ bool CNCjsClient::sendPendingCommand()
 
 
     if (
-        !socketConnectedState
-    )
-    {
-        Serial.println(
-            "[CNCjs] Pending command waiting:"
-            " Socket.IO not connected"
-        );
-
-        return false;
-    }
-
-
-    if (
+        !socketConnectedState ||
         !controllerReadyState
     )
     {
-        Serial.println(
-            "[CNCjs] Pending command waiting:"
-            " controller not ready"
-        );
-
         return false;
     }
 
-
-    /*
-        Alleen G-code/JOG commands komen momenteel
-        via deze queue.
-    */
 
     if (
         pendingCommand_.type !=
@@ -2559,26 +3137,15 @@ bool CNCjsClient::sendPendingCommand()
     }
 
 
-    String command =
-        pendingCommand_.command;
-
-
     if (
         activeControllerPortState.length() == 0
     )
     {
-        Serial.println(
-            "[CNCjs] Pending command rejected:"
-            " no active controller port"
-        );
-
         return false;
     }
 
 
-    DynamicJsonDocument doc(
-        512
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -2593,12 +3160,15 @@ bool CNCjsClient::sendPendingCommand()
     array.add(
         activeControllerPortState
     );
+
+
     array.add(
         "gcode"
     );
 
+
     array.add(
-        command
+        pendingCommand_.command
     );
 
 
@@ -2626,22 +3196,6 @@ bool CNCjsClient::sendPendingCommand()
         );
 
 
-    Serial.print(
-        "[CNCjs] sendEVENT(): "
-    );
-
-    Serial.println(
-        sent ? "TRUE" : "FALSE"
-    );
-
-
-    /*
-        Het commando is nu uit de dirty queue.
-
-        Bij een nieuwe planner-update komt er weer een nieuw
-        MachineCommand binnen via execute().
-    */
-
     if (
         sent
     )
@@ -2657,37 +3211,23 @@ bool CNCjsClient::sendPendingCommand()
     return sent;
 }
 
+
 // ============================================================
 // JOG CANCEL
 // ============================================================
 
 bool CNCjsClient::jogCancel()
 {
-    if (!socketConnectedState)
+    if (
+        !socketConnectedState ||
+        !controllerReadyState
+    )
     {
-        Serial.println(
-            "[CNCjs] Cannot cancel jog:"
-            " Socket.IO not connected"
-        );
-
         return false;
     }
 
 
-    if (!controllerReadyState)
-    {
-        Serial.println(
-            "[CNCjs] Cannot cancel jog:"
-            " controller not ready"
-        );
-
-        return false;
-    }
-
-
-    DynamicJsonDocument doc(
-        256
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -2722,33 +3262,62 @@ bool CNCjsClient::jogCancel()
     );
 
 
-    socketIO.sendEVENT(
+    return socketIO.sendEVENT(
         output
     );
-
-
-    return true;
 }
 
+
+// ============================================================
+// FEED HOLD
+// ============================================================
 
 bool CNCjsClient::feedHold()
 {
-    if (!socketConnectedState)
-    {
-        return false;
-    }
-
-    if (!controllerReadyState)
-    {
-        return false;
-    }
-
-    // CNCjs feed hold
+    return sendRealtime(
+        '!'
+    );
 }
 
-bool CNCjsClient::resume(){}
 
-bool CNCjsClient::reset(){}
+// ============================================================
+// RESUME
+// ============================================================
+
+bool CNCjsClient::resume()
+{
+    return sendRealtime(
+        '~'
+    );
+}
+
+
+// ============================================================
+// RESET
+// ============================================================
+
+bool CNCjsClient::reset()
+{
+    /*
+        GRBL reset is a realtime 0x18 byte.
+
+        The current sendRealtime() interface intentionally
+        only supports commands that CNCjs accepts as a
+        one-character command string.
+
+        Keep this explicit for now.
+    */
+
+    Serial.println(
+        "[CNCjs] Reset requested"
+    );
+
+
+    return sendRealtime(
+        0x18
+    );
+}
+
 
 // ============================================================
 // OPEN CONTROLLER
@@ -2764,11 +3333,6 @@ bool CNCjsClient::openController(
         !socketConnectedState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot open controller:"
-            " Socket.IO not connected"
-        );
-
         return false;
     }
 
@@ -2778,11 +3342,6 @@ bool CNCjsClient::openController(
         controllerType == nullptr
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot open controller:"
-            " invalid parameters"
-        );
-
         return false;
     }
 
@@ -2791,8 +3350,9 @@ bool CNCjsClient::openController(
         false;
 
 
-    currentStatus =
-        CNCjsStatus::OpeningController;
+    enterConnectionState(
+        ConnectionState::OpeningController
+    );
 
 
     if (
@@ -2807,9 +3367,7 @@ bool CNCjsClient::openController(
     }
 
 
-    DynamicJsonDocument doc(
-        512
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -2827,7 +3385,7 @@ bool CNCjsClient::openController(
 
 
     JsonObject options =
-        array.createNestedObject();
+        array.add<JsonObject>();
 
 
     options["controllerType"] =
@@ -2843,13 +3401,12 @@ bool CNCjsClient::openController(
 
 
     JsonObject pin =
-        options.createNestedObject(
-            "pin"
-        );
+        options["pin"].to<JsonObject>();
 
 
     pin["dtr"] =
         nullptr;
+
 
     pin["rts"] =
         nullptr;
@@ -2873,27 +3430,14 @@ bool CNCjsClient::openController(
     );
 
 
-    bool sent =
-        socketIO.sendEVENT(
-            output
-        );
-
-
-    Serial.print(
-        "[CNCjs] sendEVENT(): "
+    return socketIO.sendEVENT(
+        output
     );
-
-    Serial.println(
-        sent ? "TRUE" : "FALSE"
-    );
-
-
-    return sent;
 }
 
 
 // ============================================================
-// SEND GCODE - ACTIVE CONTROLLER
+// SEND GCODE
 // ============================================================
 
 bool CNCjsClient::sendGcode(
@@ -2904,11 +3448,6 @@ bool CNCjsClient::sendGcode(
         !controllerReadyState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send G-code:"
-            " controller not ready"
-        );
-
         return false;
     }
 
@@ -2930,27 +3469,10 @@ bool CNCjsClient::sendGcode(
 )
 {
     if (
-        !socketConnectedState
-    )
-    {
-        Serial.println(
-            "[CNCjs] Cannot send G-code:"
-            " Socket.IO not connected"
-        );
-
-        return false;
-    }
-
-
-    if (
+        !socketConnectedState ||
         !controllerReadyState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send G-code:"
-            " controller not ready"
-        );
-
         return false;
     }
 
@@ -2964,9 +3486,7 @@ bool CNCjsClient::sendGcode(
     }
 
 
-    DynamicJsonDocument doc(
-        512
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -3011,27 +3531,10 @@ bool CNCjsClient::sendGcode(
     );
 
 
-    bool sent =
-        socketIO.sendEVENT(
-            output
-        );
-
-
-    Serial.print(
-        "[CNCjs] sendEVENT(): "
+    return socketIO.sendEVENT(
+        output
     );
-
-    Serial.println(
-        sent ? "TRUE" : "FALSE"
-    );
-
-
-    return sent;
 }
-
-
-
-
 
 
 // ============================================================
@@ -3046,11 +3549,6 @@ bool CNCjsClient::sendCommand(
         !socketConnectedState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send command:"
-            " Socket.IO not connected"
-        );
-
         return false;
     }
 
@@ -3059,11 +3557,6 @@ bool CNCjsClient::sendCommand(
         !controllerReadyState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send command:"
-            " controller not ready"
-        );
-
         return false;
     }
 
@@ -3072,18 +3565,11 @@ bool CNCjsClient::sendCommand(
         activeControllerPortState.length() == 0
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send command:"
-            " no active controller port"
-        );
-
         return false;
     }
 
 
-    DynamicJsonDocument doc(
-        512
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -3123,22 +3609,9 @@ bool CNCjsClient::sendCommand(
     );
 
 
-    bool sent =
-        socketIO.sendEVENT(
-            output
-        );
-
-
-    Serial.print(
-        "[CNCjs] sendEVENT(): "
+    return socketIO.sendEVENT(
+        output
     );
-
-    Serial.println(
-        sent ? "TRUE" : "FALSE"
-    );
-
-
-    return sent;
 }
 
 
@@ -3154,11 +3627,6 @@ bool CNCjsClient::sendRealtime(
         !socketConnectedState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send realtime:"
-            " Socket.IO not connected"
-        );
-
         return false;
     }
 
@@ -3167,11 +3635,6 @@ bool CNCjsClient::sendRealtime(
         !controllerReadyState
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send realtime:"
-            " controller not ready"
-        );
-
         return false;
     }
 
@@ -3180,18 +3643,11 @@ bool CNCjsClient::sendRealtime(
         activeControllerPortState.length() == 0
     )
     {
-        Serial.println(
-            "[CNCjs] Cannot send realtime:"
-            " no active controller port"
-        );
-
         return false;
     }
 
 
-    DynamicJsonDocument doc(
-        256
-    );
+    JsonDocument doc;
 
 
     JsonArray array =
@@ -3216,7 +3672,9 @@ bool CNCjsClient::sendRealtime(
         char realtimeCommand[2];
 
         realtimeCommand[0] =
-            static_cast<char>(command);
+            static_cast<char>(
+                command
+            );
 
         realtimeCommand[1] =
             '\0';
@@ -3228,6 +3686,17 @@ bool CNCjsClient::sendRealtime(
     }
     else
     {
+        /*
+            GRBL reset is 0x18. JSON strings cannot represent
+            this as the actual realtime byte.
+
+            CNCjs' "command" event therefore cannot use the
+            same path as ! and ~.
+
+            Keep this rejected until we implement the proper
+            CNCjs reset event.
+        */
+
         Serial.print(
             "[CNCjs] Unsupported realtime byte: 0x"
         );
@@ -3259,20 +3728,7 @@ bool CNCjsClient::sendRealtime(
     );
 
 
-    bool sent =
-        socketIO.sendEVENT(
-            output
-        );
-
-
-    Serial.print(
-        "[CNCjs] sendEVENT(): "
+    return socketIO.sendEVENT(
+        output
     );
-
-    Serial.println(
-        sent ? "TRUE" : "FALSE"
-    );
-
-
-    return sent;
 }
