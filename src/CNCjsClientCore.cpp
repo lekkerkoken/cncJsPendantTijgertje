@@ -1,9 +1,8 @@
 #include "CNCjsClientCore.h"
 
-#include <ESPmDNS.h>
 #include <Preferences.h>
+#include "NetworkManager.h"
 
-#include "Secrets.h"
 
 
 CNCjsClientCore* CNCjsClientCore::instance =
@@ -88,6 +87,9 @@ void CNCjsClientCore::begin(
         *machineState_ =
             MachineState();
     }
+
+
+    networkManager_.begin();
 
 
     loadServerSettings();
@@ -277,8 +279,7 @@ void CNCjsClientCore::updateConnection()
         case ConnectionState::Start:
 
             if (
-                WiFi.status() ==
-                WL_CONNECTED
+                networkManager_.wifiConnected()
             )
             {
                 enterConnectionState(
@@ -287,7 +288,7 @@ void CNCjsClientCore::updateConnection()
             }
             else
             {
-                startWiFiConnection();
+                networkManager_.startWiFiConnection();
 
                 enterConnectionState(
                     ConnectionState::WiFiConnecting
@@ -304,7 +305,7 @@ void CNCjsClientCore::updateConnection()
         case ConnectionState::WiFiConnecting:
 
             if (
-                updateWiFiConnection()
+                networkManager_.updateWiFiConnection()
             )
             {
                 enterConnectionState(
@@ -341,10 +342,14 @@ void CNCjsClientCore::updateConnection()
             */
 
             if (
-                resolveCNCjs()
+                networkManager_.resolve(
+                    serverHost_.c_str(),
+                    serverPort_,
+                    serverIP_
+                )
             )
             {
-                resetAuthentication();
+                networkManager_.resetAuthentication();
 
                 enterConnectionState(
                     ConnectionState::Authenticating
@@ -367,17 +372,26 @@ void CNCjsClientCore::updateConnection()
         case ConnectionState::Authenticating:
 
             if (
-                !authRequestSent
+                !networkManager_.authenticationStarted()
             )
             {
-                startAuthentication();
+                networkManager_.startAuthentication(
+                    serverIP_,
+                    serverPort_,
+                    serverHost_.c_str()
+                );
             }
 
 
             if (
-                updateAuthentication()
+                networkManager_.updateAuthentication(
+                    token
+                )
             )
             {
+                authenticatedState =
+                    networkManager_.authenticated();
+
                 enterConnectionState(
                     ConnectionState::SocketConnecting
                 );
@@ -611,124 +625,12 @@ void CNCjsClientCore::connectionFailed(
 
 
 // ============================================================
-// WIFI START
-// ============================================================
-
-void CNCjsClientCore::startWiFiConnection()
-{
-    Serial.println();
-
-    Serial.println(
-        "[WiFi] Starting connection..."
-    );
-
-
-    WiFi.mode(
-        WIFI_STA
-    );
-
-
-    WiFi.disconnect(
-        false
-    );
-
-
-    WiFi.begin(
-        WIFI_SSID,
-        WIFI_PASSWORD
-    );
-}
-
-
-// ============================================================
-// WIFI UPDATE
-// ============================================================
-
-bool CNCjsClientCore::updateWiFiConnection()
-{
-    if (
-        WiFi.status() !=
-        WL_CONNECTED
-    )
-    {
-        return false;
-    }
-
-
-    Serial.print(
-        "[WiFi] Connected: "
-    );
-
-    Serial.println(
-        WiFi.localIP()
-    );
-
-
-    return true;
-}
-
-
-// ============================================================
 // WIFI STATUS
 // ============================================================
 
 bool CNCjsClientCore::wifiConnected() const
 {
-    return WiFi.status() ==
-           WL_CONNECTED;
-}
-
-
-// ============================================================
-// RESOLVE CNCJS
-// ============================================================
-
-bool CNCjsClientCore::resolveCNCjs()
-{
-    Serial.println();
-
-    Serial.print(
-        "[CNCjs] Resolving "
-    );
-
-    Serial.print(
-        serverHost_
-    );
-
-    Serial.print(
-        ":"
-    );
-
-    Serial.println(
-        serverPort_
-    );
-
-
-    if (
-        WiFi.hostByName(
-            serverHost_.c_str(),
-            serverIP_
-        ) != 1
-    )
-    {
-        Serial.println(
-            "[CNCjs] DNS/mDNS resolution failed"
-        );
-
-        return false;
-    }
-
-
-    Serial.print(
-        "[CNCjs] Resolved to: "
-    );
-
-    Serial.println(
-        serverIP_
-    );
-
-
-    return true;
+    return networkManager_.wifiConnected();
 }
 
 
@@ -828,388 +730,6 @@ void CNCjsClientCore::saveServerSettings(
 
     serverPort_ =
         port;
-}
-
-
-// ============================================================
-// AUTHENTICATION RESET
-// ============================================================
-
-void CNCjsClientCore::resetAuthentication()
-{
-    authClient.stop();
-
-    authResponse =
-        "";
-
-    authHeaderBuffer =
-        "";
-
-    authRequestSent =
-        false;
-
-    authHeadersReceived =
-        false;
-
-    authContentLength =
-        -1;
-
-    authStartedAt =
-        0;
-
-    token =
-        "";
-}
-
-
-// ============================================================
-// AUTHENTICATION START
-// ============================================================
-
-bool CNCjsClientCore::startAuthentication()
-{
-    resetAuthentication();
-
-
-    Serial.println();
-    Serial.println(
-        "=== CNCjs signin ==="
-    );
-
-
-    if (
-        !authClient.connect(
-            serverIP_,
-            serverPort_
-        )
-    )
-    {
-        Serial.println(
-            "[CNCjs] Authentication TCP connection failed"
-        );
-
-        return false;
-    }
-
-
-    String body =
-        "{\"token\":\"\"}";
-
-
-    authClient.print(
-        "POST /api/signin HTTP/1.1\r\n"
-    );
-
-
-    authClient.print(
-        "Host: "
-    );
-
-    authClient.print(
-        serverHost_
-    );
-
-    authClient.print(
-        "\r\n"
-    );
-
-
-    authClient.print(
-        "Content-Type: application/json\r\n"
-    );
-
-
-    authClient.print(
-        "Content-Length: "
-    );
-
-    authClient.print(
-        body.length()
-    );
-
-    authClient.print(
-        "\r\n"
-    );
-
-
-    authClient.print(
-        "Connection: close\r\n"
-    );
-
-
-    authClient.print(
-        "\r\n"
-    );
-
-
-    authClient.print(
-        body
-    );
-
-
-    authRequestSent =
-        true;
-
-    authStartedAt =
-        millis();
-
-
-    Serial.println(
-        "[CNCjs] Authentication request sent"
-    );
-
-
-    return true;
-}
-
-
-// ============================================================
-// AUTHENTICATION UPDATE
-// ============================================================
-
-bool CNCjsClientCore::updateAuthentication()
-{
-    if (
-        !authRequestSent
-    )
-    {
-        return false;
-    }
-
-
-    while (
-        authClient.available()
-    )
-    {
-        char c =
-            static_cast<char>(
-                authClient.read()
-            );
-
-
-        authResponse +=
-            c;
-
-
-        /*
-            Header terminator.
-        */
-
-        if (
-            !authHeadersReceived &&
-            authResponse.endsWith(
-                "\r\n\r\n"
-            )
-        )
-        {
-            authHeadersReceived =
-                true;
-
-
-            int contentLengthPosition =
-                authResponse.indexOf(
-                    "Content-Length:"
-                );
-
-
-            if (
-                contentLengthPosition >= 0
-            )
-            {
-                int lineEnd =
-                    authResponse.indexOf(
-                        "\r\n",
-                        contentLengthPosition
-                    );
-
-
-                if (
-                    lineEnd >= 0
-                )
-                {
-                    String line =
-                        authResponse.substring(
-                            contentLengthPosition,
-                            lineEnd
-                        );
-
-
-                    int colon =
-                        line.indexOf(
-                            ':'
-                        );
-
-
-                    if (
-                        colon >= 0
-                    )
-                    {
-                        authContentLength =
-                            line.substring(
-                                colon + 1
-                            ).toInt();
-                    }
-                }
-            }
-        }
-    }
-
-
-    if (
-        authHeadersReceived
-    )
-    {
-        String body;
-
-
-        if (
-            extractAuthenticationBody(
-                body
-            )
-        )
-        {
-            JsonDocument doc;
-
-
-            DeserializationError error =
-                deserializeJson(
-                    doc,
-                    body
-                );
-
-
-            if (
-                error
-            )
-            {
-                Serial.print(
-                    "[CNCjs] Authentication JSON error: "
-                );
-
-                Serial.println(
-                    error.c_str()
-                );
-
-
-                authClient.stop();
-
-                return false;
-            }
-
-
-            if (
-                doc["token"].is<const char*>()
-            )
-            {
-                token =
-                    doc["token"].as<String>();
-            }
-            else if (
-                doc["accessToken"].is<const char*>()
-            )
-            {
-                token =
-                    doc["accessToken"].as<String>();
-            }
-
-
-            if (
-                token.length() > 0
-            )
-            {
-                authenticatedState =
-                    true;
-
-
-                authClient.stop();
-
-
-                Serial.println(
-                    "[CNCjs] JWT received"
-                );
-
-
-                return true;
-            }
-
-
-            Serial.println(
-                "[CNCjs] Authentication response contained no token"
-            );
-
-
-            authClient.stop();
-
-            return false;
-        }
-    }
-
-
-    return false;
-}
-
-
-// ============================================================
-// EXTRACT AUTHENTICATION BODY
-// ============================================================
-
-bool CNCjsClientCore::extractAuthenticationBody(
-    String& body
-)
-{
-    int separator =
-        authResponse.indexOf(
-            "\r\n\r\n"
-        );
-
-
-    if (
-        separator < 0
-    )
-    {
-        return false;
-    }
-
-
-    int bodyStart =
-        separator + 4;
-
-
-    int bodyLength =
-        authResponse.length() -
-        bodyStart;
-
-
-    if (
-        authContentLength >= 0 &&
-        bodyLength < authContentLength
-    )
-    {
-        return false;
-    }
-
-
-    if (
-        authContentLength >= 0
-    )
-    {
-        body =
-            authResponse.substring(
-                bodyStart,
-                bodyStart +
-                authContentLength
-            );
-    }
-    else
-    {
-        body =
-            authResponse.substring(
-                bodyStart
-            );
-    }
-
-
-    return body.length() > 0;
 }
 
 

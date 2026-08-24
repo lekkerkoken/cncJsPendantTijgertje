@@ -2,20 +2,29 @@
 #define CNCJS_CLIENT_CORE_H
 
 #include <Arduino.h>
-
-#include <WiFi.h>
 #include <WebSocketsClient.h>
 #include <SocketIOclient.h>
-
 #include <ArduinoJson.h>
 
 #include "MachineCommand.h"
 #include "MachineState.h"
+#include "NetworkManager.h"
 
 
 class CNCjsClientCore
 {
 public:
+
+    // ========================================================
+    // Lifecycle
+    // ========================================================
+
+    void begin(
+        MachineState& machineState
+    );
+
+    void update();
+
 
     // ========================================================
     // Status
@@ -36,17 +45,6 @@ public:
 
 
     CNCjsStatus status() const;
-
-
-    // ========================================================
-    // Lifecycle
-    // ========================================================
-
-    void begin(
-        MachineState& machineState
-    );
-
-    void update();
 
 
     // ========================================================
@@ -191,6 +189,13 @@ private:
 
 
     // ========================================================
+    // Network
+    // ========================================================
+
+    NetworkManager networkManager_;
+
+
+    // ========================================================
     // Connection state machine
     // ========================================================
 
@@ -249,60 +254,10 @@ private:
 
 
     // ========================================================
-    // WiFi
-    // ========================================================
-
-    void startWiFiConnection();
-
-    bool updateWiFiConnection();
-
-
-    // ========================================================
-    // DNS
-    // ========================================================
-
-    bool resolveCNCjs();
-
-
-    // ========================================================
-    // Authentication
+    // Authentication token
     // ========================================================
 
     String token;
-
-    bool startAuthentication();
-
-    bool updateAuthentication();
-
-
-    WiFiClient authClient;
-
-    String authResponse;
-
-    String authHeaderBuffer;
-
-    bool authRequestSent =
-        false;
-
-    bool authHeadersReceived =
-        false;
-
-    int authContentLength =
-        -1;
-
-    unsigned long authStartedAt =
-        0;
-
-
-    void resetAuthentication();
-
-    bool sendAuthenticationRequest();
-
-    bool processAuthenticationResponse();
-
-    bool extractAuthenticationBody(
-        String& body
-    );
 
 
     // ========================================================
