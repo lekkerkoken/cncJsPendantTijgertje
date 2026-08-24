@@ -396,33 +396,54 @@ void CNCjsClient::updateConnection()
             break;
 
 
-        // ----------------------------------------------------
-        // SOCKET
-        // ----------------------------------------------------
+// ----------------------------------------------------
+// SOCKET
+// ----------------------------------------------------
 
-        case ConnectionState::SocketConnecting:
+case ConnectionState::SocketConnecting:
 
-            if (
-                socketConnectedState
-            )
-            {
-                enterConnectionState(
-                    ConnectionState::WaitingForLists
-                );
-            }
+    /*
+        Start Socket.IO slechts één keer.
 
-            else if (
-                millis() - stateStartedAt >=
-                SOCKET_TIMEOUT
-            )
-            {
-                connectionFailed(
-                    "Socket.IO timeout"
-                );
-            }
+        socketBeginRequested wordt bij iedere nieuwe
+        connection attempt gereset door de state-machine.
+    */
 
-            break;
+    if (
+        !socketBeginRequested
+    )
+    {
+        connectSocket();
+    }
 
+
+    /*
+        Vanaf hier is Socket.IO volledig asynchroon.
+
+        De socket callback zet socketConnectedState
+        zodra sIOtype_CONNECT wordt ontvangen.
+    */
+
+    if (
+        socketConnectedState
+    )
+    {
+        enterConnectionState(
+            ConnectionState::WaitingForLists
+        );
+    }
+
+    else if (
+        millis() - stateStartedAt >=
+        SOCKET_TIMEOUT
+    )
+    {
+        connectionFailed(
+            "Socket.IO timeout"
+        );
+    }
+
+    break;
 
         // ----------------------------------------------------
         // LISTS
