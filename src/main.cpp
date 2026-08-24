@@ -9,7 +9,7 @@
 #include "PendantController.h"
 #include "MachineState.h"
 #include "JogPlanner.h"
-#include "CNCjsClient.h"
+#include "CNCjsInterface.h"
 #include "MachineMapper.h"
 
 
@@ -25,7 +25,7 @@ PendantController controller;
 
 MachineState machineState;
 
-CNCjsClient cnc;
+CNCjsInterface cnc;
 
 JogPlanner jogPlanner;
 

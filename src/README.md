@@ -33,7 +33,7 @@ MachineMapper
 
     ▼
 
-CNCjsClient
+CNCjsInterface
 
     │
 
@@ -59,7 +59,7 @@ JOG_CANCEL
 
     ▼
 
-CNCjsClient
+CNCjsInterface
 
     │
 
@@ -99,7 +99,7 @@ De `PendantController` bevat **geen implementatie van WiFi, Socket.IO, CNCjs-com
 * bepalen welke pendantlaag actief is;
 * bepalen welke as en jog-instelling actief zijn;
 * reageren op de toestand van `MachineState`;
-* reageren op de toestand van `CNCjsClient`;
+* reageren op de toestand van `CNCjsInterface`;
 * bepalen welke informatie op het display prioriteit heeft;
 * aansturen van `Display`.
 
@@ -134,7 +134,7 @@ PendantController
 
      │
 
-     └──────────────► CNCjsClient
+     └──────────────► CNCjsInterface
 ```
 
 De afzonderlijke verantwoordelijkheden blijven gescheiden:
@@ -146,7 +146,7 @@ De afzonderlijke verantwoordelijkheden blijven gescheiden:
 | `PendantState`           | Toestand van de bediening                                |
 | `Display`                | Weergeven van informatie                                 |
 | `MachineState`           | Toestand van de CNC-machine                              |
-| `CNCjsClient`            | WiFi, mDNS, authenticatie, Socket.IO en CNCjs-controller |
+| `CNCjsInterface`            | WiFi, mDNS, authenticatie, Socket.IO en CNCjs-controller |
 | `JogPlanner`             | Plannen van jogbewegingen                                |
 | `MachineMapper`          | Vertalen tussen machine- en pendantcoördinaten           |
 | `PowerManager` *(later)* | Sleep-, wake- en energiebeheer                           |
@@ -580,7 +580,7 @@ De actieve laag blijft in dat geval `LAYER_JOG`; alleen de displayweergave kan t
 
 ## Verbinding met CNCjs
 
-De `CNCjsClient` beheert de volledige technische verbinding met CNCjs.
+De `CNCjsInterface` beheert de volledige technische verbinding met CNCjs.
 
 De pendant hoeft niet te weten hoe die verbinding tot stand komt.
 
@@ -620,7 +620,7 @@ Ready
 
 De pendant reageert uitsluitend op de resulterende status.
 
-Bij verbindingsverlies kan `CNCjsClient` zelfstandig opnieuw proberen verbinding te maken. Zodra de status verandert, kan `PendantController` de displayweergave daarop aanpassen.
+Bij verbindingsverlies kan `CNCjsInterface` zelfstandig opnieuw proberen verbinding te maken. Zodra de status verandert, kan `PendantController` de displayweergave daarop aanpassen.
 
 Na deep sleep wordt dezelfde verbindingsprocedure opnieuw uitgevoerd; een oude Socket.IO-verbinding wordt niet hergebruikt.
 
@@ -740,11 +740,11 @@ Daarnaast geldt voor de inputarchitectuur:
 
 ---
 
-# CNCjsClient – communicatie- en machine-selectiecontract
+# CNCjsInterface – communicatie- en machine-selectiecontract
 
 ## Doel
 
-De `CNCjsClient` vormt de technische communicatiegrens tussen de pendant en CNCjs.
+De `CNCjsInterface` vormt de technische communicatiegrens tussen de pendant en CNCjs.
 
 De rest van de pendant hoeft niets te weten over:
 
@@ -768,14 +768,14 @@ MachineState
 
 ---
 
-## 15. CNCjsClient als adapterlaag
+## 15. CNCjsInterface als adapterlaag
 
-De CNCjsClient heeft twee hoofdverantwoordelijkheden:
+De CNCjsInterface heeft twee hoofdverantwoordelijkheden:
 
 1. communicatie met CNCjs verzorgen;
 2. een geschikte CNCjs-machineverbinding vinden en openen.
 
-De CNCjsClient vertaalt dus niet de gebruikersintentie.
+De CNCjsInterface vertaalt dus niet de gebruikersintentie.
 
 De architectuur blijft:
 
@@ -792,7 +792,7 @@ MachineMapper
 
     ↓
 
-CNCjsClient
+CNCjsInterface
 
     ↓
 
@@ -814,7 +814,7 @@ CNCjs
 
     ↓
 
-CNCjsClient
+CNCjsInterface
 
     ↓
 
@@ -831,7 +831,7 @@ JogPlanner
 
 Ook wanneer CNCjs gebruikerslogin heeft uitgeschakeld, gebruikt CNCjs authenticatie voor de API en Socket.IO-interface.
 
-De CNCjsClient vraagt daarom bij het opstarten een JWT-token op via:
+De CNCjsInterface vraagt daarom bij het opstarten een JWT-token op via:
 
 ```text
 POST /api/signin
@@ -891,13 +891,13 @@ en de daarin beschikbare:
 SocketIOclient
 ```
 
-De CNCjsClient verbergt deze implementatiedetails voor de rest van de pendant.
+De CNCjsInterface verbergt deze implementatiedetails voor de rest van de pendant.
 
 ---
 
 ## 18. CNCjs-inventarisatie
 
-Na het opbouwen van de Socket.IO-verbinding wacht de CNCjsClient op informatie van CNCjs over de beschikbare controllers en seriële poorten.
+Na het opbouwen van de Socket.IO-verbinding wacht de CNCjsInterface op informatie van CNCjs over de beschikbare controllers en seriële poorten.
 
 CNCjs levert onder andere een `startup` event:
 
@@ -955,13 +955,13 @@ We mogen dus niet aannemen:
 loadedControllers[0] == serialport:list[0]
 ```
 
-De CNCjsClient combineert deze informatie tot mogelijke machineconfiguraties.
+De CNCjsInterface combineert deze informatie tot mogelijke machineconfiguraties.
 
 ---
 
 ## 19. Beschikbare machines
 
-De CNCjsClient bouwt uit de ontvangen informatie een lijst van mogelijke machineverbindingen.
+De CNCjsInterface bouwt uit de ontvangen informatie een lijst van mogelijke machineverbindingen.
 
 Conceptueel:
 
@@ -992,7 +992,7 @@ Deze lijst vormt de basis voor de machinekeuze.
 
 ## 20. Controllerkeuze
 
-De CNCjsClient onthoudt welke machine eerder door de gebruiker is gekozen.
+De CNCjsInterface onthoudt welke machine eerder door de gebruiker is gekozen.
 
 De opgeslagen keuze is **geen index**.
 
@@ -1028,7 +1028,7 @@ De opgeslagen eigenschappen blijven dan bruikbaar om de eerder gekozen machine t
 
 ## 21. Automatische selectie
 
-Na inventarisatie vergelijkt de CNCjsClient de eerder opgeslagen keuze met de actuele lijst.
+Na inventarisatie vergelijkt de CNCjsInterface de eerder opgeslagen keuze met de actuele lijst.
 
 Wanneer exact één geschikte match wordt gevonden:
 
@@ -1052,7 +1052,7 @@ De gebruiker hoeft dan niets te doen.
 
 Wanneer de opgeslagen machine niet meer wordt gevonden, wordt niet automatisch een willekeurige machine geopend.
 
-De CNCjsClient gaat naar:
+De CNCjsInterface gaat naar:
 
 ```text
 MACHINE_SELECTION_REQUIRED
@@ -1080,7 +1080,7 @@ Belangrijk:
 de UI is dus geen onderdeel van de machinecommunicatielaag.
 ```
 
-De UI levert uiteindelijk alleen een keuze aan de CNCjsClient.
+De UI levert uiteindelijk alleen een keuze aan de CNCjsInterface.
 
 ---
 
@@ -1151,7 +1151,7 @@ Daarna kan CNCjs controllerinformatie leveren.
 
 ## 25. Controllerinformatie
 
-Na het openen van de controller ontvangt de CNCjsClient onder andere:
+Na het openen van de controller ontvangt de CNCjsInterface onder andere:
 
 ```text
 controller:settings
@@ -1179,7 +1179,7 @@ $112 = 500.000
 
 Deze informatie kan later gebruikt worden om de capabilities van de machine te bepalen.
 
-De CNCjsClient hoeft deze gegevens echter niet zelf te interpreteren voor de JogPlanner.
+De CNCjsInterface hoeft deze gegevens echter niet zelf te interpreteren voor de JogPlanner.
 
 De informatie wordt beschikbaar gesteld via een passend machine-model.
 
@@ -1187,7 +1187,7 @@ De informatie wordt beschikbaar gesteld via een passend machine-model.
 
 ## 26. MachineCommand
 
-De CNCjsClient ontvangt vanuit de `MachineMapper` een `MachineCommand`.
+De CNCjsInterface ontvangt vanuit de `MachineMapper` een `MachineCommand`.
 
 Bijvoorbeeld:
 
@@ -1201,7 +1201,7 @@ MachineCommand
     command  = G0 X1
 ```
 
-De CNCjsClient vertaalt dit naar het CNCjs Socket.IO event:
+De CNCjsInterface vertaalt dit naar het CNCjs Socket.IO event:
 
 ```text
 [
@@ -1214,7 +1214,7 @@ De CNCjsClient vertaalt dit naar het CNCjs Socket.IO event:
 
 CNCjs stuurt dit vervolgens naar de geselecteerde controller.
 
-De CNCjsClient bepaalt dus niet wat een jog betekent.
+De CNCjsInterface bepaalt dus niet wat een jog betekent.
 
 Hij transporteert een reeds vertaald machinecommando.
 
@@ -1251,7 +1251,7 @@ Bijvoorbeeld:
 }]
 ```
 
-De CNCjsClient vertaalt deze informatie naar `MachineState`.
+De CNCjsInterface vertaalt deze informatie naar `MachineState`.
 
 De JogPlanner hoeft dus geen CNCjs JSON te kennen.
 
@@ -1297,7 +1297,7 @@ Dit is essentieel voor de JogPlanner.
 
 ## 29. Externe bewegingen
 
-De CNCjsClient ontvangt ook bewegingen die niet door de pendant zijn gestart.
+De CNCjsInterface ontvangt ook bewegingen die niet door de pendant zijn gestart.
 
 Bijvoorbeeld wanneer vanuit de CNCjs-webinterface een jog wordt gegeven.
 
@@ -1353,7 +1353,7 @@ controller:state
 
 ## 31. Machinebeschikbaarheid
 
-De CNCjsClient kent verschillende toestanden.
+De CNCjsInterface kent verschillende toestanden.
 
 Conceptueel:
 
@@ -1395,16 +1395,16 @@ De rest van de applicatie kan hiermee bepalen of machinecommando's veilig verstu
 
 ---
 
-## 32. CNCjsClient als zelfstandige taak
+## 32. CNCjsInterface als zelfstandige taak
 
-De `CNCjsClient` is een zelfstandige FreeRTOS-taak.
+De `CNCjsInterface` is een zelfstandige FreeRTOS-taak.
 
 De Socket.IO-communicatie wordt daardoor onafhankelijk verwerkt van de encoder-, button- en applicatietaken.
 
 Conceptueel:
 
 ```text
-CNCjsClient Task
+CNCjsInterface Task
 
     │
 
@@ -1423,12 +1423,12 @@ De client mag de verwerking van fysieke input niet blokkeren.
 
 Een tijdelijk trage netwerkverbinding mag bijvoorbeeld niet voorkomen dat de encoder verder wordt uitgelezen.
 
-De communicatie tussen de CNCjsClient en de overige applicatielagen verloopt daarom via daarvoor bestemde modellen en queues, niet via directe afhankelijkheid van de Socket.IO-loop.
+De communicatie tussen de CNCjsInterface en de overige applicatielagen verloopt daarom via daarvoor bestemde modellen en queues, niet via directe afhankelijkheid van de Socket.IO-loop.
 
 De eerdere gedachte:
 
 ```text
-cncjsClient.loop();
+CNCjsInterface.loop();
 ```
 
 in de hoofdloop wordt daarmee vervangen door een zelfstandige communicatietaak.
@@ -1471,7 +1471,7 @@ MachineMapper
     bepaalt HOE die intentie wordt vertaald naar een
     machinecommando
 
-CNCjsClient
+CNCjsInterface
 
     bepaalt met WELKE CNCjs-machine wordt gecommuniceerd
     en verzorgt de communicatie
@@ -1528,7 +1528,7 @@ De volledige input- en machinearchitectuur wordt:
                 CNCjs Command Queue
                        │
                        ▼
-                 CNCjsClient Task
+                 CNCjsInterface Task
                        │
                        ▼
                     CNCjs
@@ -1555,7 +1555,7 @@ CNCjs
 
    ↓
 
-CNCjsClient Task
+CNCjsInterface Task
 
    ↓
 
@@ -1570,7 +1570,7 @@ JogPlanner / PendantController
 
 ## 35. Belangrijk ontwerpprincipe
 
-De CNCjsClient kent de technische wereld van CNCjs.
+De CNCjsInterface kent de technische wereld van CNCjs.
 
 De JogPlanner kent de wereld van gebruikersintentie.
 
@@ -1605,7 +1605,7 @@ MachineMapper
 
         ↓
 
-CNCjsClient
+CNCjsInterface
 
     "ik stuur dit naar de geselecteerde CNCjs-machine"
 

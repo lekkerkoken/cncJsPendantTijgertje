@@ -1,4 +1,4 @@
-#include "CNCjsClient.h"
+#include "CNCjsInterface.h"
 
 #include <ESPmDNS.h>
 #include <Preferences.h>
@@ -6,7 +6,7 @@
 #include "Secrets.h"
 
 
-CNCjsClient* CNCjsClient::instance =
+CNCjsInterface* CNCjsInterface::instance =
     nullptr;
 
 
@@ -14,7 +14,7 @@ CNCjsClient* CNCjsClient::instance =
 // BEGIN
 // ============================================================
 
-void CNCjsClient::begin(
+void CNCjsInterface::begin(
     MachineState& machineState
 )
 {
@@ -27,7 +27,7 @@ void CNCjsClient::begin(
 
     Serial.println();
     Serial.println("================================");
-    Serial.println(" CNCjsClient");
+    Serial.println(" CNCjsInterface");
     Serial.println("================================");
 
 
@@ -110,7 +110,7 @@ void CNCjsClient::begin(
 // UPDATE
 // ============================================================
 
-void CNCjsClient::update()
+void CNCjsInterface::update()
 {
     /*
         Socket.IO moet altijd blijven draaien.
@@ -160,8 +160,8 @@ void CNCjsClient::update()
 // STATUS
 // ============================================================
 
-CNCjsClient::CNCjsStatus
-CNCjsClient::status() const
+CNCjsInterface::CNCjsStatus
+CNCjsInterface::status() const
 {
     return currentStatus_;
 }
@@ -171,7 +171,7 @@ CNCjsClient::status() const
 // CONNECTION STATE
 // ============================================================
 
-void CNCjsClient::enterConnectionState(
+void CNCjsInterface::enterConnectionState(
     ConnectionState state
 )
 {
@@ -266,7 +266,7 @@ void CNCjsClient::enterConnectionState(
 // CONNECTION UPDATE
 // ============================================================
 
-void CNCjsClient::updateConnection()
+void CNCjsInterface::updateConnection()
 {
     switch(connectionState)
     {
@@ -548,7 +548,7 @@ void CNCjsClient::updateConnection()
 // CONNECTION FAILED
 // ============================================================
 
-void CNCjsClient::connectionFailed(
+void CNCjsInterface::connectionFailed(
     const char* reason
 )
 {
@@ -614,7 +614,7 @@ void CNCjsClient::connectionFailed(
 // WIFI START
 // ============================================================
 
-void CNCjsClient::startWiFiConnection()
+void CNCjsInterface::startWiFiConnection()
 {
     Serial.println();
 
@@ -644,7 +644,7 @@ void CNCjsClient::startWiFiConnection()
 // WIFI UPDATE
 // ============================================================
 
-bool CNCjsClient::updateWiFiConnection()
+bool CNCjsInterface::updateWiFiConnection()
 {
     if (
         WiFi.status() !=
@@ -672,7 +672,7 @@ bool CNCjsClient::updateWiFiConnection()
 // WIFI STATUS
 // ============================================================
 
-bool CNCjsClient::wifiConnected() const
+bool CNCjsInterface::wifiConnected() const
 {
     return WiFi.status() ==
            WL_CONNECTED;
@@ -683,7 +683,7 @@ bool CNCjsClient::wifiConnected() const
 // RESOLVE CNCJS
 // ============================================================
 
-bool CNCjsClient::resolveCNCjs()
+bool CNCjsInterface::resolveCNCjs()
 {
     Serial.println();
 
@@ -736,7 +736,7 @@ bool CNCjsClient::resolveCNCjs()
 // LOAD SERVER SETTINGS
 // ============================================================
 
-void CNCjsClient::loadServerSettings()
+void CNCjsInterface::loadServerSettings()
 {
     Preferences preferences;
 
@@ -794,7 +794,7 @@ void CNCjsClient::loadServerSettings()
 // SAVE SERVER SETTINGS
 // ============================================================
 
-void CNCjsClient::saveServerSettings(
+void CNCjsInterface::saveServerSettings(
     const char* host,
     uint16_t port
 )
@@ -835,7 +835,7 @@ void CNCjsClient::saveServerSettings(
 // AUTHENTICATION RESET
 // ============================================================
 
-void CNCjsClient::resetAuthentication()
+void CNCjsInterface::resetAuthentication()
 {
     authClient.stop();
 
@@ -866,7 +866,7 @@ void CNCjsClient::resetAuthentication()
 // AUTHENTICATION START
 // ============================================================
 
-bool CNCjsClient::startAuthentication()
+bool CNCjsInterface::startAuthentication()
 {
     resetAuthentication();
 
@@ -967,7 +967,7 @@ bool CNCjsClient::startAuthentication()
 // AUTHENTICATION UPDATE
 // ============================================================
 
-bool CNCjsClient::updateAuthentication()
+bool CNCjsInterface::updateAuthentication()
 {
     if (
         !authRequestSent
@@ -1153,7 +1153,7 @@ bool CNCjsClient::updateAuthentication()
 // EXTRACT AUTHENTICATION BODY
 // ============================================================
 
-bool CNCjsClient::extractAuthenticationBody(
+bool CNCjsInterface::extractAuthenticationBody(
     String& body
 )
 {
@@ -1217,7 +1217,7 @@ bool CNCjsClient::extractAuthenticationBody(
 // AUTHENTICATED
 // ============================================================
 
-bool CNCjsClient::authenticated() const
+bool CNCjsInterface::authenticated() const
 {
     return authenticatedState;
 }
@@ -1227,7 +1227,7 @@ bool CNCjsClient::authenticated() const
 // CONNECT SOCKET
 // ============================================================
 
-void CNCjsClient::connectSocket()
+void CNCjsInterface::connectSocket()
 {
     if (
         socketBeginRequested
@@ -1298,7 +1298,7 @@ void CNCjsClient::connectSocket()
 
 
     socketIO.onEvent(
-        CNCjsClient::socketIOEvent
+        CNCjsInterface::socketIOEvent
     );
 }
 
@@ -1307,7 +1307,7 @@ void CNCjsClient::connectSocket()
 // SOCKET STATUS
 // ============================================================
 
-bool CNCjsClient::socketConnected() const
+bool CNCjsInterface::socketConnected() const
 {
     return socketConnectedState;
 }
@@ -1317,7 +1317,7 @@ bool CNCjsClient::socketConnected() const
 // SOCKET CALLBACK
 // ============================================================
 
-void CNCjsClient::socketIOEvent(
+void CNCjsInterface::socketIOEvent(
     socketIOmessageType_t type,
     uint8_t* payload,
     size_t length
@@ -1343,7 +1343,7 @@ void CNCjsClient::socketIOEvent(
 // MACHINE STATUS MAPPING
 // ============================================================
 
-MachineStatus CNCjsClient::machineStatusFromCNCjs(
+MachineStatus CNCjsInterface::machineStatusFromCNCjs(
     const char* activeState
 ) const
 {
@@ -1407,7 +1407,7 @@ MachineStatus CNCjsClient::machineStatusFromCNCjs(
 // UPDATE MACHINE STATE
 // ============================================================
 
-void CNCjsClient::updateMachineState(
+void CNCjsInterface::updateMachineState(
     JsonObject status,
     JsonObject parserstate
 )
@@ -1500,7 +1500,7 @@ void CNCjsClient::updateMachineState(
 // MACHINE HEARTBEAT RECEIVED
 // ============================================================
 
-void CNCjsClient::machineHeartbeatReceived()
+void CNCjsInterface::machineHeartbeatReceived()
 {
     lastMachineStateTime =
         millis();
@@ -1514,7 +1514,7 @@ void CNCjsClient::machineHeartbeatReceived()
 // HEARTBEAT UPDATE
 // ============================================================
 
-void CNCjsClient::updateHeartbeat()
+void CNCjsInterface::updateHeartbeat()
 {
     if (
         connectionState !=
@@ -1582,7 +1582,7 @@ void CNCjsClient::updateHeartbeat()
 // STATUS REPORT
 // ============================================================
 
-bool CNCjsClient::sendStatusReport()
+bool CNCjsInterface::sendStatusReport()
 {
     if (
         !socketConnectedState ||
@@ -1664,7 +1664,7 @@ bool CNCjsClient::sendStatusReport()
 // SOCKET EVENT HANDLER
 // ============================================================
 
-void CNCjsClient::handleSocketEvent(
+void CNCjsInterface::handleSocketEvent(
     socketIOmessageType_t type,
     uint8_t* payload,
     size_t length
@@ -2554,7 +2554,7 @@ void CNCjsClient::handleSocketEvent(
 // REQUEST PORT LIST
 // ============================================================
 
-void CNCjsClient::requestPortList()
+void CNCjsInterface::requestPortList()
 {
     if (
         listRequested
@@ -2613,7 +2613,7 @@ void CNCjsClient::requestPortList()
 // CONTROLLER SELECTION READY
 // ============================================================
 
-bool CNCjsClient::controllerSelectionReady() const
+bool CNCjsInterface::controllerSelectionReady() const
 {
     return controllerSelectionReadyState;
 }
@@ -2623,7 +2623,7 @@ bool CNCjsClient::controllerSelectionReady() const
 // CONTROLLER COUNT
 // ============================================================
 
-int CNCjsClient::controllerCount() const
+int CNCjsInterface::controllerCount() const
 {
     return numberOfControllers;
 }
@@ -2633,7 +2633,7 @@ int CNCjsClient::controllerCount() const
 // CONTROLLER
 // ============================================================
 
-const char* CNCjsClient::controller(
+const char* CNCjsInterface::controller(
     int index
 ) const
 {
@@ -2654,7 +2654,7 @@ const char* CNCjsClient::controller(
 // PORT COUNT
 // ============================================================
 
-int CNCjsClient::portCount() const
+int CNCjsInterface::portCount() const
 {
     return numberOfPorts;
 }
@@ -2664,7 +2664,7 @@ int CNCjsClient::portCount() const
 // PORT
 // ============================================================
 
-const char* CNCjsClient::port(
+const char* CNCjsInterface::port(
     int index
 ) const
 {
@@ -2685,7 +2685,7 @@ const char* CNCjsClient::port(
 // LOAD SAVED CONTROLLER
 // ============================================================
 
-int CNCjsClient::loadSavedController()
+int CNCjsInterface::loadSavedController()
 {
     Preferences preferences;
 
@@ -2714,7 +2714,7 @@ int CNCjsClient::loadSavedController()
 // LOAD SAVED CONTROLLER NAME
 // ============================================================
 
-String CNCjsClient::loadSavedControllerName()
+String CNCjsInterface::loadSavedControllerName()
 {
     Preferences preferences;
 
@@ -2743,7 +2743,7 @@ String CNCjsClient::loadSavedControllerName()
 // LOAD SAVED PORT NAME
 // ============================================================
 
-String CNCjsClient::loadSavedPortName()
+String CNCjsInterface::loadSavedPortName()
 {
     Preferences preferences;
 
@@ -2772,7 +2772,7 @@ String CNCjsClient::loadSavedPortName()
 // SAVE SELECTED CONTROLLER
 // ============================================================
 
-void CNCjsClient::saveSelectedController(
+void CNCjsInterface::saveSelectedController(
     int index,
     const char* name
 )
@@ -2815,7 +2815,7 @@ void CNCjsClient::saveSelectedController(
 // SAVE SELECTED PORT
 // ============================================================
 
-void CNCjsClient::saveSelectedPort(
+void CNCjsInterface::saveSelectedPort(
     const char* portName
 )
 {
@@ -2851,7 +2851,7 @@ void CNCjsClient::saveSelectedPort(
 // FIND CONTROLLER BY NAME
 // ============================================================
 
-int CNCjsClient::findControllerByName(
+int CNCjsInterface::findControllerByName(
     const char* name
 ) const
 {
@@ -2888,7 +2888,7 @@ int CNCjsClient::findControllerByName(
 // FIND PORT BY NAME
 // ============================================================
 
-int CNCjsClient::findPortByName(
+int CNCjsInterface::findPortByName(
     const char* name
 ) const
 {
@@ -2925,7 +2925,7 @@ int CNCjsClient::findPortByName(
 // BAUDRATE
 // ============================================================
 
-int CNCjsClient::baudrateForController(
+int CNCjsInterface::baudrateForController(
     const char* controllerType
 ) const
 {
@@ -2989,7 +2989,7 @@ int CNCjsClient::baudrateForController(
 // LOAD CONTROLLER LIST / SELECTION
 // ============================================================
 
-void CNCjsClient::loadControllerList()
+void CNCjsInterface::loadControllerList()
 {
     if (
         !startupReceivedState ||
@@ -3108,7 +3108,7 @@ void CNCjsClient::loadControllerList()
 // CHOOSE CONTROLLER
 // ============================================================
 
-void CNCjsClient::chooseController()
+void CNCjsInterface::chooseController()
 {
     if (
         numberOfControllers == 0 ||
@@ -3158,7 +3158,7 @@ void CNCjsClient::chooseController()
 // SELECT CONTROLLER
 // ============================================================
 
-bool CNCjsClient::selectController(
+bool CNCjsInterface::selectController(
     int portIndex,
     int controllerIndex
 )
@@ -3222,7 +3222,7 @@ bool CNCjsClient::selectController(
 // SELECTED CONTROLLER
 // ============================================================
 
-int CNCjsClient::selectedController() const
+int CNCjsInterface::selectedController() const
 {
     return selectedControllerIndex;
 }
@@ -3233,7 +3233,7 @@ int CNCjsClient::selectedController() const
 // ============================================================
 
 const char*
-CNCjsClient::selectedControllerName() const
+CNCjsInterface::selectedControllerName() const
 {
     return selectedControllerNameState.c_str();
 }
@@ -3243,7 +3243,7 @@ CNCjsClient::selectedControllerName() const
 // SELECTED PORT
 // ============================================================
 
-int CNCjsClient::selectedPort() const
+int CNCjsInterface::selectedPort() const
 {
     return selectedPortIndex;
 }
@@ -3254,7 +3254,7 @@ int CNCjsClient::selectedPort() const
 // ============================================================
 
 const char*
-CNCjsClient::selectedPortName() const
+CNCjsInterface::selectedPortName() const
 {
     return selectedPortNameState.c_str();
 }
@@ -3264,7 +3264,7 @@ CNCjsClient::selectedPortName() const
 // CONTROLLER READY
 // ============================================================
 
-bool CNCjsClient::controllerReady() const
+bool CNCjsInterface::controllerReady() const
 {
     return controllerReadyState;
 }
@@ -3275,7 +3275,7 @@ bool CNCjsClient::controllerReady() const
 // ============================================================
 
 const char*
-CNCjsClient::controllerPort() const
+CNCjsInterface::controllerPort() const
 {
     return activeControllerPortState.c_str();
 }
@@ -3286,7 +3286,7 @@ CNCjsClient::controllerPort() const
 // ============================================================
 
 const char*
-CNCjsClient::controllerType() const
+CNCjsInterface::controllerType() const
 {
     return activeControllerTypeState.c_str();
 }
@@ -3296,7 +3296,7 @@ CNCjsClient::controllerType() const
 // ACTIVE CONTROLLER BAUDRATE
 // ============================================================
 
-int CNCjsClient::controllerBaudrate() const
+int CNCjsInterface::controllerBaudrate() const
 {
     return activeControllerBaudrateState;
 }
@@ -3306,7 +3306,7 @@ int CNCjsClient::controllerBaudrate() const
 // OPEN SELECTED CONTROLLER
 // ============================================================
 
-bool CNCjsClient::openSelectedController()
+bool CNCjsInterface::openSelectedController()
 {
     if (
         selectedPortIndex < 0 ||
@@ -3335,7 +3335,7 @@ bool CNCjsClient::openSelectedController()
 // EXECUTE MACHINE COMMAND
 // ============================================================
 
-bool CNCjsClient::execute(
+bool CNCjsInterface::execute(
     const MachineCommand& command
 )
 {
@@ -3401,7 +3401,7 @@ bool CNCjsClient::execute(
 // SEND PENDING COMMAND
 // ============================================================
 
-bool CNCjsClient::sendPendingCommand()
+bool CNCjsInterface::sendPendingCommand()
 {
     if (
         !commandDirty_
@@ -3511,7 +3511,7 @@ bool CNCjsClient::sendPendingCommand()
 // JOG CANCEL
 // ============================================================
 
-bool CNCjsClient::jogCancel()
+bool CNCjsInterface::jogCancel()
 {
     if (
         !socketConnectedState ||
@@ -3567,7 +3567,7 @@ bool CNCjsClient::jogCancel()
 // FEED HOLD
 // ============================================================
 
-bool CNCjsClient::feedHold()
+bool CNCjsInterface::feedHold()
 {
     return sendRealtime(
         '!'
@@ -3579,7 +3579,7 @@ bool CNCjsClient::feedHold()
 // RESUME
 // ============================================================
 
-bool CNCjsClient::resume()
+bool CNCjsInterface::resume()
 {
     return sendRealtime(
         '~'
@@ -3591,7 +3591,7 @@ bool CNCjsClient::resume()
 // RESET
 // ============================================================
 
-bool CNCjsClient::reset()
+bool CNCjsInterface::reset()
 {
     /*
         GRBL reset is a realtime 0x18 byte.
@@ -3618,7 +3618,7 @@ bool CNCjsClient::reset()
 // OPEN CONTROLLER
 // ============================================================
 
-bool CNCjsClient::openController(
+bool CNCjsInterface::openController(
     const char* portName,
     const char* controllerType,
     int baudrate
@@ -3735,7 +3735,7 @@ bool CNCjsClient::openController(
 // SEND GCODE
 // ============================================================
 
-bool CNCjsClient::sendGcode(
+bool CNCjsInterface::sendGcode(
     const char* gcode
 )
 {
@@ -3758,7 +3758,7 @@ bool CNCjsClient::sendGcode(
 // SEND GCODE - EXPLICIT PORT
 // ============================================================
 
-bool CNCjsClient::sendGcode(
+bool CNCjsInterface::sendGcode(
     const char* portName,
     const char* gcode
 )
@@ -3836,7 +3836,7 @@ bool CNCjsClient::sendGcode(
 // SEND COMMAND
 // ============================================================
 
-bool CNCjsClient::sendCommand(
+bool CNCjsInterface::sendCommand(
     const String& command
 )
 {
@@ -3914,7 +3914,7 @@ bool CNCjsClient::sendCommand(
 // SEND REALTIME
 // ============================================================
 
-bool CNCjsClient::sendRealtime(
+bool CNCjsInterface::sendRealtime(
     uint8_t command
 )
 {

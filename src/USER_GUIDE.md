@@ -15,7 +15,7 @@ De `PendantController` bevat **geen implementatie van WiFi, Socket.IO, CNCjs-com
 * bepalen welke pendantlaag actief is;
 * bepalen welke as en jog-instelling actief zijn;
 * reageren op de toestand van `MachineState`;
-* reageren op de toestand van `CNCjsClient`;
+* reageren op de toestand van `CNCjsInterface`;
 * bepalen welke informatie op het display prioriteit heeft;
 * aansturen van `Display`.
 
@@ -38,7 +38,7 @@ PendantController
      │
      ├──────────────► MachineState
      │
-     └──────────────► CNCjsClient
+     └──────────────► CNCjsInterface
 ```
 
 De afzonderlijke verantwoordelijkheden blijven gescheiden:
@@ -50,7 +50,7 @@ De afzonderlijke verantwoordelijkheden blijven gescheiden:
 | `PendantState`           | Toestand van de bediening                                |
 | `Display`                | Weergeven van informatie                                 |
 | `MachineState`           | Toestand van de CNC-machine                              |
-| `CNCjsClient`            | WiFi, mDNS, authenticatie, Socket.IO en CNCjs-controller |
+| `CNCjsInterface`            | WiFi, mDNS, authenticatie, Socket.IO en CNCjs-controller |
 | `JogPlanner`             | Plannen van jogbewegingen                                |
 | `MachineMapper`          | Vertalen tussen machine- en pendantcoördinaten           |
 | `PowerManager` *(later)* | Sleep-, wake- en energiebeheer                           |
@@ -158,7 +158,7 @@ De actieve laag blijft in dat geval `LAYER_JOG`; alleen de displayweergave kan t
 
 ## Verbinding met CNCjs
 
-De `CNCjsClient` beheert de volledige technische verbinding met CNCjs.
+De `CNCjsInterface` beheert de volledige technische verbinding met CNCjs.
 
 De pendant hoeft niet te weten hoe die verbinding tot stand komt.
 
@@ -184,7 +184,7 @@ Ready
 
 De pendant reageert uitsluitend op de resulterende status.
 
-Bij verbindingsverlies kan `CNCjsClient` zelfstandig opnieuw proberen verbinding te maken. Zodra de status verandert, kan `PendantController` de displayweergave daarop aanpassen.
+Bij verbindingsverlies kan `CNCjsInterface` zelfstandig opnieuw proberen verbinding te maken. Zodra de status verandert, kan `PendantController` de displayweergave daarop aanpassen.
 
 Na deep sleep wordt dezelfde verbindingsprocedure opnieuw uitgevoerd; een oude Socket.IO-verbinding wordt niet hergebruikt.
 

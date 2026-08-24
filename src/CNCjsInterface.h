@@ -1,5 +1,5 @@
-#ifndef CNCJS_CLIENT_H
-#define CNCJS_CLIENT_H
+#ifndef CNCJS_Interface_H
+#define CNCJS_Interface_H
 
 #include <Arduino.h>
 
@@ -13,7 +13,7 @@
 #include "MachineState.h"
 
 
-class CNCjsClient
+class CNCjsInterface
 {
 public:
 
@@ -324,7 +324,7 @@ private:
     );
 
 
-    static CNCjsClient* instance;
+    static CNCjsInterface* instance;
 
 
     static void socketIOEvent(

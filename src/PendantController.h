@@ -6,7 +6,7 @@
 #include "Display.h"
 #include "PendantState.h"
 #include "MachineState.h"
-#include "CNCjsClient.h"
+#include "CNCjsInterface.h"
 
 
 class PendantController
@@ -17,7 +17,7 @@ public:
     void begin(
         Display& display,
         MachineState& machineState,
-        CNCjsClient& cnc
+        CNCjsInterface& cnc
     );
 
 
@@ -36,7 +36,7 @@ private:
 
     MachineState* machineState = nullptr;
 
-    CNCjsClient* cnc = nullptr;
+    CNCjsInterface* cnc = nullptr;
 
 
     PendantState pendantState;
@@ -48,8 +48,8 @@ private:
 
     bool displayDirty = true;
 
-    CNCjsClient::CNCjsStatus lastCncStatus =
-        CNCjsClient::CNCjsStatus::Offline;
+    CNCjsInterface::CNCjsStatus lastCncStatus =
+        CNCjsInterface::CNCjsStatus::Offline;
 
     MachineStatus lastMachineStatus =
         MACHINE_DISCONNECTED;

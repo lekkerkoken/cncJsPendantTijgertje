@@ -10,7 +10,7 @@
 void PendantController::begin(
     Display& display,
     MachineState& machineState,
-    CNCjsClient& cnc
+    CNCjsInterface& cnc
 )
 {
     this->display =
@@ -215,7 +215,7 @@ void PendantController::checkStatusChanges()
 {
     if(cnc != nullptr)
     {
-        CNCjsClient::CNCjsStatus currentCncStatus =
+        CNCjsInterface::CNCjsStatus currentCncStatus =
             cnc->status();
 
 
@@ -342,25 +342,25 @@ void PendantController::updateDisplay()
 
     if(cnc != nullptr)
     {
-        CNCjsClient::CNCjsStatus status =
+        CNCjsInterface::CNCjsStatus status =
             cnc->status();
 
 
         switch(status)
         {
-            case CNCjsClient::CNCjsStatus::Offline:
+            case CNCjsInterface::CNCjsStatus::Offline:
 
-            case CNCjsClient::CNCjsStatus::WiFiConnecting:
+            case CNCjsInterface::CNCjsStatus::WiFiConnecting:
 
-            case CNCjsClient::CNCjsStatus::Authenticating:
+            case CNCjsInterface::CNCjsStatus::Authenticating:
 
-            case CNCjsClient::CNCjsStatus::Connecting:
+            case CNCjsInterface::CNCjsStatus::Connecting:
 
-            case CNCjsClient::CNCjsStatus::WaitingForLists:
+            case CNCjsInterface::CNCjsStatus::WaitingForLists:
 
-            case CNCjsClient::CNCjsStatus::SelectionRequired:
+            case CNCjsInterface::CNCjsStatus::SelectionRequired:
 
-            case CNCjsClient::CNCjsStatus::OpeningController:
+            case CNCjsInterface::CNCjsStatus::OpeningController:
 
                 updateCncStatus();
 
@@ -404,7 +404,7 @@ void PendantController::updateCncStatus()
     }
 
 
-    CNCjsClient::CNCjsStatus status =
+    CNCjsInterface::CNCjsStatus status =
         cnc->status();
 
 
@@ -416,7 +416,7 @@ void PendantController::updateCncStatus()
     switch(status)
     {
 
-        case CNCjsClient::CNCjsStatus::Offline:
+        case CNCjsInterface::CNCjsStatus::Offline:
 
             display->setLine1(
                 "Offline"
@@ -429,7 +429,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::WiFiConnecting:
+        case CNCjsInterface::CNCjsStatus::WiFiConnecting:
 
             display->setLine1(
                 "WiFi"
@@ -442,7 +442,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::Authenticating:
+        case CNCjsInterface::CNCjsStatus::Authenticating:
 
             display->setLine1(
                 "CNCjs"
@@ -455,7 +455,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::Connecting:
+        case CNCjsInterface::CNCjsStatus::Connecting:
 
             display->setLine1(
                 "CNCjs"
@@ -468,7 +468,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::WaitingForLists:
+        case CNCjsInterface::CNCjsStatus::WaitingForLists:
 
             display->setLine1(
                 "CNCjs"
@@ -481,7 +481,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::SelectionRequired:
+        case CNCjsInterface::CNCjsStatus::SelectionRequired:
 
             display->setLine1(
                 "Controller"
@@ -494,7 +494,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::OpeningController:
+        case CNCjsInterface::CNCjsStatus::OpeningController:
 
             display->setLine1(
                 "Opening"
@@ -507,7 +507,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsClient::CNCjsStatus::Error:
+        case CNCjsInterface::CNCjsStatus::Error:
 
             display->setLine1(
                 "CNCjs"
@@ -758,39 +758,39 @@ PendantController::cncStatusName() const
     switch(cnc->status())
     {
 
-        case CNCjsClient::CNCjsStatus::Offline:
+        case CNCjsInterface::CNCjsStatus::Offline:
             return "OFFLINE";
 
 
-        case CNCjsClient::CNCjsStatus::WiFiConnecting:
+        case CNCjsInterface::CNCjsStatus::WiFiConnecting:
             return "CONNECTING";
 
 
-        case CNCjsClient::CNCjsStatus::Authenticating:
+        case CNCjsInterface::CNCjsStatus::Authenticating:
             return "AUTHENTICATING";
 
 
-        case CNCjsClient::CNCjsStatus::Connecting:
+        case CNCjsInterface::CNCjsStatus::Connecting:
             return "CONNECTING";
 
 
-        case CNCjsClient::CNCjsStatus::WaitingForLists:
+        case CNCjsInterface::CNCjsStatus::WaitingForLists:
             return "WAITING";
 
 
-        case CNCjsClient::CNCjsStatus::SelectionRequired:
+        case CNCjsInterface::CNCjsStatus::SelectionRequired:
             return "SELECT";
 
 
-        case CNCjsClient::CNCjsStatus::OpeningController:
+        case CNCjsInterface::CNCjsStatus::OpeningController:
             return "CONNECTING";
 
 
-        case CNCjsClient::CNCjsStatus::Ready:
+        case CNCjsInterface::CNCjsStatus::Ready:
             return "READY";
 
 
-        case CNCjsClient::CNCjsStatus::Error:
+        case CNCjsInterface::CNCjsStatus::Error:
             return "ERROR";
     }
 

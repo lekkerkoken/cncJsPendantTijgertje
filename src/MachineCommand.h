@@ -15,7 +15,7 @@ enum MachineCommandType
 
     /*
         Annuleer een actieve jog.
-        De CNCjsClient vertaalt dit naar de juiste
+        De CNCjsInterface vertaalt dit naar de juiste
         CNCjs/controller-functionaliteit.
     */
     MACHINE_COMMAND_JOG_CANCEL,
@@ -45,8 +45,8 @@ struct MachineCommand
 /*
     Commando voor de machine-interface.
 
-    Dit beschrijft wat de CNCjsClient van de machine moet uitvoeren.
-    De CNCjsClient vertaalt dit vervolgens naar de concrete
+    Dit beschrijft wat de CNCjsInterface van de machine moet uitvoeren.
+    De CNCjsInterface vertaalt dit vervolgens naar de concrete
     CNCjs/controller-aanroep.
 
     Bijvoorbeeld:
