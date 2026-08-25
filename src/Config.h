@@ -31,6 +31,14 @@ const int MATRIX_COL_PINS[MATRIX_COLS] =
 #define ENCODER_B_PIN       44
 #define ENCODER_BUTTON_PIN  6
 
+// ============================================================
+// SSD1306 128×32 OLED
+// ============================================================
+
+#define SDA_PIN       4
+#define SCL_PIN       5
+
+
 #define DISPLAY_DEBUG
 
 #endif

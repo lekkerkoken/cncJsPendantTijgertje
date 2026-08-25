@@ -26,8 +26,8 @@ public:
     /*
         Kept for interface compatibility.
 
-        Network processing now runs in its own FreeRTOS task.
-        update() therefore no longer performs network work.
+        Network processing runs in the dedicated FreeRTOS
+        network task.
     */
     void update();
 
@@ -175,6 +175,28 @@ public:
 private:
 
     // ========================================================
+    // Synchronization
+    // ========================================================
+
+    /*
+        All access to Core state and Socket.IO is serialized
+        through this mutex.
+
+        Public methods acquire the mutex.
+
+        Internal methods are called only while the mutex is
+        already held.
+    */
+
+    SemaphoreHandle_t networkMutex_ =
+        nullptr;
+
+
+    bool lock();
+    void unlock();
+
+
+    // ========================================================
     // FreeRTOS network task
     // ========================================================
 
@@ -189,9 +211,6 @@ private:
 
 
     TaskHandle_t networkTaskHandle_ =
-        nullptr;
-
-    SemaphoreHandle_t networkMutex_ =
         nullptr;
 
 
@@ -348,11 +367,6 @@ private:
     );
 
 
-    bool parseGrblStatusReport(
-        const char* report
-    );
-
-
     MachineStatus machineStatusFromCNCjs(
         const char* activeState
     ) const;
@@ -374,7 +388,6 @@ private:
 
     unsigned long lastMachineStateTime =
         0;
-
 
     bool heartbeatWaiting =
         false;
@@ -414,7 +427,6 @@ private:
     static constexpr int MAX_PORTS =
         8;
 
-
     String ports[MAX_PORTS];
 
     int numberOfPorts =
@@ -430,7 +442,6 @@ private:
 
     static constexpr int MAX_CONTROLLERS =
         8;
-
 
     String controllers[MAX_CONTROLLERS];
 
@@ -522,6 +533,40 @@ private:
     int baudrateForController(
         const char* controllerType
     ) const;
+
+
+    // ========================================================
+    // Internal controller operations
+    // ========================================================
+
+    bool openSelectedControllerInternal();
+
+    bool openControllerInternal(
+        const char* port,
+        const char* controllerType,
+        int baudrate
+    );
+
+    bool sendGcodeInternal(
+        const char* port,
+        const char* gcode
+    );
+
+    bool sendCommandInternal(
+        const String& command
+    );
+
+    bool sendRealtimeInternal(
+        uint8_t command
+    );
+
+    bool jogCancelInternal();
+
+    bool feedHoldInternal();
+
+    bool resumeInternal();
+
+    bool resetInternal();
 };
 
 

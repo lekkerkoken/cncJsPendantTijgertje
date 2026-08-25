@@ -1,7 +1,6 @@
 #include "CNCjsClientCore.h"
 
 #include <Preferences.h>
-#include "NetworkManager.h"
 
 
 CNCjsClientCore* CNCjsClientCore::instance =
@@ -153,11 +152,50 @@ void CNCjsClientCore::begin(
 void CNCjsClientCore::update()
 {
     /*
-        Network processing no longer happens here.
+        Network processing runs in the dedicated FreeRTOS
+        network task.
 
-        The method remains intentionally empty for now so
-        CNCjsInterface does not need a simultaneous API change.
+        This method remains for interface compatibility.
     */
+}
+
+
+// ============================================================
+// LOCK
+// ============================================================
+
+bool CNCjsClientCore::lock()
+{
+    if (
+        networkMutex_ == nullptr
+    )
+    {
+        return false;
+    }
+
+
+    return
+        xSemaphoreTake(
+            networkMutex_,
+            portMAX_DELAY
+        ) == pdTRUE;
+}
+
+
+// ============================================================
+// UNLOCK
+// ============================================================
+
+void CNCjsClientCore::unlock()
+{
+    if (
+        networkMutex_ != nullptr
+    )
+    {
+        xSemaphoreGive(
+            networkMutex_
+        );
+    }
 }
 
 
@@ -202,13 +240,10 @@ void CNCjsClientCore::networkTaskEntry(
 
 void CNCjsClientCore::networkTask()
 {
-    while(true)
+    while (true)
     {
         if (
-            xSemaphoreTake(
-                networkMutex_,
-                portMAX_DELAY
-            ) == pdTRUE
+            lock()
         )
         {
             socketIO.loop();
@@ -236,9 +271,7 @@ void CNCjsClientCore::networkTask()
             }
 
 
-            xSemaphoreGive(
-                networkMutex_
-            );
+            unlock();
         }
 
 
@@ -277,7 +310,7 @@ void CNCjsClientCore::enterConnectionState(
         millis();
 
 
-    switch(state)
+    switch (state)
     {
         case ConnectionState::Start:
 
@@ -321,15 +354,6 @@ void CNCjsClientCore::enterConnectionState(
 
         case ConnectionState::WaitingForLists:
 
-            /*
-                WaitingForLists is only used while waiting
-                for the startup and serialport:list events.
-
-                Once those have arrived and no selection is
-                available, loadControllerList() changes the
-                public status to ControllerSelectionPending.
-            */
-
             currentStatus_ =
                 CNCjsStatus::WaitingForLists;
 
@@ -372,7 +396,7 @@ void CNCjsClientCore::enterConnectionState(
 
 void CNCjsClientCore::updateConnection()
 {
-    switch(connectionState)
+    switch (connectionState)
     {
         case ConnectionState::Start:
 
@@ -406,7 +430,6 @@ void CNCjsClientCore::updateConnection()
                     ConnectionState::Resolving
                 );
             }
-
             else if (
                 millis() - stateStartedAt >=
                 WIFI_TIMEOUT
@@ -473,7 +496,6 @@ void CNCjsClientCore::updateConnection()
                     ConnectionState::SocketConnecting
                 );
             }
-
             else if (
                 millis() - stateStartedAt >=
                 AUTH_TIMEOUT
@@ -505,7 +527,6 @@ void CNCjsClientCore::updateConnection()
                     ConnectionState::WaitingForLists
                 );
             }
-
             else if (
                 millis() - stateStartedAt >=
                 SOCKET_TIMEOUT
@@ -520,15 +541,6 @@ void CNCjsClientCore::updateConnection()
 
 
         case ConnectionState::WaitingForLists:
-
-            /*
-                loadControllerList() is triggered from the
-                event handlers when both lists are available.
-
-                Once processed, controllerListProcessedState
-                prevents this part of the connection state
-                machine from doing anything else.
-            */
 
             if (
                 startupReceivedState &&
@@ -793,17 +805,25 @@ void CNCjsClientCore::saveServerSettings(
     Preferences preferences;
 
 
-    preferences.begin(
-        "cncjs",
-        false
-    );
+    if (
+        !preferences.begin(
+            "cncjs",
+            false
+        )
+    )
+    {
+        Serial.println(
+            "[CNCjs] ERROR: Failed to open NVS namespace"
+        );
+
+        return;
+    }
 
 
     preferences.putString(
         "host",
         host
     );
-
 
     preferences.putUShort(
         "port",
@@ -1055,11 +1075,9 @@ void CNCjsClientCore::updateMachineState(
             mpos["x"] |
             0.0f;
 
-
         machineState_->machinePosition.y =
             mpos["y"] |
             0.0f;
-
 
         machineState_->machinePosition.z =
             mpos["z"] |
@@ -1079,11 +1097,9 @@ void CNCjsClientCore::updateMachineState(
             wpos["x"] |
             0.0f;
 
-
         machineState_->workPosition.y =
             wpos["y"] |
             0.0f;
-
 
         machineState_->workPosition.z =
             wpos["z"] |
@@ -1209,11 +1225,9 @@ bool CNCjsClientCore::sendStatusReport()
         "command"
     );
 
-
     array.add(
         activeControllerPortState
     );
-
 
     array.add(
         "statusreport"
@@ -1254,7 +1268,7 @@ void CNCjsClientCore::handleSocketEvent(
     size_t length
 )
 {
-    switch(type)
+    switch (type)
     {
         case sIOtype_DISCONNECT:
         {
@@ -1436,6 +1450,10 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
+            // ------------------------------------------------
+            // STARTUP
+            // ------------------------------------------------
+
             if (
                 strcmp(
                     eventName,
@@ -1477,7 +1495,6 @@ void CNCjsClientCore::handleSocketEvent(
                             numberOfControllers
                         ] =
                             name;
-
 
                         numberOfControllers++;
                     }
@@ -1537,6 +1554,10 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
+            // ------------------------------------------------
+            // SERIAL PORT LIST
+            // ------------------------------------------------
+
             if (
                 strcmp(
                     eventName,
@@ -1578,7 +1599,6 @@ void CNCjsClientCore::handleSocketEvent(
                             numberOfPorts
                         ] =
                             portName;
-
 
                         numberOfPorts++;
                     }
@@ -1636,6 +1656,10 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
+            // ------------------------------------------------
+            // SERIAL PORT OPEN
+            // ------------------------------------------------
+
             if (
                 strcmp(
                     eventName,
@@ -1667,10 +1691,8 @@ void CNCjsClientCore::handleSocketEvent(
                     activeControllerPortState =
                         portName;
 
-
                     activeControllerTypeState =
                         controllerType;
-
 
                     activeControllerBaudrateState =
                         baudrate;
@@ -1736,6 +1758,10 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
+            // ------------------------------------------------
+            // CONTROLLER SETTINGS
+            // ------------------------------------------------
+
             if (
                 strcmp(
                     eventName,
@@ -1750,6 +1776,10 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
+
+            // ------------------------------------------------
+            // CONTROLLER STATE
+            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -1782,6 +1812,10 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
+            // ------------------------------------------------
+            // GRBL STATE
+            // ------------------------------------------------
+
             if (
                 strcmp(
                     eventName,
@@ -1806,6 +1840,10 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
+
+            // ------------------------------------------------
+            // SERIAL PORT READ
+            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -1979,7 +2017,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 
         case sIOtype_ACK:
-        {
+
             Serial.print(
                 "[IOc] ACK: "
             );
@@ -1992,11 +2030,10 @@ void CNCjsClientCore::handleSocketEvent(
             Serial.println();
 
             break;
-        }
 
 
         case sIOtype_ERROR:
-        {
+
             Serial.print(
                 "[IOc] ERROR: "
             );
@@ -2009,7 +2046,6 @@ void CNCjsClientCore::handleSocketEvent(
             Serial.println();
 
             break;
-        }
 
 
         default:
@@ -2043,7 +2079,6 @@ void CNCjsClientCore::requestPortList()
     array.add(
         "list"
     );
-
 
     array.add(
         nullptr
@@ -2102,7 +2137,8 @@ int CNCjsClientCore::controllerCount() const
 // CONTROLLER
 // ============================================================
 
-const char* CNCjsClientCore::controller(
+const char*
+CNCjsClientCore::controller(
     int index
 ) const
 {
@@ -2133,7 +2169,8 @@ int CNCjsClientCore::portCount() const
 // PORT
 // ============================================================
 
-const char* CNCjsClientCore::port(
+const char*
+CNCjsClientCore::port(
     int index
 ) const
 {
@@ -2535,14 +2572,6 @@ void CNCjsClientCore::loadControllerList()
     }
 
 
-    /*
-        The two lists may each arrive more than once.
-
-        Controller selection, however, is a one-shot operation
-        for this connection. Once both lists have been processed,
-        the Core waits for an explicit selection if necessary.
-    */
-
     if (
         controllerListProcessedState
     )
@@ -2576,8 +2605,8 @@ void CNCjsClientCore::loadControllerList()
 
 
     /*
-        A saved selection is valid only when BOTH entries still
-        exist in the lists supplied by CNCjs.
+        A saved selection is valid only when BOTH entries
+        still exist in the lists supplied by CNCjs.
     */
 
     if (
@@ -2633,20 +2662,11 @@ void CNCjsClientCore::loadControllerList()
         );
 
 
-        openSelectedController();
-
+        openSelectedControllerInternal();
 
         return;
     }
 
-
-    /*
-        No valid saved selection exists.
-
-        The lists have already arrived, so this is no longer a
-        "waiting for lists" situation. The Core is now waiting
-        for the application to explicitly choose a controller.
-    */
 
     Serial.println();
     Serial.println(
@@ -2690,16 +2710,6 @@ void CNCjsClientCore::loadControllerList()
         CNCjsStatus::ControllerSelectionPending;
 
 
-    /*
-        Keep the connection state at WaitingForLists.
-
-        This state now means:
-        - CNCjs is connected
-        - the lists have arrived
-        - no controller is being opened
-        - Core is waiting for an explicit selection
-    */
-
     connectionState =
         ConnectionState::WaitingForLists;
 }
@@ -2711,11 +2721,19 @@ void CNCjsClientCore::loadControllerList()
 
 void CNCjsClientCore::chooseController()
 {
+    if (!lock())
+    {
+        return;
+    }
+
+
     if (
         numberOfControllers == 0 ||
         numberOfPorts == 0
     )
     {
+        unlock();
+
         return;
     }
 
@@ -2751,7 +2769,10 @@ void CNCjsClientCore::chooseController()
         false;
 
 
-    openSelectedController();
+    openSelectedControllerInternal();
+
+
+    unlock();
 }
 
 
@@ -2764,11 +2785,19 @@ bool CNCjsClientCore::selectController(
     int controllerIndex
 )
 {
+    if (!lock())
+    {
+        return false;
+    }
+
+
     if (
         portIndex < 0 ||
         portIndex >= numberOfPorts
     )
     {
+        unlock();
+
         return false;
     }
 
@@ -2778,6 +2807,8 @@ bool CNCjsClientCore::selectController(
         controllerIndex >= numberOfControllers
     )
     {
+        unlock();
+
         return false;
     }
 
@@ -2815,7 +2846,14 @@ bool CNCjsClientCore::selectController(
         false;
 
 
-    return openSelectedController();
+    bool result =
+        openSelectedControllerInternal();
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2909,6 +2947,29 @@ int CNCjsClientCore::controllerBaudrate() const
 
 bool CNCjsClientCore::openSelectedController()
 {
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        openSelectedControllerInternal();
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// OPEN SELECTED CONTROLLER INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::openSelectedControllerInternal()
+{
     if (
         selectedPortIndex < 0 ||
         selectedControllerIndex < 0
@@ -2924,7 +2985,7 @@ bool CNCjsClientCore::openSelectedController()
         );
 
 
-    return openController(
+    return openControllerInternal(
         selectedPortNameState.c_str(),
         selectedControllerNameState.c_str(),
         baudrate
@@ -2940,14 +3001,9 @@ bool CNCjsClientCore::execute(
     const MachineCommand& command
 )
 {
-    if (
-        networkMutex_ != nullptr
-    )
+    if (!lock())
     {
-        xSemaphoreTake(
-            networkMutex_,
-            portMAX_DELAY
-        );
+        return false;
     }
 
 
@@ -2963,35 +3019,29 @@ bool CNCjsClientCore::execute(
         Serial.println(
             "[CNCjs] execute rejected: not ready"
         );
-
-        result =
-            false;
     }
     else
     {
-        switch(command.type)
+        switch (command.type)
         {
             case MACHINE_COMMAND_GCODE:
-            {
+
                 pendingCommand_ =
                     command;
 
-
                 commandDirty_ =
                     true;
-
 
                 result =
                     true;
 
                 break;
-            }
 
 
             case MACHINE_COMMAND_JOG_CANCEL:
 
                 result =
-                    jogCancel();
+                    jogCancelInternal();
 
                 break;
 
@@ -2999,7 +3049,7 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_FEED_HOLD:
 
                 result =
-                    feedHold();
+                    feedHoldInternal();
 
                 break;
 
@@ -3007,7 +3057,7 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_RESUME:
 
                 result =
-                    resume();
+                    resumeInternal();
 
                 break;
 
@@ -3015,7 +3065,7 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_RESET:
 
                 result =
-                    reset();
+                    resetInternal();
 
                 break;
 
@@ -3032,14 +3082,7 @@ bool CNCjsClientCore::execute(
     }
 
 
-    if (
-        networkMutex_ != nullptr
-    )
-    {
-        xSemaphoreGive(
-            networkMutex_
-        );
-    }
+    unlock();
 
 
     return result;
@@ -3100,16 +3143,13 @@ bool CNCjsClientCore::sendPendingCommand()
         "command"
     );
 
-
     array.add(
         activeControllerPortState
     );
 
-
     array.add(
         "gcode"
     );
-
 
     array.add(
         pendingCommand_.command
@@ -3162,6 +3202,29 @@ bool CNCjsClientCore::sendPendingCommand()
 
 bool CNCjsClientCore::jogCancel()
 {
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        jogCancelInternal();
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// JOG CANCEL INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::jogCancelInternal()
+{
     if (
         !socketConnectedState ||
         !controllerReadyState
@@ -3181,7 +3244,6 @@ bool CNCjsClientCore::jogCancel()
     array.add(
         "jogCancel"
     );
-
 
     array.add(
         activeControllerPortState
@@ -3218,7 +3280,30 @@ bool CNCjsClientCore::jogCancel()
 
 bool CNCjsClientCore::feedHold()
 {
-    return sendRealtime(
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        feedHoldInternal();
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// FEED HOLD INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::feedHoldInternal()
+{
+    return sendRealtimeInternal(
         '!'
     );
 }
@@ -3230,7 +3315,30 @@ bool CNCjsClientCore::feedHold()
 
 bool CNCjsClientCore::resume()
 {
-    return sendRealtime(
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        resumeInternal();
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// RESUME INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::resumeInternal()
+{
+    return sendRealtimeInternal(
         '~'
     );
 }
@@ -3242,12 +3350,35 @@ bool CNCjsClientCore::resume()
 
 bool CNCjsClientCore::reset()
 {
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        resetInternal();
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// RESET INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::resetInternal()
+{
     Serial.println(
         "[CNCjs] Reset requested"
     );
 
 
-    return sendRealtime(
+    return sendRealtimeInternal(
         0x18
     );
 }
@@ -3258,6 +3389,37 @@ bool CNCjsClientCore::reset()
 // ============================================================
 
 bool CNCjsClientCore::openController(
+    const char* port,
+    const char* controllerType,
+    int baudrate
+)
+{
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        openControllerInternal(
+            port,
+            controllerType,
+            baudrate
+        );
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// OPEN CONTROLLER INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::openControllerInternal(
     const char* portName,
     const char* controllerType,
     int baudrate
@@ -3312,7 +3474,6 @@ bool CNCjsClientCore::openController(
         "open"
     );
 
-
     array.add(
         portName
     );
@@ -3325,10 +3486,8 @@ bool CNCjsClientCore::openController(
     options["controllerType"] =
         controllerType;
 
-
     options["baudrate"] =
         baudrate;
-
 
     options["rtscts"] =
         false;
@@ -3340,7 +3499,6 @@ bool CNCjsClientCore::openController(
 
     pin["dtr"] =
         nullptr;
-
 
     pin["rts"] =
         nullptr;
@@ -3378,38 +3536,9 @@ bool CNCjsClientCore::sendGcode(
     const char* gcode
 )
 {
-    if (
-        !controllerReadyState
-    )
+    if (!lock())
     {
         return false;
-    }
-
-
-    return sendGcode(
-        activeControllerPortState.c_str(),
-        gcode
-    );
-}
-
-
-// ============================================================
-// SEND GCODE - EXPLICIT PORT
-// ============================================================
-
-bool CNCjsClientCore::sendGcode(
-    const char* portName,
-    const char* gcode
-)
-{
-    if (
-        networkMutex_ != nullptr
-    )
-    {
-        xSemaphoreTake(
-            networkMutex_,
-            portMAX_DELAY
-        );
     }
 
 
@@ -3418,86 +3547,125 @@ bool CNCjsClientCore::sendGcode(
 
 
     if (
-        !socketConnectedState ||
-        !controllerReadyState
+        controllerReadyState
     )
     {
         result =
-            false;
-    }
-    else if (
-        portName == nullptr ||
-        gcode == nullptr
-    )
-    {
-        result =
-            false;
-    }
-    else
-    {
-        JsonDocument doc;
-
-
-        JsonArray array =
-            doc.to<JsonArray>();
-
-
-        array.add(
-            "command"
-        );
-
-
-        array.add(
-            portName
-        );
-
-
-        array.add(
-            "gcode"
-        );
-
-
-        array.add(
-            gcode
-        );
-
-
-        String output;
-
-
-        serializeJson(
-            doc,
-            output
-        );
-
-
-        Serial.print(
-            "[CNCjs] GCODE: "
-        );
-
-        Serial.println(
-            output
-        );
-
-
-        result =
-            socketIO.sendEVENT(
-                output
+            sendGcodeInternal(
+                activeControllerPortState.c_str(),
+                gcode
             );
     }
 
 
-    if (
-        networkMutex_ != nullptr
-    )
-    {
-        xSemaphoreGive(
-            networkMutex_
-        );
-    }
+    unlock();
 
 
     return result;
+}
+
+
+// ============================================================
+// SEND GCODE - EXPLICIT PORT
+// ============================================================
+
+bool CNCjsClientCore::sendGcode(
+    const char* port,
+    const char* gcode
+)
+{
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        sendGcodeInternal(
+            port,
+            gcode
+        );
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// SEND GCODE INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::sendGcodeInternal(
+    const char* portName,
+    const char* gcode
+)
+{
+    if (
+        !socketConnectedState ||
+        !controllerReadyState
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        portName == nullptr ||
+        gcode == nullptr
+    )
+    {
+        return false;
+    }
+
+
+    JsonDocument doc;
+
+
+    JsonArray array =
+        doc.to<JsonArray>();
+
+
+    array.add(
+        "command"
+    );
+
+    array.add(
+        portName
+    );
+
+    array.add(
+        "gcode"
+    );
+
+    array.add(
+        gcode
+    );
+
+
+    String output;
+
+
+    serializeJson(
+        doc,
+        output
+    );
+
+
+    Serial.print(
+        "[CNCjs] GCODE: "
+    );
+
+    Serial.println(
+        output
+    );
+
+
+    return socketIO.sendEVENT(
+        output
+    );
 }
 
 
@@ -3509,102 +3677,91 @@ bool CNCjsClientCore::sendCommand(
     const String& command
 )
 {
-    if (
-        networkMutex_ != nullptr
-    )
+    if (!lock())
     {
-        xSemaphoreTake(
-            networkMutex_,
-            portMAX_DELAY
-        );
+        return false;
     }
 
 
     bool result =
-        false;
-
-
-    if (
-        !socketConnectedState
-    )
-    {
-        result =
-            false;
-    }
-    else if (
-        !controllerReadyState
-    )
-    {
-        result =
-            false;
-    }
-    else if (
-        activeControllerPortState.length() == 0
-    )
-    {
-        result =
-            false;
-    }
-    else
-    {
-        JsonDocument doc;
-
-
-        JsonArray array =
-            doc.to<JsonArray>();
-
-
-        array.add(
-            "command"
-        );
-
-
-        array.add(
-            activeControllerPortState
-        );
-
-
-        array.add(
+        sendCommandInternal(
             command
         );
 
 
-        String output;
+    unlock();
 
 
-        serializeJson(
-            doc,
-            output
-        );
+    return result;
+}
 
 
-        Serial.print(
-            "[CNCjs] COMMAND: "
-        );
+// ============================================================
+// SEND COMMAND INTERNAL
+// ============================================================
 
-        Serial.println(
-            output
-        );
-
-
-        result =
-            socketIO.sendEVENT(
-                output
-            );
+bool CNCjsClientCore::sendCommandInternal(
+    const String& command
+)
+{
+    if (
+        !socketConnectedState ||
+        !controllerReadyState
+    )
+    {
+        return false;
     }
 
 
     if (
-        networkMutex_ != nullptr
+        activeControllerPortState.length() == 0
     )
     {
-        xSemaphoreGive(
-            networkMutex_
-        );
+        return false;
     }
 
 
-    return result;
+    JsonDocument doc;
+
+
+    JsonArray array =
+        doc.to<JsonArray>();
+
+
+    array.add(
+        "command"
+    );
+
+    array.add(
+        activeControllerPortState
+    );
+
+    array.add(
+        command
+    );
+
+
+    String output;
+
+
+    serializeJson(
+        doc,
+        output
+    );
+
+
+    Serial.print(
+        "[CNCjs] COMMAND: "
+    );
+
+    Serial.println(
+        output
+    );
+
+
+    return socketIO.sendEVENT(
+        output
+    );
 }
 
 
@@ -3613,6 +3770,33 @@ bool CNCjsClientCore::sendCommand(
 // ============================================================
 
 bool CNCjsClientCore::sendRealtime(
+    uint8_t command
+)
+{
+    if (!lock())
+    {
+        return false;
+    }
+
+
+    bool result =
+        sendRealtimeInternal(
+            command
+        );
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// SEND REALTIME INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::sendRealtimeInternal(
     uint8_t command
 )
 {
@@ -3651,7 +3835,6 @@ bool CNCjsClientCore::sendRealtime(
         "command"
     );
 
-
     array.add(
         activeControllerPortState
     );
@@ -3664,10 +3847,12 @@ bool CNCjsClientCore::sendRealtime(
     {
         char realtimeCommand[2];
 
+
         realtimeCommand[0] =
             static_cast<char>(
                 command
             );
+
 
         realtimeCommand[1] =
             '\0';
@@ -3679,6 +3864,11 @@ bool CNCjsClientCore::sendRealtime(
     }
     else
     {
+        /*
+            The current CNCjs interface only supports the
+            realtime commands used by feed hold and resume.
+        */
+
         Serial.print(
             "[CNCjs] Unsupported realtime byte: 0x"
         );

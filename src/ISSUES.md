@@ -473,6 +473,169 @@ Goedgekeurd ontwerp:
 
 FreeRTOS network task + non-blocking CNCjsInterface.update() + connection generation voor normale commands + expliciete TTL-based uitzondering voor Feed Hold van 4 seconden.
 
+# ISS-005c — CNCjs-interface thread-safe maken
+
+Probleem
+
+Sinds het CNCjs-netwerkwerk in een eigen FreeRTOS-task draait, kunnen netwerkoperaties vanuit de applicatielogica (loop()) gelijktijdig plaatsvinden met netwerkverwerking in de CNCjsNetwork task.
+
+Niet alle toegang tot CNCjsClientCore / SocketIOclient verloopt momenteel via networkMutex_. Daarnaast wordt MachineState vanuit de netwerk-task bijgewerkt terwijl deze vanuit de hoofdloop wordt gelezen.
+
+Voorbeelden zijn onder andere:
+
+selectController() → openSelectedController() → socketIO.sendEVENT()
+openController() → socketIO.sendEVENT()
+lezen van MachineState vanuit loop()
+schrijven naar MachineState vanuit de netwerk-task
+
+Doel
+
+De grens tussen de applicatielogica en de CNCjs-network-task expliciet en thread-safe maken, zonder de verantwoordelijkheden van de bestaande componenten opnieuw te vermengen.
+
+Acceptatiecriteria
+
+Alle toegang tot SocketIOclient vanuit buiten de network-task is thread-safe.
+MachineState kan veilig door de network-task worden bijgewerkt en door de applicatielogica worden gelezen.
+Controllerselectie en controller-openen blijven betrouwbaar werken.
+Jog-commando's blijven zonder merkbare vertraging werken.
+Er ontstaan geen deadlocks of blokkeringen van de hoofdloop.
+De netwerk-task behoudt zijn zelfstandige verantwoordelijkheid voor CNCjs-netwerkverkeer.
+
+# ISS-005d — Jogging correct en voorspelbaar maken
+
+**Status: OPEN 🔴**
+
+## Doel
+
+Het joggen van de pendant moet zich correct en voorspelbaar gedragen.
+
+De basisroute van encoder naar CNCjs werkt inmiddels: een encoderbeweging kan een jog uitvoeren en de machinepositie verandert overeenkomstig.
+
+Het daadwerkelijke joggedrag is echter nog niet volledig correct en moet verder worden onderzocht en aangepast.
+
+## Huidige observatie
+
+Een test met een jog-increment van `0.1 mm` laat bijvoorbeeld zien:
+
+```text
+positie 0.0
+    ↓
+jog +0.1
+    ↓
+positie 0.1
+    ↓
+jog -0.1
+    ↓
+positie 0.0
+```
+
+Deze eenvoudige beweging werkt.
+
+Daarmee is vastgesteld dat:
+
+```text
+Encoder
+   ↓
+InputManager
+   ↓
+JogPlanner
+   ↓
+MachineMapper
+   ↓
+CNCjsInterface
+   ↓
+CNCjs
+   ↓
+GRBL
+```
+
+functioneel met elkaar verbonden zijn.
+
+Het volledige joggedrag moet echter nog worden gevalideerd en gecorrigeerd.
+
+## Te onderzoeken gedrag
+
+Onder andere:
+
+* opeenvolgende encoderbewegingen;
+* snel achter elkaar draaien van de encoder;
+* positieve en negatieve richting;
+* verschillende jog-incrementen;
+* grotere verplaatsingen;
+* het correct blijven volgen van de actuele machinepositie;
+* gedrag wanneer CNCjs tijdelijk niet READY is;
+* gedrag bij het wisselen van richting tijdens het joggen.
+
+## Belangrijke ontwerpgrens
+
+De bestaande beslissing over het **aggregeren van jog-bewegingen** staat niet ter discussie in dit issue.
+
+De aggregatie is eerder ontworpen en blijft uitgangspunt voor de verdere implementatie.
+
+Dit issue gaat uitsluitend over het feitelijke gedrag en de correcte uitvoering van joggen binnen die bestaande architectuur.
+
+## Doelgedrag
+
+Een encoderbeweging moet uiteindelijk leiden tot een voorspelbare fysieke machinebeweging waarbij:
+
+```text
+encoder input
+    ↓
+jog planning
+    ↓
+jog command
+    ↓
+CNCjs
+    ↓
+machine
+```
+
+de gewenste relatieve verplaatsing wordt uitgevoerd.
+
+De positie die vervolgens via CNCjs/GRBL terugkomt in `MachineState` moet daarmee consistent zijn.
+
+## Acceptance criteria
+
+### Basis
+
+* `+0.1 mm` resulteert in een verplaatsing van `+0.1 mm`.
+* `-0.1 mm` resulteert in een verplaatsing van `-0.1 mm`.
+* Positieve en negatieve bewegingen kunnen elkaar correct opheffen.
+
+### Opeenvolgende bewegingen
+
+* Meerdere encoderstappen worden correct verwerkt.
+* Snel opeenvolgende encoderbewegingen leiden niet tot verloren of onverwachte bewegingen.
+* Richtingswisselingen gedragen zich voorspelbaar.
+
+### Incrementen
+
+* Alle ondersteunde jog-incrementen gedragen zich correct.
+* De uiteindelijke verplaatsing komt overeen met het gekozen increment en de hoeveelheid encoderinput.
+
+### MachineState
+
+* De door CNCjs teruggegeven machinepositie blijft de leidende werkelijkheid.
+* Jogplanning gebruikt geen verouderde positie als actuele machinepositie.
+
+### CNCjs
+
+* Jogcommando's worden correct naar CNCjs gestuurd.
+* Het joggedrag blijft correct nadat de CNCjs-network-task uit ISS-005b is geïsoleerd.
+
+## Ontwerpbeslissing
+
+De bestaande architectuur en jog-command-aggregatie blijven behouden.
+
+Eerst wordt het huidige gedrag reproduceerbaar vastgesteld. Daarna wordt bepaald waar in:
+
+```text
+Encoder → InputManager → JogPlanner → MachineMapper → CNCjsInterface
+```
+
+het afwijkende gedrag ontstaat.
+
+Pas daarna wordt de implementatie aangepast.
 
 ISS-006 — Data-uitwisseling tussen tasks
 Waarschijnlijk queues/state snapshots/andere veilige mechanismen bepalen.
@@ -485,3 +648,34 @@ De bestaande CNCjs jogCancel netjes in de uiteindelijke keten opnemen.
 
 ISS-009 — Sequence diagrams/documentatie bijwerken
 Nu pas, want we weten inmiddels veel beter hoe de architectuur werkelijk geworden is.
+
+ISS-010 - ## Probleem
+
+Joggen via de pendant werkt gedeeltelijk, maar het joggedrag is nog niet correct.
+
+Op dit moment kan de machine bijvoorbeeld:
+
+* `0.1 mm` in positieve richting joggen;
+* daarna weer `0.1 mm` terug joggen naar de oorspronkelijke positie.
+
+De basisroute van een jog-command naar CNCjs werkt daarmee, maar het volledige joggedrag moet nog worden onderzocht en gecorrigeerd.
+
+## Doel
+
+Jogging moet zich voorspelbaar gedragen bij:
+
+* meerdere opeenvolgende encoderbewegingen;
+* positieve en negatieve richting;
+* verschillende jog-incrementen;
+* snel achter elkaar draaien van de encoder;
+* het bereiken van de gewenste doelpositie.
+
+De pendant moet daarbij de door de gebruiker gevraagde beweging correct vertalen naar CNCjs-jogcommando's.
+
+## Opmerking
+
+Dit issue staat los van Commit 5.
+
+Commit 5 heeft als doel gehad om het CNCjs-netwerkwerk naar een eigen FreeRTOS-task te verplaatsen. Dat is functioneel getest en werkt.
+
+Het huidige jogprobleem moet daarom in een afzonderlijke stap worden onderzocht.

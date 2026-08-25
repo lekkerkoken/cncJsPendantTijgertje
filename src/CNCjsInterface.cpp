@@ -64,7 +64,8 @@ int CNCjsInterface::portCount() const
 }
 
 
-const char* CNCjsInterface::port(
+const char*
+CNCjsInterface::port(
     int index
 ) const
 {
@@ -84,7 +85,8 @@ int CNCjsInterface::controllerCount() const
 }
 
 
-const char* CNCjsInterface::controller(
+const char*
+CNCjsInterface::controller(
     int index
 ) const
 {

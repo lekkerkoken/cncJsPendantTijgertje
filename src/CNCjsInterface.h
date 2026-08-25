@@ -31,6 +31,12 @@ public:
         MachineState& machineState
     );
 
+    /*
+        Kept for application compatibility.
+
+        Network processing is performed by CNCjsClientCore's
+        dedicated FreeRTOS task.
+    */
     void update();
 
 
