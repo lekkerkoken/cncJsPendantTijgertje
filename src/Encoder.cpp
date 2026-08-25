@@ -290,21 +290,21 @@ void Encoder::task()
             fysieke encoderpulsen.
         */
 
-        while(encoderAccumulator >= 4)
+        while(encoderAccumulator >= 2)
         {
             delta++;
 
             encoderAccumulator -=
-                4;
+                2;
         }
 
 
-        while(encoderAccumulator <= -4)
+        while(encoderAccumulator <= -2)
         {
             delta--;
 
             encoderAccumulator +=
-                4;
+                2;
         }
 
 

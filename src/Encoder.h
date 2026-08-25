@@ -72,7 +72,7 @@ private:
     TaskHandle_t taskHandle = nullptr;
 
 
-    static constexpr int EVENT_QUEUE_LENGTH = 16;
+    static constexpr int EVENT_QUEUE_LENGTH = 32;
 
     static constexpr uint32_t TASK_STACK_SIZE = 2048;
 
@@ -94,7 +94,7 @@ private:
 
     volatile int encoderAccumulator = 0;
 
-    uint8_t lastEncoderState = 0;
+    uint8_t lastEncoderState = 1;
 
 
     portMUX_TYPE encoderMux =
