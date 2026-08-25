@@ -27,9 +27,9 @@ const int MATRIX_COL_PINS[MATRIX_COLS] =
 // Encoder
 // ============================================================
 
-#define ENCODER_A_PIN       D1
-#define ENCODER_B_PIN       D2
-#define ENCODER_BUTTON_PIN  D3
+#define ENCODER_A_PIN       6
+#define ENCODER_B_PIN       43
+#define ENCODER_BUTTON_PIN  4
 
 #define DISPLAY_DEBUG
 
