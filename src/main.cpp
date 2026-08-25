@@ -108,45 +108,50 @@ void setup()
 void loop()
 {
     // --------------------------------------------------------
-    // CNCjs
-    // --------------------------------------------------------
-
-    cnc.update();
-
-
-    // --------------------------------------------------------
     // SERIAL TEST INPUT
     // --------------------------------------------------------
 
     /*
-        Tijdelijke encoder-emulatie via Serial.
+        Tijdelijke testinput via Serial.
 
         l = encoder pulse links
         r = encoder pulse rechts
+        s = CNCjs statusreport
+        select <poort> <controller>
+            = selecteer CNCjs poort en controllertype
 
-        De injectie gebeurt rechtstreeks in Encoder,
-        zodat de rest van de inputketen identiek blijft
-        aan de echte hardware.
+        Voorbeeld:
+
+        select 0 0
+
+        betekent:
+            poort      0
+            controller 0
     */
 
     if(Serial.available())
     {
-        char command =
-            Serial.read();
+        String command =
+            Serial.readStringUntil(
+                '\n'
+            );
+
+        command.trim();
 
 
-        if(command == 'l')
+        if(command == "l")
         {
             encoder.injectPulse(
                 -1
             );
         }
-        else if(command == 'r')
+        else if(command == "r")
         {
             encoder.injectPulse(
                 1
             );
-        }else if(command == 's')
+        }
+        else if(command == "s")
         {
             Serial.println();
             Serial.println(
@@ -167,6 +172,58 @@ void loop()
                     ? "SENT"
                     : "FAILED"
             );
+        }
+        else if(
+            command.startsWith(
+                "select "
+            )
+        )
+        {
+            int separator =
+                command.indexOf(
+                    ' ',
+                    7
+                );
+
+
+            if(separator > 0)
+            {
+                String portText =
+                    command.substring(
+                        7,
+                        separator
+                    );
+
+                String controllerText =
+                    command.substring(
+                        separator + 1
+                    );
+
+
+                int portIndex =
+                    portText.toInt();
+
+                int controllerIndex =
+                    controllerText.toInt();
+
+
+                bool success =
+                    cnc.selectController(
+                        portIndex,
+                        controllerIndex
+                    );
+
+
+                Serial.print(
+                    "[TEST] select: "
+                );
+
+                Serial.println(
+                    success
+                        ? "OK"
+                        : "FAILED"
+                );
+            }
         }
     }
 
@@ -191,6 +248,7 @@ void loop()
             controller.handle(event);
         }
     }
+
 
     // --------------------------------------------------------
     // PENDANT CONTROLLER
@@ -265,6 +323,9 @@ void loop()
 
         /*
             Nu daadwerkelijk naar CNCjs.
+
+            execute() plaatst G-code in de bestaande pending
+            command. De network task verstuurt deze vervolgens.
         */
 
         bool success =

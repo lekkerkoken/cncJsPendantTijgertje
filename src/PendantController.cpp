@@ -358,7 +358,7 @@ void PendantController::updateDisplay()
 
             case CNCjsInterface::CNCjsStatus::WaitingForLists:
 
-            case CNCjsInterface::CNCjsStatus::SelectionRequired:
+            case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
 
             case CNCjsInterface::CNCjsStatus::OpeningController:
 
@@ -481,7 +481,7 @@ void PendantController::updateCncStatus()
             break;
 
 
-        case CNCjsInterface::CNCjsStatus::SelectionRequired:
+        case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
 
             display->setLine1(
                 "Controller"
@@ -778,7 +778,7 @@ PendantController::cncStatusName() const
             return "WAITING";
 
 
-        case CNCjsInterface::CNCjsStatus::SelectionRequired:
+        case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
             return "SELECT";
 
 

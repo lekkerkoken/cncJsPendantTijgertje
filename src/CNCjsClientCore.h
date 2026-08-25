@@ -23,6 +23,12 @@ public:
         MachineState& machineState
     );
 
+    /*
+        Kept for interface compatibility.
+
+        Network processing now runs in its own FreeRTOS task.
+        update() therefore no longer performs network work.
+    */
     void update();
 
 
@@ -37,7 +43,7 @@ public:
         Authenticating,
         Connecting,
         WaitingForLists,
-        SelectionRequired,
+        ControllerSelectionPending,
         OpeningController,
         Ready,
         Error
@@ -167,6 +173,34 @@ public:
 
 
 private:
+
+    // ========================================================
+    // FreeRTOS network task
+    // ========================================================
+
+    static constexpr uint32_t NETWORK_TASK_STACK_SIZE =
+        8192;
+
+    static constexpr UBaseType_t NETWORK_TASK_PRIORITY =
+        1;
+
+    static constexpr uint32_t NETWORK_TASK_DELAY_MS =
+        5;
+
+
+    TaskHandle_t networkTaskHandle_ =
+        nullptr;
+
+    SemaphoreHandle_t networkMutex_ =
+        nullptr;
+
+
+    static void networkTaskEntry(
+        void* parameter
+    );
+
+    void networkTask();
+
 
     // ========================================================
     // CNCjs server
@@ -412,6 +446,9 @@ private:
         false;
 
     bool portListReceivedState =
+        false;
+
+    bool controllerListProcessedState =
         false;
 
 

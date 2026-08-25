@@ -7,10 +7,39 @@
 
 void ControllerPreference::begin()
 {
-    preferences.begin(
-        "cncjs",
-        false
-    );
+    bool opened =
+        preferences.begin(
+            "cncjs",
+            false
+        );
+
+
+    if (!opened)
+    {
+        Serial.println();
+        Serial.println(
+            "[Preference] Controller"
+        );
+
+        Serial.println(
+            "  No stored controller"
+        );
+
+
+        preferredPort =
+            "";
+
+        preferredControllerType =
+            "TinyG";
+
+        preferredBaudrate =
+            115200;
+
+        preferenceAvailable =
+            false;
+
+        return;
+    }
 
 
     preferredPort =
@@ -23,21 +52,19 @@ void ControllerPreference::begin()
     preferredControllerType =
         preferences.getString(
             "controller",
-            ""
+            "TinyG"
         );
 
 
     preferredBaudrate =
         preferences.getInt(
             "baudrate",
-            0
+            115200
         );
 
 
     preferenceAvailable =
-        preferredPort.length() > 0 &&
-        preferredControllerType.length() > 0 &&
-        preferredBaudrate > 0;
+        preferredPort.length() > 0;
 
 
     Serial.println();
@@ -78,6 +105,22 @@ void ControllerPreference::begin()
     {
         Serial.println(
             "  No stored controller"
+        );
+
+        Serial.print(
+            "  Default Controller: "
+        );
+
+        Serial.println(
+            preferredControllerType
+        );
+
+        Serial.print(
+            "  Default Baudrate: "
+        );
+
+        Serial.println(
+            preferredBaudrate
         );
     }
 }
