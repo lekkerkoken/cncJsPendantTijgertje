@@ -229,6 +229,26 @@ void loop()
 
 
     // --------------------------------------------------------
+    // MACHINE STATE
+    // --------------------------------------------------------
+
+    /*
+        CNCjsClientCore bezit de werkelijke MachineState.
+
+        De applicatie gebruikt hiervan een lokale snapshot.
+
+        Deze snapshot is de enige MachineState die door
+        PendantController, JogPlanner en MachineMapper wordt
+        gebruikt.
+
+        De Core blijft eigenaar van zijn eigen state.
+    */
+
+machineState =
+    cnc.machineStateSnapshot();
+
+
+    // --------------------------------------------------------
     // INPUT
     // --------------------------------------------------------
 
@@ -262,7 +282,8 @@ void loop()
     // --------------------------------------------------------
 
     /*
-        De planner gebruikt MachineState als werkelijkheid.
+        De planner gebruikt de actuele MachineState-snapshot
+        als werkelijkheid.
 
         update() levert direct één JogCommand terug.
         Als er niets hoeft te gebeuren is het type JOG_NONE.

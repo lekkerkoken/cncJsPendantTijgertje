@@ -15,6 +15,7 @@ CNCjsInterface::snapshot() const
 MachineState
 CNCjsInterface::machineStateSnapshot() const
 {
+    
     return core_.machineStateSnapshot();
 }
 

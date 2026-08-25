@@ -15,14 +15,21 @@ public:
     /*
         Encoderinput verandert uitsluitend de
         gebruikersintentie/horizon.
+
+        Een encoderbeweging markeert daarmee dat de
+        gebruikersintentie is gewijzigd.
     */
     void encoder(const Event& event);
 
     /*
         Planner wordt vanuit loop() aangeroepen.
 
-        Geeft direct het volgende JogCommand terug.
-        Als er niets hoeft te gebeuren is type JOG_NONE.
+        Geeft maximaal één JogCommand terug.
+
+        De planner geeft niet continu dezelfde jog opnieuw
+        uit. Een nieuwe stap wordt pas gepland wanneer de
+        vorige stap daadwerkelijk door MachineState is
+        bereikt, of wanneer de gebruikersintentie verandert.
     */
     JogCommand update(
         const MachineState& machineState
@@ -44,6 +51,14 @@ private:
         Geldige machinepositie ontvangen?
     */
     bool positionKnown = false;
+
+    /*
+        De gebruikersintentie is gewijzigd sinds de laatste
+        geplande beweging.
+
+        Dit wordt door encoder() gezet.
+    */
+    bool intentChanged = false;
 
 
     // ========================================================
@@ -95,16 +110,38 @@ private:
 
 
     /*
-        Er loopt momenteel een jog.
+        Maximale grootte van één geplande jogstap.
 
-        Dit is GEEN voorspelling van de machinepositie.
-        MachineState blijft de werkelijkheid.
+        Dit is nadrukkelijk NIET de maximale afstand die de
+        gebruiker kan aanvragen.
+
+        Bij een horizon van bijvoorbeeld +5 mm worden meerdere
+        stappen van maximaal 1 mm gepland.
+    */
+    static constexpr float JOG_DISTANCE = 1.0f;
+
+
+    // ========================================================
+    // ACTIVE JOG
+    // ========================================================
+
+    /*
+        Er is momenteel een door de planner uitgegeven jog
+        waarvan we nog niet via MachineState hebben vastgesteld
+        dat het doel is bereikt.
     */
     bool jogActive = false;
 
+    /*
+        Het doel van de momenteel actieve jog.
+
+        Dit is een voorspeld/planningsdoel, geen machinefeedback.
+        MachineState blijft altijd de werkelijkheid.
+    */
+    float plannedTarget = 0.0f;
 
     /*
-        Richting van de laatst gestuurde jog:
+        Richting van de actieve jog:
 
             -1 = negatief
              0 = geen richting
@@ -129,6 +166,10 @@ private:
 
     int direction(
         float distance
+    ) const;
+
+    bool targetReached(
+        float machinePosition
     ) const;
 };
 

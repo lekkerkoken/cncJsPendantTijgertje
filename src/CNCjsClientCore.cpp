@@ -1237,16 +1237,13 @@ void CNCjsClientCore::updateMachineState(
     )
     {
         machineState_.machinePosition.x =
-            mpos["x"] |
-            0.0f;
+            mpos["x"].as<float>();
 
         machineState_.machinePosition.y =
-            mpos["y"] |
-            0.0f;
+            mpos["y"].as<float>();
 
         machineState_.machinePosition.z =
-            mpos["z"] |
-            0.0f;
+            mpos["z"].as<float>();
     }
 
 
@@ -1259,16 +1256,13 @@ void CNCjsClientCore::updateMachineState(
     )
     {
         machineState_.workPosition.x =
-            wpos["x"] |
-            0.0f;
+            wpos["x"].as<float>();
 
         machineState_.workPosition.y =
-            wpos["y"] |
-            0.0f;
+            wpos["y"].as<float>();
 
         machineState_.workPosition.z =
-            wpos["z"] |
-            0.0f;
+            wpos["z"].as<float>();
     }
 
 
@@ -1282,9 +1276,36 @@ void CNCjsClientCore::updateMachineState(
         0;
 
 
+    // Serial.print(
+    //     "[CNCjsCore] MachineState: X="
+    // );
+
+    // Serial.print(
+    //     machineState_.workPosition.x,
+    //     3
+    // );
+
+    // Serial.print(
+    //     " Y="
+    // );
+
+    // Serial.print(
+    //     machineState_.workPosition.y,
+    //     3
+    // );
+
+    // Serial.print(
+    //     " Z="
+    // );
+
+    // Serial.println(
+    //     machineState_.workPosition.z,
+    //     3
+    // );
+
+
     machineHeartbeatReceived();
 }
-
 
 // ============================================================
 // MACHINE HEARTBEAT RECEIVED
