@@ -13,77 +13,95 @@ class CNCjsInterface
 public:
 
     // ========================================================
-    // Status
+    // TYPES
     // ========================================================
 
     using CNCjsStatus =
         CNCjsClientCore::CNCjsStatus;
 
+    using CNCjsSnapshot =
+        CNCjsClientCore::CNCjsSnapshot;
 
+
+    // ========================================================
+    // SNAPSHOTS
+    // ========================================================
+
+    CNCjsSnapshot snapshot() const;
+
+    MachineState machineStateSnapshot() const;
+
+
+    // ========================================================
+    // STATUS
+    // ========================================================
+
+    /*
+        Kept as a lightweight compatibility accessor.
+
+        PendantController currently uses cnc.status().
+        Internally this simply reads the Core snapshot.
+    */
     CNCjsStatus status() const;
 
 
     // ========================================================
-    // Lifecycle
+    // LIFECYCLE
     // ========================================================
 
     void begin(
         MachineState& machineState
     );
 
-    /*
-        Kept for application compatibility.
-
-        Network processing is performed by CNCjsClientCore's
-        dedicated FreeRTOS task.
-    */
     void update();
 
 
     // ========================================================
-    // Connection
+    // CONNECTION
     // ========================================================
 
     bool wifiConnected() const;
+
     bool authenticated() const;
+
     bool socketConnected() const;
 
 
     // ========================================================
-    // Serial ports
+    // SERIAL PORTS
     // ========================================================
 
     int portCount() const;
 
-    const char* port(
+    String port(
         int index
     ) const;
 
 
     // ========================================================
-    // Controllers
+    // CONTROLLERS
     // ========================================================
 
     int controllerCount() const;
 
-    const char* controller(
+    String controller(
         int index
     ) const;
 
 
     // ========================================================
-    // Controller selection
+    // CONTROLLER SELECTION
     // ========================================================
 
     bool controllerSelectionReady() const;
 
     int selectedController() const;
 
-    const char* selectedControllerName() const;
+    String selectedControllerName() const;
 
     int selectedPort() const;
 
-    const char* selectedPortName() const;
+    String selectedPortName() const;
 
 
     bool selectController(
@@ -95,20 +113,20 @@ public:
 
 
     // ========================================================
-    // Active controller
+    // ACTIVE CONTROLLER
     // ========================================================
 
     bool controllerReady() const;
 
-    const char* controllerPort() const;
+    String controllerPort() const;
 
-    const char* controllerType() const;
+    String controllerType() const;
 
     int controllerBaudrate() const;
 
 
     // ========================================================
-    // Controller communication
+    // CONTROLLER COMMUNICATION
     // ========================================================
 
     bool openSelectedController();
@@ -119,14 +137,15 @@ public:
         int baudrate
     );
 
+
+    // ========================================================
+    // COMMANDS
+    // ========================================================
+
     bool execute(
         const MachineCommand& command
     );
 
-
-    // ========================================================
-    // G-code
-    // ========================================================
 
     bool sendGcode(
         const char* gcode
@@ -138,13 +157,10 @@ public:
     );
 
 
-    // ========================================================
-    // CNCjs controller commands
-    // ========================================================
-
     bool sendCommand(
         const String& command
     );
+
 
     bool jogCancel();
 

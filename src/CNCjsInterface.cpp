@@ -2,6 +2,24 @@
 
 
 // ============================================================
+// SNAPSHOTS
+// ============================================================
+
+CNCjsInterface::CNCjsSnapshot
+CNCjsInterface::snapshot() const
+{
+    return core_.snapshot();
+}
+
+
+MachineState
+CNCjsInterface::machineStateSnapshot() const
+{
+    return core_.machineStateSnapshot();
+}
+
+
+// ============================================================
 // STATUS
 // ============================================================
 
@@ -20,9 +38,19 @@ void CNCjsInterface::begin(
     MachineState& machineState
 )
 {
-    core_.begin(
-        machineState
-    );
+    /*
+        MachineState is retained in the public interface for
+        compatibility with the existing application.
+
+        The Core owns the actual CNCjs machine state.
+
+        The supplied MachineState is therefore no longer used
+        as shared state.
+    */
+
+    (void)machineState;
+
+    core_.begin();
 }
 
 
@@ -64,8 +92,7 @@ int CNCjsInterface::portCount() const
 }
 
 
-const char*
-CNCjsInterface::port(
+String CNCjsInterface::port(
     int index
 ) const
 {
@@ -85,8 +112,7 @@ int CNCjsInterface::controllerCount() const
 }
 
 
-const char*
-CNCjsInterface::controller(
+String CNCjsInterface::controller(
     int index
 ) const
 {
@@ -112,8 +138,7 @@ int CNCjsInterface::selectedController() const
 }
 
 
-const char*
-CNCjsInterface::selectedControllerName() const
+String CNCjsInterface::selectedControllerName() const
 {
     return core_.selectedControllerName();
 }
@@ -125,8 +150,7 @@ int CNCjsInterface::selectedPort() const
 }
 
 
-const char*
-CNCjsInterface::selectedPortName() const
+String CNCjsInterface::selectedPortName() const
 {
     return core_.selectedPortName();
 }
@@ -160,15 +184,13 @@ bool CNCjsInterface::controllerReady() const
 }
 
 
-const char*
-CNCjsInterface::controllerPort() const
+String CNCjsInterface::controllerPort() const
 {
     return core_.controllerPort();
 }
 
 
-const char*
-CNCjsInterface::controllerType() const
+String CNCjsInterface::controllerType() const
 {
     return core_.controllerType();
 }
@@ -204,6 +226,10 @@ bool CNCjsInterface::openController(
 }
 
 
+// ============================================================
+// COMMANDS
+// ============================================================
+
 bool CNCjsInterface::execute(
     const MachineCommand& command
 )
@@ -213,10 +239,6 @@ bool CNCjsInterface::execute(
     );
 }
 
-
-// ============================================================
-// G-CODE
-// ============================================================
 
 bool CNCjsInterface::sendGcode(
     const char* gcode
@@ -239,10 +261,6 @@ bool CNCjsInterface::sendGcode(
     );
 }
 
-
-// ============================================================
-// CNCJS CONTROLLER COMMANDS
-// ============================================================
 
 bool CNCjsInterface::sendCommand(
     const String& command

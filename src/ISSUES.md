@@ -473,8 +473,7 @@ Goedgekeurd ontwerp:
 
 FreeRTOS network task + non-blocking CNCjsInterface.update() + connection generation voor normale commands + expliciete TTL-based uitzondering voor Feed Hold van 4 seconden.
 
-# ISS-005c — CNCjs-interface thread-safe maken
-
+# ISS-005c — opgelost met de huidige implementatie. ✅
 Probleem
 
 Sinds het CNCjs-netwerkwerk in een eigen FreeRTOS-task draait, kunnen netwerkoperaties vanuit de applicatielogica (loop()) gelijktijdig plaatsvinden met netwerkverwerking in de CNCjsNetwork task.

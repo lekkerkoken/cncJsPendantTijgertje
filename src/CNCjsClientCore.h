@@ -16,24 +16,7 @@ class CNCjsClientCore
 public:
 
     // ========================================================
-    // Lifecycle
-    // ========================================================
-
-    void begin(
-        MachineState& machineState
-    );
-
-    /*
-        Kept for interface compatibility.
-
-        Network processing runs in the dedicated FreeRTOS
-        network task.
-    */
-    void update();
-
-
-    // ========================================================
-    // Status
+    // STATUS
     // ========================================================
 
     enum class CNCjsStatus
@@ -50,53 +33,149 @@ public:
     };
 
 
+    // ========================================================
+    // SNAPSHOT
+    // ========================================================
+
+    struct CNCjsSnapshot
+    {
+        CNCjsStatus status;
+
+        bool wifiConnected;
+        bool authenticated;
+        bool socketConnected;
+
+        int portCount;
+        int controllerCount;
+
+        int selectedController;
+        String selectedControllerName;
+
+        int selectedPort;
+        String selectedPortName;
+
+        bool controllerSelectionReady;
+
+        bool controllerReady;
+
+        String controllerPort;
+        String controllerType;
+        int controllerBaudrate;
+
+
+        CNCjsSnapshot()
+            :
+            status(CNCjsStatus::Offline),
+            wifiConnected(false),
+            authenticated(false),
+            socketConnected(false),
+            portCount(0),
+            controllerCount(0),
+            selectedController(-1),
+            selectedControllerName(""),
+            selectedPort(-1),
+            selectedPortName(""),
+            controllerSelectionReady(false),
+            controllerReady(false),
+            controllerPort(""),
+            controllerType(""),
+            controllerBaudrate(0)
+        {
+        }
+    };
+
+
+    // ========================================================
+    // THREADING CONTRACT
+    // ========================================================
+    //
+    // commando → thread-safe naar Core
+    // state     → snapshot uit Core
+    //
+    // CNCjsClientCore bezit zijn eigen MachineState.
+    //
+    // Publieke commando-methodes zijn thread-safe.
+    //
+    // State wordt uitsluitend als snapshot naar buiten gegeven.
+    //
+    // ========================================================
+
+
+    // ========================================================
+    // LIFECYCLE
+    // ========================================================
+
+    void begin();
+
+    void update();
+
+
+    // ========================================================
+    // SNAPSHOTS
+    // ========================================================
+
+    CNCjsSnapshot snapshot() const;
+
+    MachineState machineStateSnapshot() const;
+
+
+    // Kept for compatibility with existing code.
+    MachineState getMachineState() const;
+
+
+    // ========================================================
+    // STATUS
+    // ========================================================
+
     CNCjsStatus status() const;
 
 
     // ========================================================
-    // Connection
+    // CONNECTION
     // ========================================================
 
     bool wifiConnected() const;
+
     bool authenticated() const;
+
     bool socketConnected() const;
 
 
     // ========================================================
-    // Serial ports
+    // SERIAL PORTS
     // ========================================================
 
     int portCount() const;
 
-    const char* port(
+    String port(
         int index
     ) const;
 
 
     // ========================================================
-    // Controllers
+    // CONTROLLERS
     // ========================================================
 
     int controllerCount() const;
 
-    const char* controller(
+    String controller(
         int index
     ) const;
 
 
     // ========================================================
-    // Controller selection
+    // CONTROLLER SELECTION
     // ========================================================
 
     bool controllerSelectionReady() const;
 
     int selectedController() const;
 
-    const char* selectedControllerName() const;
+    String selectedControllerName() const;
 
     int selectedPort() const;
 
-    const char* selectedPortName() const;
+    String selectedPortName() const;
 
 
     bool selectController(
@@ -108,20 +187,20 @@ public:
 
 
     // ========================================================
-    // Active controller
+    // ACTIVE CONTROLLER
     // ========================================================
 
     bool controllerReady() const;
 
-    const char* controllerPort() const;
+    String controllerPort() const;
 
-    const char* controllerType() const;
+    String controllerType() const;
 
     int controllerBaudrate() const;
 
 
     // ========================================================
-    // Controller communication
+    // CONTROLLER COMMUNICATION
     // ========================================================
 
     bool openSelectedController();
@@ -138,7 +217,7 @@ public:
 
 
     // ========================================================
-    // G-code
+    // G-CODE
     // ========================================================
 
     bool sendGcode(
@@ -152,7 +231,7 @@ public:
 
 
     // ========================================================
-    // CNCjs controller commands
+    // CNCjs CONTROLLER COMMANDS
     // ========================================================
 
     bool sendCommand(
@@ -175,29 +254,20 @@ public:
 private:
 
     // ========================================================
-    // Synchronization
+    // SYNCHRONIZATION
     // ========================================================
 
-    /*
-        All access to Core state and Socket.IO is serialized
-        through this mutex.
-
-        Public methods acquire the mutex.
-
-        Internal methods are called only while the mutex is
-        already held.
-    */
-
-    SemaphoreHandle_t networkMutex_ =
+    mutable SemaphoreHandle_t networkMutex_ =
         nullptr;
 
 
-    bool lock();
-    void unlock();
+    bool lock() const;
+
+    void unlock() const;
 
 
     // ========================================================
-    // FreeRTOS network task
+    // FREERTOS NETWORK TASK
     // ========================================================
 
     static constexpr uint32_t NETWORK_TASK_STACK_SIZE =
@@ -222,7 +292,7 @@ private:
 
 
     // ========================================================
-    // CNCjs server
+    // CNCjs SERVER
     // ========================================================
 
     String serverHost_;
@@ -242,14 +312,14 @@ private:
 
 
     // ========================================================
-    // Network
+    // NETWORK
     // ========================================================
 
     NetworkManager networkManager_;
 
 
     // ========================================================
-    // Connection state machine
+    // CONNECTION STATE MACHINE
     // ========================================================
 
     enum class ConnectionState
@@ -307,14 +377,14 @@ private:
 
 
     // ========================================================
-    // Authentication token
+    // AUTHENTICATION TOKEN
     // ========================================================
 
     String token;
 
 
     // ========================================================
-    // Socket.IO
+    // SOCKET.IO
     // ========================================================
 
     SocketIOclient socketIO;
@@ -343,7 +413,7 @@ private:
 
 
     // ========================================================
-    // Connection state
+    // CONNECTION FLAGS
     // ========================================================
 
     bool authenticatedState =
@@ -354,11 +424,10 @@ private:
 
 
     // ========================================================
-    // Machine state
+    // MACHINE STATE
     // ========================================================
 
-    MachineState* machineState_ =
-        nullptr;
+    MachineState machineState_;
 
 
     void updateMachineState(
@@ -373,7 +442,7 @@ private:
 
 
     // ========================================================
-    // Machine heartbeat
+    // MACHINE HEARTBEAT
     // ========================================================
 
     static constexpr unsigned long HEARTBEAT_INTERVAL =
@@ -401,7 +470,7 @@ private:
 
 
     // ========================================================
-    // Pending machine command
+    // PENDING MACHINE COMMAND
     // ========================================================
 
     MachineCommand pendingCommand_;
@@ -421,7 +490,7 @@ private:
 
 
     // ========================================================
-    // Serial ports
+    // SERIAL PORTS
     // ========================================================
 
     static constexpr int MAX_PORTS =
@@ -437,7 +506,7 @@ private:
 
 
     // ========================================================
-    // Controllers
+    // CONTROLLERS
     // ========================================================
 
     static constexpr int MAX_CONTROLLERS =
@@ -450,7 +519,7 @@ private:
 
 
     // ========================================================
-    // Lists received
+    // LISTS RECEIVED
     // ========================================================
 
     bool startupReceivedState =
@@ -464,7 +533,7 @@ private:
 
 
     // ========================================================
-    // Selected controller
+    // SELECTED CONTROLLER
     // ========================================================
 
     int selectedControllerIndex =
@@ -482,7 +551,7 @@ private:
 
 
     // ========================================================
-    // Active controller
+    // ACTIVE CONTROLLER
     // ========================================================
 
     String activeControllerPortState;
@@ -497,7 +566,7 @@ private:
 
 
     // ========================================================
-    // Controller selection
+    // CONTROLLER SELECTION
     // ========================================================
 
     void requestPortList();
@@ -536,7 +605,7 @@ private:
 
 
     // ========================================================
-    // Internal controller operations
+    // INTERNAL CONTROLLER OPERATIONS
     // ========================================================
 
     bool openSelectedControllerInternal();

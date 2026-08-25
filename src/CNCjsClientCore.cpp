@@ -11,15 +11,10 @@ CNCjsClientCore* CNCjsClientCore::instance =
 // BEGIN
 // ============================================================
 
-void CNCjsClientCore::begin(
-    MachineState& machineState
-)
+void CNCjsClientCore::begin()
 {
     instance =
         this;
-
-    machineState_ =
-        &machineState;
 
 
     Serial.println();
@@ -61,6 +56,27 @@ void CNCjsClientCore::begin(
     numberOfPorts =
         0;
 
+    selectedControllerIndex =
+        -1;
+
+    selectedPortIndex =
+        -1;
+
+    selectedControllerNameState =
+        "";
+
+    selectedPortNameState =
+        "";
+
+    activeControllerPortState =
+        "";
+
+    activeControllerTypeState =
+        "";
+
+    activeControllerBaudrateState =
+        0;
+
     commandDirty_ =
         false;
 
@@ -77,13 +93,8 @@ void CNCjsClientCore::begin(
         0;
 
 
-    if (
-        machineState_ != nullptr
-    )
-    {
-        *machineState_ =
-            MachineState();
-    }
+    machineState_ =
+        MachineState();
 
 
     networkManager_.begin();
@@ -161,10 +172,122 @@ void CNCjsClientCore::update()
 
 
 // ============================================================
+// SNAPSHOT
+// ============================================================
+
+CNCjsClientCore::CNCjsSnapshot
+CNCjsClientCore::snapshot() const
+{
+    CNCjsSnapshot result;
+
+
+    if (
+        !lock()
+    )
+    {
+        result.status =
+            CNCjsStatus::Error;
+
+        return result;
+    }
+
+
+    result.status =
+        currentStatus_;
+
+    result.wifiConnected =
+        networkManager_.wifiConnected();
+
+    result.authenticated =
+        authenticatedState;
+
+    result.socketConnected =
+        socketConnectedState;
+
+    result.portCount =
+        numberOfPorts;
+
+    result.controllerCount =
+        numberOfControllers;
+
+    result.controllerSelectionReady =
+        controllerSelectionReadyState;
+
+    result.selectedController =
+        selectedControllerIndex;
+
+    result.selectedPort =
+        selectedPortIndex;
+
+    result.selectedControllerName =
+        selectedControllerNameState;
+
+    result.selectedPortName =
+        selectedPortNameState;
+
+    result.controllerReady =
+        controllerReadyState;
+
+    result.controllerPort =
+        activeControllerPortState;
+
+    result.controllerType =
+        activeControllerTypeState;
+
+    result.controllerBaudrate =
+        activeControllerBaudrateState;
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// MACHINE STATE SNAPSHOT
+// ============================================================
+
+MachineState CNCjsClientCore::machineStateSnapshot() const
+{
+    MachineState snapshot;
+
+
+    if (
+        !lock()
+    )
+    {
+        return snapshot;
+    }
+
+
+    snapshot =
+        machineState_;
+
+
+    unlock();
+
+
+    return snapshot;
+}
+
+
+// ============================================================
+// LEGACY MACHINE STATE GETTER
+// ============================================================
+
+MachineState CNCjsClientCore::getMachineState() const
+{
+    return machineStateSnapshot();
+}
+
+
+// ============================================================
 // LOCK
 // ============================================================
 
-bool CNCjsClientCore::lock()
+bool CNCjsClientCore::lock() const
 {
     if (
         networkMutex_ == nullptr
@@ -186,7 +309,7 @@ bool CNCjsClientCore::lock()
 // UNLOCK
 // ============================================================
 
-void CNCjsClientCore::unlock()
+void CNCjsClientCore::unlock() const
 {
     if (
         networkMutex_ != nullptr
@@ -291,7 +414,22 @@ void CNCjsClientCore::networkTask()
 CNCjsClientCore::CNCjsStatus
 CNCjsClientCore::status() const
 {
-    return currentStatus_;
+    if (
+        !lock()
+    )
+    {
+        return CNCjsStatus::Error;
+    }
+
+
+    CNCjsStatus result =
+        currentStatus_;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -565,16 +703,11 @@ void CNCjsClientCore::updateConnection()
                 );
 
 
-                if (
-                    machineState_ != nullptr
-                )
-                {
-                    machineState_->connected =
-                        false;
+                machineState_.connected =
+                    false;
 
-                    machineState_->machineStatus =
-                        MACHINE_DISCONNECTED;
-                }
+                machineState_.machineStatus =
+                    MACHINE_DISCONNECTED;
 
 
                 lastMachineStateTime =
@@ -662,16 +795,11 @@ void CNCjsClientCore::connectionFailed(
         false;
 
 
-    if (
-        machineState_ != nullptr
-    )
-    {
-        machineState_->connected =
-            false;
+    machineState_.connected =
+        false;
 
-        machineState_->machineStatus =
-            MACHINE_DISCONNECTED;
-    }
+    machineState_.machineStatus =
+        MACHINE_DISCONNECTED;
 
 
     enterConnectionState(
@@ -686,7 +814,22 @@ void CNCjsClientCore::connectionFailed(
 
 bool CNCjsClientCore::wifiConnected() const
 {
-    return networkManager_.wifiConnected();
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        networkManager_.wifiConnected();
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -848,7 +991,22 @@ void CNCjsClientCore::saveServerSettings(
 
 bool CNCjsClientCore::authenticated() const
 {
-    return authenticatedState;
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        authenticatedState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -938,7 +1096,22 @@ void CNCjsClientCore::connectSocket()
 
 bool CNCjsClientCore::socketConnected() const
 {
-    return socketConnectedState;
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        socketConnectedState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -1041,25 +1214,17 @@ void CNCjsClientCore::updateMachineState(
     JsonObject parserstate
 )
 {
-    if (
-        machineState_ == nullptr
-    )
-    {
-        return;
-    }
-
-
     const char* activeState =
         status["activeState"];
 
 
-    machineState_->machineStatus =
+    machineState_.machineStatus =
         machineStatusFromCNCjs(
             activeState
         );
 
 
-    machineState_->connected =
+    machineState_.connected =
         true;
 
 
@@ -1071,15 +1236,15 @@ void CNCjsClientCore::updateMachineState(
         !mpos.isNull()
     )
     {
-        machineState_->machinePosition.x =
+        machineState_.machinePosition.x =
             mpos["x"] |
             0.0f;
 
-        machineState_->machinePosition.y =
+        machineState_.machinePosition.y =
             mpos["y"] |
             0.0f;
 
-        machineState_->machinePosition.z =
+        machineState_.machinePosition.z =
             mpos["z"] |
             0.0f;
     }
@@ -1093,26 +1258,26 @@ void CNCjsClientCore::updateMachineState(
         !wpos.isNull()
     )
     {
-        machineState_->workPosition.x =
+        machineState_.workPosition.x =
             wpos["x"] |
             0.0f;
 
-        machineState_->workPosition.y =
+        machineState_.workPosition.y =
             wpos["y"] |
             0.0f;
 
-        machineState_->workPosition.z =
+        machineState_.workPosition.z =
             wpos["z"] |
             0.0f;
     }
 
 
-    machineState_->feedrate =
+    machineState_.feedrate =
         status["feedrate"] |
         0.0f;
 
 
-    machineState_->spindleSpeed =
+    machineState_.spindleSpeed =
         status["spindle"] |
         0;
 
@@ -1177,16 +1342,11 @@ void CNCjsClientCore::updateHeartbeat()
         HEARTBEAT_TIMEOUT
     )
     {
-        if (
-            machineState_ != nullptr
-        )
-        {
-            machineState_->connected =
-                false;
+        machineState_.connected =
+            false;
 
-            machineState_->machineStatus =
-                MACHINE_DISCONNECTED;
-        }
+        machineState_.machineStatus =
+            MACHINE_DISCONNECTED;
     }
 }
 
@@ -1318,16 +1478,11 @@ void CNCjsClientCore::handleSocketEvent(
                 CNCjsStatus::Offline;
 
 
-            if (
-                machineState_ != nullptr
-            )
-            {
-                machineState_->connected =
-                    false;
+            machineState_.connected =
+                false;
 
-                machineState_->machineStatus =
-                    MACHINE_DISCONNECTED;
-            }
+            machineState_.machineStatus =
+                MACHINE_DISCONNECTED;
 
 
             Serial.println(
@@ -1707,16 +1862,11 @@ void CNCjsClientCore::handleSocketEvent(
                     );
 
 
-                    if (
-                        machineState_ != nullptr
-                    )
-                    {
-                        machineState_->connected =
-                            false;
+                    machineState_.connected =
+                        false;
 
-                        machineState_->machineStatus =
-                            MACHINE_DISCONNECTED;
-                    }
+                    machineState_.machineStatus =
+                        MACHINE_DISCONNECTED;
 
 
                     Serial.println();
@@ -1872,15 +2022,10 @@ void CNCjsClientCore::handleSocketEvent(
                 }
 
 
-                if (
-                    machineState_ != nullptr
-                )
-                {
-                    machineHeartbeatReceived();
+                machineHeartbeatReceived();
 
-                    machineState_->connected =
-                        true;
-                }
+                machineState_.connected =
+                    true;
 
 
                 const char* stateStart =
@@ -1895,8 +2040,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 if (
-                    stateEnd != nullptr &&
-                    machineState_ != nullptr
+                    stateEnd != nullptr
                 )
                 {
                     size_t stateLength =
@@ -1924,7 +2068,7 @@ void CNCjsClientCore::handleSocketEvent(
                             '\0';
 
 
-                        machineState_->machineStatus =
+                        machineState_.machineStatus =
                             machineStatusFromCNCjs(
                                 activeState
                             );
@@ -1940,8 +2084,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 if (
-                    mposStart != nullptr &&
-                    machineState_ != nullptr
+                    mposStart != nullptr
                 )
                 {
                     mposStart +=
@@ -1963,13 +2106,13 @@ void CNCjsClientCore::handleSocketEvent(
                         ) == 3
                     )
                     {
-                        machineState_->machinePosition.x =
+                        machineState_.machinePosition.x =
                             x;
 
-                        machineState_->machinePosition.y =
+                        machineState_.machinePosition.y =
                             y;
 
-                        machineState_->machinePosition.z =
+                        machineState_.machinePosition.z =
                             z;
                     }
                 }
@@ -1983,8 +2126,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 if (
-                    fsStart != nullptr &&
-                    machineState_ != nullptr
+                    fsStart != nullptr
                 )
                 {
                     fsStart +=
@@ -2002,7 +2144,7 @@ void CNCjsClientCore::handleSocketEvent(
                         ) == 1
                     )
                     {
-                        machineState_->feedrate =
+                        machineState_.feedrate =
                             feedrate;
                     }
                 }
@@ -2119,7 +2261,22 @@ void CNCjsClientCore::requestPortList()
 
 bool CNCjsClientCore::controllerSelectionReady() const
 {
-    return controllerSelectionReadyState;
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        controllerSelectionReadyState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2129,7 +2286,22 @@ bool CNCjsClientCore::controllerSelectionReady() const
 
 int CNCjsClientCore::controllerCount() const
 {
-    return numberOfControllers;
+    if (
+        !lock()
+    )
+    {
+        return 0;
+    }
+
+
+    int result =
+        numberOfControllers;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2137,21 +2309,35 @@ int CNCjsClientCore::controllerCount() const
 // CONTROLLER
 // ============================================================
 
-const char*
-CNCjsClientCore::controller(
+String CNCjsClientCore::controller(
     int index
 ) const
 {
     if (
-        index < 0 ||
-        index >= numberOfControllers
+        !lock()
     )
     {
-        return nullptr;
+        return "";
     }
 
 
-    return controllers[index].c_str();
+    String result;
+
+
+    if (
+        index >= 0 &&
+        index < numberOfControllers
+    )
+    {
+        result =
+            controllers[index];
+    }
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2161,7 +2347,22 @@ CNCjsClientCore::controller(
 
 int CNCjsClientCore::portCount() const
 {
-    return numberOfPorts;
+    if (
+        !lock()
+    )
+    {
+        return 0;
+    }
+
+
+    int result =
+        numberOfPorts;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2169,21 +2370,35 @@ int CNCjsClientCore::portCount() const
 // PORT
 // ============================================================
 
-const char*
-CNCjsClientCore::port(
+String CNCjsClientCore::port(
     int index
 ) const
 {
     if (
-        index < 0 ||
-        index >= numberOfPorts
+        !lock()
     )
     {
-        return nullptr;
+        return "";
     }
 
 
-    return ports[index].c_str();
+    String result;
+
+
+    if (
+        index >= 0 &&
+        index < numberOfPorts
+    )
+    {
+        result =
+            ports[index];
+    }
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2863,7 +3078,22 @@ bool CNCjsClientCore::selectController(
 
 int CNCjsClientCore::selectedController() const
 {
-    return selectedControllerIndex;
+    if (
+        !lock()
+    )
+    {
+        return -1;
+    }
+
+
+    int result =
+        selectedControllerIndex;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2871,10 +3101,24 @@ int CNCjsClientCore::selectedController() const
 // SELECTED CONTROLLER NAME
 // ============================================================
 
-const char*
-CNCjsClientCore::selectedControllerName() const
+String CNCjsClientCore::selectedControllerName() const
 {
-    return selectedControllerNameState.c_str();
+    if (
+        !lock()
+    )
+    {
+        return "";
+    }
+
+
+    String result =
+        selectedControllerNameState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2884,7 +3128,22 @@ CNCjsClientCore::selectedControllerName() const
 
 int CNCjsClientCore::selectedPort() const
 {
-    return selectedPortIndex;
+    if (
+        !lock()
+    )
+    {
+        return -1;
+    }
+
+
+    int result =
+        selectedPortIndex;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2892,10 +3151,24 @@ int CNCjsClientCore::selectedPort() const
 // SELECTED PORT NAME
 // ============================================================
 
-const char*
-CNCjsClientCore::selectedPortName() const
+String CNCjsClientCore::selectedPortName() const
 {
-    return selectedPortNameState.c_str();
+    if (
+        !lock()
+    )
+    {
+        return "";
+    }
+
+
+    String result =
+        selectedPortNameState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2905,7 +3178,22 @@ CNCjsClientCore::selectedPortName() const
 
 bool CNCjsClientCore::controllerReady() const
 {
-    return controllerReadyState;
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        controllerReadyState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2913,10 +3201,24 @@ bool CNCjsClientCore::controllerReady() const
 // ACTIVE CONTROLLER PORT
 // ============================================================
 
-const char*
-CNCjsClientCore::controllerPort() const
+String CNCjsClientCore::controllerPort() const
 {
-    return activeControllerPortState.c_str();
+    if (
+        !lock()
+    )
+    {
+        return "";
+    }
+
+
+    String result =
+        activeControllerPortState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2924,10 +3226,24 @@ CNCjsClientCore::controllerPort() const
 // ACTIVE CONTROLLER TYPE
 // ============================================================
 
-const char*
-CNCjsClientCore::controllerType() const
+String CNCjsClientCore::controllerType() const
 {
-    return activeControllerTypeState.c_str();
+    if (
+        !lock()
+    )
+    {
+        return "";
+    }
+
+
+    String result =
+        activeControllerTypeState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -2937,7 +3253,22 @@ CNCjsClientCore::controllerType() const
 
 int CNCjsClientCore::controllerBaudrate() const
 {
-    return activeControllerBaudrateState;
+    if (
+        !lock()
+    )
+    {
+        return 0;
+    }
+
+
+    int result =
+        activeControllerBaudrateState;
+
+
+    unlock();
+
+
+    return result;
 }
 
 
@@ -3451,16 +3782,11 @@ bool CNCjsClientCore::openControllerInternal(
     );
 
 
-    if (
-        machineState_ != nullptr
-    )
-    {
-        machineState_->connected =
-            false;
+    machineState_.connected =
+        false;
 
-        machineState_->machineStatus =
-            MACHINE_DISCONNECTED;
-    }
+    machineState_.machineStatus =
+        MACHINE_DISCONNECTED;
 
 
     JsonDocument doc;
