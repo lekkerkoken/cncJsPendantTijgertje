@@ -442,29 +442,35 @@ private:
 
 
     // ========================================================
-    // MACHINE HEARTBEAT
+    // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
+    // ========================================================
+    //
+    // Iedere geldige CNCjs EVENT telt als communicatie-
+    // activiteit. Een statusreport wordt alleen verstuurd
+    // wanneer CNCjs gedurende deze periode niets heeft
+    // laten horen.
+    //
     // ========================================================
 
-    static constexpr unsigned long HEARTBEAT_INTERVAL =
+    static constexpr unsigned long CNCJS_ACTIVITY_TIMEOUT =
         3000;
 
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
         5000;
 
 
-    unsigned long lastHeartbeatTime =
+    unsigned long lastCncjsActivity =
         0;
 
     unsigned long lastMachineStateTime =
         0;
 
-    bool heartbeatWaiting =
-        false;
-
 
     void updateHeartbeat();
 
     bool sendStatusReport();
+
+    void cncjsActivityReceived();
 
     void machineHeartbeatReceived();
 

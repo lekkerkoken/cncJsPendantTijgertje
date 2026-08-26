@@ -80,10 +80,7 @@ void CNCjsClientCore::begin()
     commandDirty_ =
         false;
 
-    heartbeatWaiting =
-        false;
-
-    lastHeartbeatTime =
+    lastCncjsActivity =
         0;
 
     lastMachineStateTime =
@@ -713,11 +710,8 @@ void CNCjsClientCore::updateConnection()
                 lastMachineStateTime =
                     millis();
 
-                lastHeartbeatTime =
+                lastCncjsActivity =
                     millis();
-
-                heartbeatWaiting =
-                    false;
             }
 
             break;
@@ -791,8 +785,9 @@ void CNCjsClientCore::connectionFailed(
     commandDirty_ =
         false;
 
-    heartbeatWaiting =
-        false;
+
+    lastCncjsActivity =
+        0;
 
 
     machineState_.connected =
@@ -1276,36 +1271,20 @@ void CNCjsClientCore::updateMachineState(
         0;
 
 
-    // Serial.print(
-    //     "[CNCjsCore] MachineState: X="
-    // );
-
-    // Serial.print(
-    //     machineState_.workPosition.x,
-    //     3
-    // );
-
-    // Serial.print(
-    //     " Y="
-    // );
-
-    // Serial.print(
-    //     machineState_.workPosition.y,
-    //     3
-    // );
-
-    // Serial.print(
-    //     " Z="
-    // );
-
-    // Serial.println(
-    //     machineState_.workPosition.z,
-    //     3
-    // );
-
-
     machineHeartbeatReceived();
 }
+
+
+// ============================================================
+// CNCjs ACTIVITY RECEIVED
+// ============================================================
+
+void CNCjsClientCore::cncjsActivityReceived()
+{
+    lastCncjsActivity =
+        millis();
+}
+
 
 // ============================================================
 // MACHINE HEARTBEAT RECEIVED
@@ -1315,9 +1294,6 @@ void CNCjsClientCore::machineHeartbeatReceived()
 {
     lastMachineStateTime =
         millis();
-
-    heartbeatWaiting =
-        false;
 }
 
 
@@ -1340,23 +1316,42 @@ void CNCjsClientCore::updateHeartbeat()
         millis();
 
 
+    /*
+        CNCjs is considered active as long as valid events
+        have recently arrived.
+
+        The heartbeat is therefore a watchdog rather than
+        a periodic activity.
+    */
+
     if (
-        now - lastHeartbeatTime >=
-        HEARTBEAT_INTERVAL
+        now - lastCncjsActivity >=
+        CNCJS_ACTIVITY_TIMEOUT
     )
     {
         if (
             sendStatusReport()
         )
         {
-            lastHeartbeatTime =
-                now;
+            /*
+                Do not reset lastCncjsActivity here.
 
-            heartbeatWaiting =
-                true;
+                Sending the request is not activity.
+                Only an actual CNCjs event resets the
+                watchdog.
+            */
+
+            Serial.println(
+                "[CNCjs] Activity timeout - heartbeat sent"
+            );
         }
     }
 
+
+    /*
+        Machine-state timeout remains independent from the
+        CNCjs communication watchdog.
+    */
 
     if (
         now - lastMachineStateTime >=
@@ -1491,8 +1486,8 @@ void CNCjsClientCore::handleSocketEvent(
             commandDirty_ =
                 false;
 
-            heartbeatWaiting =
-                false;
+            lastCncjsActivity =
+                0;
 
 
             currentStatus_ =
@@ -1624,6 +1619,16 @@ void CNCjsClientCore::handleSocketEvent(
             {
                 break;
             }
+
+
+            /*
+                Any valid CNCjs event is communication activity.
+
+                The event does not need to have any particular
+                semantic meaning for the watchdog.
+            */
+
+            cncjsActivityReceived();
 
 
             // ------------------------------------------------

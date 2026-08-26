@@ -15,7 +15,7 @@ enum JogCommandType
     JOG_MOVE,
 
     /*
-        Annuleer de huidige jogbeweging.
+        Annuleer de huidige jogbewefeeging.
 
         Voor GRBL wordt dit uiteindelijk vertaald naar
         de realtime jog-cancel 0x85.

@@ -105,7 +105,7 @@ private:
     /*
         Gewenste tijd om de resterende afstand af te leggen.
     */
-    static constexpr float ARRIVAL_TIME = 0.8f;
+    static constexpr float ARRIVAL_TIME = 0.4f;
 
 
     /*
