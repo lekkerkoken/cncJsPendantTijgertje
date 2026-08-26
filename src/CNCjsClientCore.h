@@ -446,7 +446,7 @@ private:
     // ========================================================
 
     static constexpr unsigned long HEARTBEAT_INTERVAL =
-        1000;
+        3000;
 
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
         5000;

@@ -502,7 +502,7 @@ De netwerk-task behoudt zijn zelfstandige verantwoordelijkheid voor CNCjs-netwer
 
 # ISS-005d — Jogging correct en voorspelbaar maken
 
-**Status: OPEN 🔴**
+**Status: 🔵 POSTPONED — bewust uitgesteld; niet vergeten, maar nu geen actie.
 
 ## Doel
 
@@ -678,3 +678,239 @@ Dit issue staat los van Commit 5.
 Commit 5 heeft als doel gehad om het CNCjs-netwerkwerk naar een eigen FreeRTOS-task te verplaatsen. Dat is functioneel getest en werkt.
 
 Het huidige jogprobleem moet daarom in een afzonderlijke stap worden onderzocht.
+
+# Issue 11 — Heartbeat alleen bij inactiviteit
+
+## Doel
+
+De CNCjs-heartbeat moet niet langer periodiek `statusreport`-requests sturen terwijl er al actief communicatieverkeer met CNCjs plaatsvindt.
+
+Tijdens een jog ontvangt de pendant voortdurend informatie van CNCjs. Die inkomende events zijn feitelijk al een bewijs dat de verbinding actief is. Een extra heartbeat-request is dan redundant en kan bovendien onnodig concurreren met de jogcommunicatie.
+
+De heartbeat moet daarom worden veranderd van een **periodieke activiteit** naar een **watchdog bij inactiviteit**.
+
+---
+
+## Huidige situatie
+
+De CNCjs-communicatie verstuurt momenteel periodiek een heartbeat, bijvoorbeeld:
+
+```text
+[CNCjs] HEARTBEAT: ["command","/dev/ttyUSB0","statusreport"]
+```
+
+Dit gebeurt ook wanneer de pendant actief aan het joggen is.
+
+Tijdens zo'n jog komen echter al events binnen zoals:
+
+```text
+["serialport:read","ok"]
+```
+
+```text
+["serialport:write","G91 X0.100 F100\n", ...]
+```
+
+```text
+["controller:state","Grbl", ...]
+```
+
+```text
+["Grbl:state", ...]
+```
+
+Deze events bewijzen dat de Socket.IO-verbinding en CNCjs-communicatie functioneren.
+
+---
+
+## Gewenst gedrag
+
+Alle relevante inkomende CNCjs-events moeten intern worden beschouwd als **activiteit / heartbeat**.
+
+Bij ontvangst van een geldig CNCjs-event wordt bijvoorbeeld:
+
+```text
+lastCncjsActivity = millis()
+```
+
+bijgewerkt.
+
+De heartbeat-request wordt vervolgens alleen verstuurd wanneer er gedurende een bepaalde periode géén CNCjs-activiteit is geweest.
+
+Bijvoorbeeld:
+
+```text
+CNCjs event
+    ↓
+lastActivity = now
+
+...
+
+geen events gedurende 1 seconde
+    ↓
+heartbeat request
+    ↓
+statusreport
+```
+
+Ontvangt de pendant ondertussen opnieuw een CNCjs-event, dan wordt de watchdog opnieuw gereset.
+
+---
+
+## Belangrijk onderscheid
+
+De heartbeat is **geen onderdeel van de jogbesturing**.
+
+`JogPlanner` hoeft niets van heartbeat, Socket.IO of verbindingbewaking te weten.
+
+De verantwoordelijkheid ligt volledig bij de CNCjs-communicatielaag:
+
+```text
+JogPlanner
+    │
+    │ MachineCommand
+    ▼
+CNCjsClientCore / CNCjsInterface
+    │
+    ├── normale TX
+    ├── normale RX
+    │       └── update lastActivity
+    │
+    └── heartbeat watchdog
+            └── alleen request bij langdurige stilte
+```
+
+---
+
+## Gewenste eigenschappen
+
+### 1. Joggen onderdrukt de heartbeat niet expliciet
+
+Er hoeft geen speciale code te komen zoals:
+
+```cpp
+if(jogging)
+    disableHeartbeat();
+```
+
+Dat zou de verkeerde abstractie zijn.
+
+De reden dat tijdens een jog geen heartbeat nodig is, is simpelweg dat er al CNCjs-verkeer plaatsvindt.
+
+---
+
+### 2. Iedere relevante inkomende CNCjs-event telt als activiteit
+
+Bijvoorbeeld:
+
+* `serialport:read`
+* `serialport:write`
+* `controller:state`
+* `Grbl:state`
+* `feeder:status`
+* andere geldige CNCjs-events
+
+Deze hoeven niet allemaal afzonderlijk semantisch als heartbeat geïnterpreteerd te worden. Voor de verbindingswatchdog is alleen van belang:
+
+> Er is recent geldige communicatie van CNCjs ontvangen.
+
+---
+
+### 3. Heartbeat alleen als vangnet
+
+De heartbeat-request moet pas worden verzonden nadat de verbinding gedurende bijvoorbeeld **1 seconde** stil is geweest.
+
+Dit voorkomt:
+
+* onnodige `statusreport` requests tijdens joggen;
+* extra verkeer op de Socket.IO-verbinding;
+* mogelijke timinginteractie met jogcommando's;
+* onnodige belasting van CNCjs;
+* een heartbeat die feitelijk dubbelop is met bestaande communicatie.
+
+---
+
+## Voorbeeld
+
+### Actief joggen
+
+```text
+JogCommand
+    ↓
+CNCjs TX: G91 X0.100 F100
+
+CNCjs RX: serialport:write
+CNCjs RX: serialport:read "ok"
+CNCjs RX: controller:state
+CNCjs RX: Grbl:state
+CNCjs RX: serialport:read status
+...
+```
+
+Zolang deze events blijven binnenkomen:
+
+```text
+geen heartbeat-request
+```
+
+---
+
+### Geen jog, maar verbinding actief
+
+```text
+CNCjs RX
+    ↓
+lastActivity = now
+
+... 300 ms ...
+
+geen event
+
+... 700 ms ...
+
+nog steeds geen event
+```
+
+Nog steeds geen heartbeat nodig totdat de ingestelde timeout bereikt is.
+
+---
+
+### Verbinding mogelijk stilgevallen
+
+```text
+lastActivity
+    │
+    └── > 1 seconde geleden
+             ↓
+        statusreport
+             ↓
+        CNCjs response
+             ↓
+        lastActivity = now
+```
+
+Wanneer daarop geen antwoord komt, kan de bestaande disconnect/offline-detectie zijn werk doen.
+
+---
+
+## Acceptatiecriteria
+
+* [ ] Tijdens actief joggen wordt geen periodieke heartbeat-request meer verstuurd zolang CNCjs-events binnenkomen.
+* [ ] Inkomende CNCjs-events resetten de heartbeat-watchdog.
+* [ ] Een heartbeat-request wordt alleen verstuurd na de ingestelde periode van volledige inactiviteit.
+* [ ] De heartbeat-logica blijft volledig buiten `JogPlanner`.
+* [ ] De bestaande CNCjs-communicatie en authenticatie blijven ongewijzigd.
+* [ ] Een actieve jog blijft volledig onafhankelijk van de heartbeat-watchdog functioneren.
+* [ ] Bij wegvallen van CNCjs-verkeer kan de bestaande offline-detectie nog steeds optreden.
+* [ ] Een normale CNCjs-response op een heartbeat geldt eveneens als nieuwe activiteit.
+* [ ] Er worden geen extra `statusreport` requests gegenereerd zolang de verbinding aantoonbaar actief communiceert.
+
+## Opmerking
+
+Dit issue is nadrukkelijk een **communicatie-/watchdogverbetering**. De eerder aangepaste jogplanning en encoderverwerking worden hierbij niet opnieuw ontworpen.
+
+De kern is:
+
+> **Niet periodiek vragen of CNCjs nog leeft wanneer CNCjs ondertussen uit zichzelf tegen ons praat.**
+>
+> De heartbeat is alleen nodig wanneer het stil wordt.

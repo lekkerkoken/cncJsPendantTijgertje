@@ -13,23 +13,19 @@ public:
     void begin();
 
     /*
-        Encoderinput verandert uitsluitend de
-        gebruikersintentie/horizon.
+        Encoderinput verandert de gebruikersintentie/horizon.
 
-        Een encoderbeweging markeert daarmee dat de
-        gebruikersintentie is gewijzigd.
+        Een richtingsverandering tijdens een actieve jog wordt
+        door de planner gebruikt om de huidige jog af te bouwen.
     */
-    void encoder(const Event& event);
+    void encoder(
+        const Event& event
+    );
 
     /*
         Planner wordt vanuit loop() aangeroepen.
 
         Geeft maximaal één JogCommand terug.
-
-        De planner geeft niet continu dezelfde jog opnieuw
-        uit. Een nieuwe stap wordt pas gepland wanneer de
-        vorige stap daadwerkelijk door MachineState is
-        bereikt, of wanneer de gebruikersintentie verandert.
     */
     JogCommand update(
         const MachineState& machineState
@@ -55,8 +51,6 @@ private:
     /*
         De gebruikersintentie is gewijzigd sinds de laatste
         geplande beweging.
-
-        Dit wordt door encoder() gezet.
     */
     bool intentChanged = false;
 
@@ -72,6 +66,25 @@ private:
         Later halen we dit rechtstreeks uit PendantState.
     */
     static constexpr float STEP_SIZE = 0.1f;
+
+
+    /*
+        Aantal encoderpulsen in de tegengestelde richting
+        sinds de actieve jog nog geldig was.
+
+        Iedere pulse halveert bij een cancel de nog resterende
+        afstand van de huidige jog.
+
+        Bijvoorbeeld:
+
+            4 pulses
+            1.0 mm
+            -> 0.5
+            -> 0.25
+            -> 0.125
+            -> 0.0625
+    */
+    int reversePulseCount = 0;
 
 
     // ========================================================
@@ -110,13 +123,7 @@ private:
 
 
     /*
-        Maximale grootte van één geplande jogstap.
-
-        Dit is nadrukkelijk NIET de maximale afstand die de
-        gebruiker kan aanvragen.
-
-        Bij een horizon van bijvoorbeeld +5 mm worden meerdere
-        stappen van maximaal 1 mm gepland.
+        Maximale grootte van één normale geplande jogstap.
     */
     static constexpr float JOG_DISTANCE = 1.0f;
 
@@ -132,13 +139,14 @@ private:
     */
     bool jogActive = false;
 
+
     /*
         Het doel van de momenteel actieve jog.
 
         Dit is een voorspeld/planningsdoel, geen machinefeedback.
-        MachineState blijft altijd de werkelijkheid.
     */
     float plannedTarget = 0.0f;
+
 
     /*
         Richting van de actieve jog:
@@ -156,6 +164,12 @@ private:
 
     JogCommand requestMove(
         const MachineState& machineState
+    );
+
+    JogCommand requestMove(
+        const MachineState& machineState,
+        float moveDistance,
+        int moveDirection
     );
 
     JogCommand requestCancel();
