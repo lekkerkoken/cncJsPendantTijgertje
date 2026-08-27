@@ -914,3 +914,26 @@ De kern is:
 > **Niet periodiek vragen of CNCjs nog leeft wanneer CNCjs ondertussen uit zichzelf tegen ons praat.**
 >
 > De heartbeat is alleen nodig wanneer het stil wordt.
+
+ISS-011 — JOG_CANCEL moet geplande positie ongeldig maken
+
+Status: OPEN
+
+Probleem
+Wanneer een lopende jog wordt geannuleerd via JOG_CANCEL, kan JogPlanner zijn huidige horizon en positionKnown behouden. De horizon kan daardoor verwijzen naar een positie die de machine mogelijk nooit heeft bereikt.
+
+Gewenst gedrag
+Bij JOG_CANCEL moet de planner zijn huidige geplande positie als ongeldig beschouwen:
+
+positionKnown = false;
+
+De bestaande horizon hoeft daarbij niet direct naar de machinepositie te worden gezet. Bij de eerstvolgende geldige MachineState moet de planner de horizon opnieuw synchroniseren met de werkelijke machinepositie en positionKnown weer true maken.
+
+Acceptatiecriteria
+
+JOG_CANCEL zet positionKnown op false.
+Na JOG_CANCEL wordt niet verder gepland vanuit de oude horizon.
+Een volgende geldige machinepositie initialiseert de horizon opnieuw.
+Daarna kan jogplanning weer normaal worden hervat.
+
+Dit is wat mij betreft een goede, duidelijke ISSUE, los van de huidige heartbeat/offline-kwestie.

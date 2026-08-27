@@ -299,6 +299,10 @@ JogCommand JogPlanner::update(
 
     if(!positionKnown)
     {
+        if(!machineState.connected)
+        {
+            return noCommand;
+        }
         horizon =
             machinePosition(
                 machineState,
@@ -823,7 +827,8 @@ JogCommand JogPlanner::requestCancel()
     intentChanged =
         true;
 
-
+    positionKnown = false;
+    
     Serial.println(
         "[JogPlanner] JOG_CANCEL"
     );
