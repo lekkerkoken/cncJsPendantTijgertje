@@ -46,7 +46,6 @@ void setup()
     // --------------------------------------------------------
 
     cnc.begin(
-        machineState
     );
 
 
@@ -261,7 +260,10 @@ machineState =
 
         if(event.type == EVENT_ENCODER_PULSE)
         {
-            jogPlanner.encoder(event);
+            jogPlanner.encoder(
+                event,
+                controller.axis()
+            );
         }
         else
         {

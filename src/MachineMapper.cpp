@@ -1,7 +1,5 @@
 #include "MachineMapper.h"
 
-#include <Arduino.h>
-
 
 // ============================================================
 // BEGIN
@@ -9,10 +7,14 @@
 
 void MachineMapper::begin()
 {
-    pendingCommand =
-        MachineCommand();
+    commandAvailable =
+        false;
 
-    commandAvailable = false;
+    pendingCommand.type =
+        MACHINE_COMMAND_NONE;
+
+    pendingCommand.command =
+        "";
 }
 
 
@@ -25,14 +27,8 @@ void MachineMapper::update(
     const MachineState& machineState
 )
 {
-    /*
-        Slechts één command tegelijk.
-    */
-
-    if(commandAvailable)
-    {
-        return;
-    }
+    commandAvailable =
+        false;
 
 
     switch(jog.type)
@@ -45,27 +41,49 @@ void MachineMapper::update(
                     machineState
                 );
 
-            commandAvailable = true;
-
             break;
 
-
-        case JOG_CANCEL:
-
-            pendingCommand =
-                mapJogCancel();
-
-            commandAvailable = true;
-
-            break;
-
-
-        case JOG_NONE:
 
         default:
 
+            pendingCommand.type =
+                MACHINE_COMMAND_NONE;
+
+            pendingCommand.command =
+                "";
+
             break;
     }
+
+
+    if(pendingCommand.type != MACHINE_COMMAND_NONE)
+    {
+        commandAvailable =
+            true;
+    }
+}
+
+
+// ============================================================
+// AVAILABLE
+// ============================================================
+
+bool MachineMapper::available()
+{
+    return commandAvailable;
+}
+
+
+// ============================================================
+// READ
+// ============================================================
+
+MachineCommand MachineMapper::read()
+{
+    commandAvailable =
+        false;
+
+    return pendingCommand;
 }
 
 
@@ -89,14 +107,57 @@ MachineCommand MachineMapper::mapJogMove(
 
         We gebruiken relatieve jogging:
 
-            $J=G91 X1.000 F1000
+            G91 X1.000 F1000
 
         Omdat de jogafstand relatief is, hoeven we hier
         niet zelf de absolute machinepositie te berekenen.
+
+        De JogPlanner levert echter een absolute
+        targetPosition aan. Daarom bepalen we hier eerst
+        de huidige werkpositie van de actieve as.
     */
 
-    float machinePosition =
-        machineState.workPosition.x;
+    float machinePosition;
+
+
+    switch(jog.axis)
+    {
+        case AXIS_X:
+
+            machinePosition =
+                machineState.workPosition.x;
+
+            break;
+
+
+        case AXIS_Y:
+
+            machinePosition =
+                machineState.workPosition.y;
+
+            break;
+
+
+        case AXIS_Z:
+
+            machinePosition =
+                machineState.workPosition.z;
+
+            break;
+
+
+        case AXIS_NONE:
+
+        default:
+
+            command.type =
+                MACHINE_COMMAND_NONE;
+
+            command.command =
+                "";
+
+            return command;
+    }
 
 
     float distance =
@@ -171,6 +232,56 @@ MachineCommand MachineMapper::mapJogMove(
     );
 
     Serial.print(
+        "  axis: "
+    );
+
+    switch(jog.axis)
+    {
+        case AXIS_X:
+            Serial.println("X");
+            break;
+
+        case AXIS_Y:
+            Serial.println("Y");
+            break;
+
+        case AXIS_Z:
+            Serial.println("Z");
+            break;
+
+        default:
+            Serial.println("NONE");
+            break;
+    }
+
+    Serial.print(
+        "  machine position: "
+    );
+
+    Serial.println(
+        machinePosition,
+        3
+    );
+
+    Serial.print(
+        "  target position: "
+    );
+
+    Serial.println(
+        jog.targetPosition,
+        3
+    );
+
+    Serial.print(
+        "  distance: "
+    );
+
+    Serial.println(
+        distance,
+        3
+    );
+
+    Serial.print(
         "  command: "
     );
 
@@ -180,56 +291,4 @@ MachineCommand MachineMapper::mapJogMove(
 
 
     return command;
-}
-
-
-// ============================================================
-// MAP JOG CANCEL
-// ============================================================
-
-MachineCommand MachineMapper::mapJogCancel()
-{
-    MachineCommand command;
-
-    command.type =
-        MACHINE_COMMAND_JOG_CANCEL;
-
-    command.command =
-        "";
-
-
-    Serial.println(
-        "[MachineMapper] JOG_CANCEL"
-    );
-
-
-    return command;
-}
-
-
-// ============================================================
-// AVAILABLE
-// ============================================================
-
-bool MachineMapper::available()
-{
-    return commandAvailable;
-}
-
-
-// ============================================================
-// READ
-// ============================================================
-
-MachineCommand MachineMapper::read()
-{
-    MachineCommand result =
-        pendingCommand;
-
-    pendingCommand =
-        MachineCommand();
-
-    commandAvailable = false;
-
-    return result;
 }

@@ -12,6 +12,18 @@ public:
 
     void begin();
 
+
+    /*
+        Selecteer de as waarop de encoder jogt.
+
+        De planner is niet afhankelijk van PendantState;
+        main.cpp geeft alleen de geselecteerde Axis door.
+    */
+    void setAxis(
+        Axis axis
+    );
+
+
     /*
         Encoderinput verandert de gebruikersintentie/horizon.
 
@@ -19,8 +31,10 @@ public:
         door de planner gebruikt om de huidige jog af te bouwen.
     */
     void encoder(
-        const Event& event
+        const Event& event,
+        Axis axis
     );
+
 
     /*
         Planner wordt vanuit loop() aangeroepen.
@@ -39,14 +53,35 @@ private:
     // ========================================================
 
     /*
-        De positie waar de gebruiker uiteindelijk naartoe wil.
+        De positie waar de gebruiker uiteindelijk naartoe wil,
+        voor de momenteel geselecteerde as.
     */
     float horizon = 0.0f;
+
 
     /*
         Geldige machinepositie ontvangen?
     */
     bool positionKnown = false;
+
+
+    /*
+        De momenteel geselecteerde jog-as.
+    */
+    Axis selectedAxis =
+        AXIS_X;
+
+
+    /*
+        De as waarop de momenteel actieve jog daadwerkelijk
+        draait.
+
+        Dit is belangrijk wanneer de gebruiker tijdens een
+        actieve jog van as wisselt.
+    */
+    Axis activeAxis =
+        AXIS_NONE;
+
 
     /*
         De gebruikersintentie is gewijzigd sinds de laatste
@@ -71,20 +106,17 @@ private:
     /*
         Aantal encoderpulsen in de tegengestelde richting
         sinds de actieve jog nog geldig was.
-
-        Iedere pulse halveert bij een cancel de nog resterende
-        afstand van de huidige jog.
-
-        Bijvoorbeeld:
-
-            4 pulses
-            1.0 mm
-            -> 0.5
-            -> 0.25
-            -> 0.125
-            -> 0.0625
     */
     int reversePulseCount = 0;
+
+
+    /*
+        Richting van de laatste tegengestelde encoderbeweging.
+
+        Hiermee kunnen we ook bij zeer kleine resterende
+        afstanden correct bepalen wat de nieuwe intentie is.
+    */
+    int reverseDirection = 0;
 
 
     // ========================================================
@@ -162,9 +194,16 @@ private:
     // INTERNAL
     // ========================================================
 
+    float machinePosition(
+        const MachineState& machineState,
+        Axis axis
+    ) const;
+
+
     JogCommand requestMove(
         const MachineState& machineState
     );
+
 
     JogCommand requestMove(
         const MachineState& machineState,
@@ -172,15 +211,19 @@ private:
         int moveDirection
     );
 
+
     JogCommand requestCancel();
+
 
     int calculateFeedrate(
         float remainingDistance
     ) const;
 
+
     int direction(
         float distance
     ) const;
+
 
     bool targetReached(
         float machinePosition

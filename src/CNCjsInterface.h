@@ -50,7 +50,6 @@ public:
     // ========================================================
 
     void begin(
-        MachineState& machineState
     );
 
     void update();

@@ -29,6 +29,15 @@ public:
     void update();
 
 
+    /*
+        Geeft de momenteel geselecteerde jog-as terug.
+
+        De JogPlanner gebruikt deze waarde om te bepalen
+        welke machine-as door de encoder wordt bestuurd.
+    */
+    Axis axis() const;
+
+
 
 private:
 
@@ -66,11 +75,6 @@ private:
     void updateMachineStatus();
 
     void updateCncStatus();
-
-
-    // ========================================================
-    // EVENTS
-    // ========================================================
 
 
     // ========================================================

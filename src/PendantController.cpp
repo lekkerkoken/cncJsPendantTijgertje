@@ -66,7 +66,8 @@ void PendantController::handle(
         case EVENT_KEY_8:
 
             if(
-                pendantState.axis != AXIS_X
+                pendantState.axis !=
+                AXIS_X
             )
             {
                 pendantState.axis =
@@ -86,7 +87,8 @@ void PendantController::handle(
         case EVENT_KEY_4:
 
             if(
-                pendantState.axis != AXIS_Y
+                pendantState.axis !=
+                AXIS_Y
             )
             {
                 pendantState.axis =
@@ -106,7 +108,8 @@ void PendantController::handle(
         case EVENT_KEY_7:
 
             if(
-                pendantState.axis != AXIS_Z
+                pendantState.axis !=
+                AXIS_Z
             )
             {
                 pendantState.axis =
@@ -159,7 +162,6 @@ void PendantController::handle(
 
         case EVENT_KEY_9:
 
-
         default:
 
             break;
@@ -171,6 +173,17 @@ void PendantController::handle(
         displayDirty =
             true;
     }
+}
+
+
+
+// ============================================================
+// AXIS
+// ============================================================
+
+Axis PendantController::axis() const
+{
+    return pendantState.axis;
 }
 
 

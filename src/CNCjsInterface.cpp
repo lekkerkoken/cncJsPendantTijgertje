@@ -36,21 +36,8 @@ CNCjsInterface::status() const
 // ============================================================
 
 void CNCjsInterface::begin(
-    MachineState& machineState
 )
 {
-    /*
-        MachineState is retained in the public interface for
-        compatibility with the existing application.
-
-        The Core owns the actual CNCjs machine state.
-
-        The supplied MachineState is therefore no longer used
-        as shared state.
-    */
-
-    (void)machineState;
-
     core_.begin();
 }
 

@@ -16,10 +16,19 @@ void JogPlanner::begin()
     positionKnown =
         false;
 
+    selectedAxis =
+        AXIS_X;
+
+    activeAxis =
+        AXIS_NONE;
+
     intentChanged =
         false;
 
     reversePulseCount =
+        0;
+
+    reverseDirection =
         0;
 
     lastUpdate =
@@ -37,11 +46,67 @@ void JogPlanner::begin()
 
 
 // ============================================================
+// SET AXIS
+// ============================================================
+
+void JogPlanner::setAxis(
+    Axis axis
+)
+{
+    if(axis == AXIS_NONE)
+    {
+        return;
+    }
+
+
+    /*
+        Wanneer de as verandert, moet de horizon opnieuw
+        worden gesynchroniseerd met de actuele positie van
+        de nieuwe as.
+
+        Een actieve jog op de oude as mag niet doorlopen
+        als nieuwe as-intentie.
+    */
+
+    if(axis != selectedAxis)
+    {
+        selectedAxis =
+            axis;
+
+        positionKnown =
+            false;
+
+        jogActive =
+            false;
+
+        activeAxis =
+            AXIS_NONE;
+
+        plannedTarget =
+            0.0f;
+
+        activeDirection =
+            0;
+
+        reversePulseCount =
+            0;
+
+        reverseDirection =
+            0;
+
+        intentChanged =
+            false;
+    }
+}
+
+
+// ============================================================
 // ENCODER
 // ============================================================
 
 void JogPlanner::encoder(
-    const Event& event
+    const Event& event,
+    Axis axis
 )
 {
     if(
@@ -59,12 +124,44 @@ void JogPlanner::encoder(
     }
 
 
+    /*
+        De encoder hoort bij de op dit moment geselecteerde as.
+    */
+
+    setAxis(axis);
+
+
+    /*
+        ========================================================
+        POSITIE NOG NIET GESYNCHRONISEERD
+        ========================================================
+
+        Er is nog geen geldige horizon voor deze as.
+
+        Zonder actuele machinepositie kunnen we de encoderstap
+        niet veilig aan een absolute horizon koppelen.
+
+        Daarom negeren we de puls hier.
+    */
+
+    if(!positionKnown)
+    {
+        Serial.println(
+            "[JogPlanner] Encoder ignored: position not known"
+        );
+
+        return;
+    }
+
+
     float oldHorizon =
         horizon;
 
 
     /*
-        De horizon blijft altijd de gebruikersintentie.
+        ========================================================
+        POSITIE IS WEL BEKEND
+        ========================================================
 
         Iedere encoderpulse verandert de horizon met STEP_SIZE.
     */
@@ -82,9 +179,8 @@ void JogPlanner::encoder(
         Wanneer er een actieve jog is en de encoder de andere
         kant op wordt gedraaid, onthouden we iedere pulse.
 
-        Deze pulsen worden later bij de cancel gebruikt om de
-        resterende afstand van de actieve jog telkens te
-        halveren.
+        Deze pulsen worden gebruikt om de huidige actieve jog
+        eerst gecontroleerd af te remmen.
     */
 
     if(
@@ -105,18 +201,16 @@ void JogPlanner::encoder(
         {
             reversePulseCount +=
                 abs(event.value);
+
+            reverseDirection =
+                encoderDirection;
         }
         else
         {
-            /*
-                Zodra de gebruiker weer dezelfde kant op draait,
-                is er geen nieuwe tegengestelde intentie meer.
-
-                De eerder opgebouwde remactie wordt daarom
-                opnieuw vanaf nul bekeken.
-            */
-
             reversePulseCount =
+                0;
+
+            reverseDirection =
                 0;
         }
     }
@@ -185,40 +279,56 @@ JogCommand JogPlanner::update(
 
 
     /*
-        MachineState is altijd de werkelijkheid.
-    */
-
-    float machinePosition =
-        machineState.workPosition.x;
-
-
-    /*
         ========================================================
-        EERSTE GELDIGE POSITIE
+        EERSTE MACHINEPOSITIE
         ========================================================
+
+        Bij startup is horizon nog geen geldige gebruikersintentie.
+
+        We synchroniseren de horizon daarom éénmalig met de
+        actuele positie van de geselecteerde as.
+
+        BELANGRIJK:
+
+        Deze update mag NOOIT zelf een jog veroorzaken.
+
+        De volgende update begint vanuit een stabiele toestand:
+
+            horizon == machinePosition
     */
 
     if(!positionKnown)
     {
         horizon =
-            machinePosition;
+            machinePosition(
+                machineState,
+                selectedAxis
+            );
+
 
         positionKnown =
             true;
 
+
         intentChanged =
             false;
-
-        reversePulseCount =
-            0;
 
         jogActive =
             false;
 
+        activeAxis =
+            AXIS_NONE;
+
         plannedTarget =
-            machinePosition;
+            horizon;
 
         activeDirection =
+            0;
+
+        reversePulseCount =
+            0;
+
+        reverseDirection =
             0;
 
 
@@ -227,13 +337,24 @@ JogCommand JogPlanner::update(
         );
 
         Serial.println(
-            machinePosition,
+            horizon,
             3
         );
 
 
         return noCommand;
     }
+
+
+    /*
+        MachineState is vanaf hier de werkelijkheid.
+    */
+
+    float currentPosition =
+        machinePosition(
+            machineState,
+            selectedAxis
+        );
 
 
     /*
@@ -246,268 +367,38 @@ JogCommand JogPlanner::update(
     {
         /*
             Een tegengestelde encoderbeweging betekent dat de
-            huidige jog niet meer de juiste beweging is.
+            huidige jog niet meer volledig overeenkomt met de
+            gebruikersintentie.
 
-            We annuleren de huidige $J precies één keer en
-            berekenen daarna een nieuwe beweging op basis van
-            de resterende afstand.
+            Eerst moet de lopende $J worden gecanceld.
         */
 
         if(
             reversePulseCount > 0
         )
         {
-            /*
-                Bepaal hoeveel van de huidige geplande jog nog
-                resteert vanaf de werkelijke machinepositie.
-            */
-
-            float remainingJog =
-                fabs(
-                    plannedTarget -
-                    machinePosition
-                );
-
-
-            /*
-                Iedere tegengestelde encoderpulse halveert de
-                resterende jog.
-
-                Voorbeeld:
-
-                    1.0
-                    0.5
-                    0.25
-                    0.125
-                    ...
-            */
-
-            for(
-                int i = 0;
-                i < reversePulseCount;
-                ++i
-            )
-            {
-                remainingJog *=
-                    0.5f;
-            }
-
-
-            /*
-                De cancel is altijd noodzakelijk.
-
-                We mogen de bestaande $J niet laten doorlopen
-                terwijl we een nieuwe, kortere beweging plannen.
-            */
-
-            JogCommand cancel =
-                requestCancel();
-
-
-            /*
-                De remactie is nu verwerkt.
-            */
-
             reversePulseCount =
                 0;
 
 
-            /*
-                Als de resterende jog nog minstens STEP_SIZE is,
-                plannen we een nieuwe jog over de gehalveerde
-                afstand in de oorspronkelijke bewegingsrichting.
-
-                De horizon blijft ondertussen volledig intact.
-            */
-
-            if(
-                remainingJog >=
-                STEP_SIZE
-            )
-            {
-                /*
-                    De huidige jog werd geannuleerd.
-                    De volgende update moet de nieuwe jog plannen.
-
-                    We slaan de berekende afstand tijdelijk op
-                    via plannedTarget en laten jogActive false.
-
-                    Omdat de normale requestMove() de afstand
-                    zelf berekent vanuit de horizon, gebruiken we
-                    hier de speciale overload.
-                */
-
-                float newRemaining =
-                    remainingJog;
-
-
-                /*
-                    De nieuwe beweging wordt in dezelfde richting
-                    als de oorspronkelijke jog gepland.
-
-                    Dat is bewust: terugdraaien remt eerst de
-                    bestaande beweging af. Pas wanneer de horizon
-                    daadwerkelijk aan de andere kant van de
-                    machinepositie komt, verandert de normale
-                    planner van richting.
-                */
-
-                JogCommand move =
-                    requestMove(
-                        machineState,
-                        newRemaining,
-                        activeDirection
-                    );
-
-
-                if(
-                    move.type ==
-                    JOG_MOVE
-                )
-                {
-                    intentChanged =
-                        false;
-
-                    return move;
-                }
-
-
-                return cancel;
-            }
-
-
-            /*
-                De resterende jog is kleiner geworden dan
-                STEP_SIZE.
-
-                Dan willen we niet nog een steeds kleinere jog
-                uitvoeren.
-
-                De huidige beweging wordt gewoon gecanceld en
-                daarmee stoppen we op de actuele machinepositie.
-
-                Daarna leggen we de horizon één STEP_SIZE in de
-                nieuwe encoder-richting.
-
-                Vanaf dat moment werkt de normale planner weer.
-            */
-
-            int newDirection =
+            reverseDirection =
                 0;
 
 
-            if(
-                reversePulseCount == 0 &&
-                activeDirection != 0
-            )
-            {
-                /*
-                    De richting van de laatste tegengestelde
-                    encoderbeweging kunnen we hier niet meer uit
-                    reversePulseCount halen.
-
-                    De nieuwe richting wordt daarom afgeleid
-                    uit de relatie tussen horizon en machine.
-                */
-
-                newDirection =
-                    direction(
-                        horizon -
-                        machinePosition
-                    );
-            }
-
-
-            /*
-                Als de horizon door afronding nog niet aan de
-                andere kant van de machinepositie ligt, gebruiken
-                we de tegengestelde richting van de oude jog.
-            */
-
-            if(newDirection == 0)
-            {
-                newDirection =
-                    -activeDirection;
-            }
-
-
-            horizon =
-                machinePosition +
-                (
-                    newDirection *
-                    STEP_SIZE
-                );
-
-
-            intentChanged =
-                true;
-
-
-            /*
-                De cancel wordt éénmalig teruggegeven.
-
-                De volgende planner-update ziet:
-                
-                    jogActive = false
-                    horizon   = machine + STEP_SIZE
-
-                en gebruikt vervolgens de normale plannerlogica.
-            */
-
-            return cancel;
+            return requestCancel();
         }
 
 
         /*
             Geen tegengestelde beweging.
 
-            Bepaal de normale gewenste richting.
-        */
-
-        int desiredDirection =
-            direction(
-                horizon -
-                machinePosition
-            );
-
-
-        /*
-            De horizon is bereikt.
-        */
-
-        if(
-            fabs(
-                horizon -
-                machinePosition
-            ) <=
-            POSITION_EPSILON
-        )
-        {
-            jogActive =
-                false;
-
-            plannedTarget =
-                machinePosition;
-
-            activeDirection =
-                0;
-
-            intentChanged =
-                false;
-
-            return noCommand;
-        }
-
-
-        /*
-            Is de huidige geplande stap bereikt?
-
-            Dan mag een volgende normale stap worden gepland.
+            Bepaal of de huidige geplande jog zijn doel heeft
+            bereikt.
         */
 
         if(
             targetReached(
-                machinePosition
+                currentPosition
             )
         )
         {
@@ -515,10 +406,13 @@ JogCommand JogPlanner::update(
                 false;
 
             plannedTarget =
-                machinePosition;
+                currentPosition;
 
             activeDirection =
                 0;
+
+            activeAxis =
+                AXIS_NONE;
         }
         else
         {
@@ -542,7 +436,7 @@ JogCommand JogPlanner::update(
 
     float remaining =
         horizon -
-        machinePosition;
+        currentPosition;
 
 
     int desiredDirection =
@@ -555,9 +449,7 @@ JogCommand JogPlanner::update(
         Horizon bereikt.
     */
 
-    if(
-        desiredDirection == 0
-    )
+    if(desiredDirection == 0)
     {
         intentChanged =
             false;
@@ -591,6 +483,41 @@ JogCommand JogPlanner::update(
 
 
 // ============================================================
+// MACHINE POSITION
+// ============================================================
+
+float JogPlanner::machinePosition(
+    const MachineState& machineState,
+    Axis axis
+) const
+{
+    switch(axis)
+    {
+        case AXIS_X:
+
+            return machineState.workPosition.x;
+
+
+        case AXIS_Y:
+
+            return machineState.workPosition.y;
+
+
+        case AXIS_Z:
+
+            return machineState.workPosition.z;
+
+
+        case AXIS_NONE:
+
+        default:
+
+            return 0.0f;
+    }
+}
+
+
+// ============================================================
 // REQUEST MOVE
 // ============================================================
 
@@ -598,13 +525,16 @@ JogCommand JogPlanner::requestMove(
     const MachineState& machineState
 )
 {
-    float machinePosition =
-        machineState.workPosition.x;
+    float currentPosition =
+        machinePosition(
+            machineState,
+            selectedAxis
+        );
 
 
     float remaining =
         horizon -
-        machinePosition;
+        currentPosition;
 
 
     int moveDirection =
@@ -670,22 +600,17 @@ JogCommand JogPlanner::requestMove(
     }
 
 
-    float machinePosition =
-        machineState.workPosition.x;
+    float currentPosition =
+        machinePosition(
+            machineState,
+            selectedAxis
+        );
 
-
-    /*
-        Een speciale rem-jog mag nooit voorbij de actuele
-        horizon worden gepland.
-
-        Dit is alleen relevant wanneer de nieuwe intentie
-        inmiddels dichter bij de machinepositie ligt.
-    */
 
     float remainingToHorizon =
         fabs(
             horizon -
-            machinePosition
+            currentPosition
         );
 
 
@@ -699,15 +624,14 @@ JogCommand JogPlanner::requestMove(
 
 
     /*
-        Bij een remjog gebruiken we de berekende halve afstand,
-        maar nooit meer dan de resterende afstand naar de horizon
-        wanneer die in dezelfde richting ligt.
+        Wanneer de beweging dezelfde richting heeft als de
+        horizon, mogen we nooit voorbij de horizon bewegen.
     */
 
     if(
         direction(
             horizon -
-            machinePosition
+            currentPosition
         ) ==
         moveDirection
     )
@@ -730,10 +654,8 @@ JogCommand JogPlanner::requestMove(
 
 
     /*
-        Feedrate blijft volledig automatisch gekoppeld aan de
-        resterende afstand naar de horizon.
-
-        We hoeven dus geen aparte snelheidsregeling te maken.
+        Feedrate blijft automatisch gekoppeld aan de resterende
+        afstand naar de horizon.
     */
 
     int feedrate =
@@ -743,7 +665,7 @@ JogCommand JogPlanner::requestMove(
 
 
     float target =
-        machinePosition +
+        currentPosition +
         (
             moveDirection *
             moveDistance
@@ -756,7 +678,7 @@ JogCommand JogPlanner::requestMove(
         JOG_MOVE;
 
     command.axis =
-        AXIS_X;
+        selectedAxis;
 
     command.targetPosition =
         target;
@@ -767,6 +689,9 @@ JogCommand JogPlanner::requestMove(
 
     jogActive =
         true;
+
+    activeAxis =
+        selectedAxis;
 
     plannedTarget =
         target;
@@ -780,11 +705,34 @@ JogCommand JogPlanner::requestMove(
     );
 
     Serial.print(
+        "  axis: "
+    );
+
+    switch(selectedAxis)
+    {
+        case AXIS_X:
+            Serial.println("X");
+            break;
+
+        case AXIS_Y:
+            Serial.println("Y");
+            break;
+
+        case AXIS_Z:
+            Serial.println("Z");
+            break;
+
+        default:
+            Serial.println("NONE");
+            break;
+    }
+
+    Serial.print(
         "  machine: "
     );
 
     Serial.println(
-        machinePosition,
+        currentPosition,
         3
     );
 
@@ -864,9 +812,12 @@ JogCommand JogPlanner::requestCancel()
     activeDirection =
         0;
 
+    activeAxis =
+        AXIS_NONE;
+
 
     /*
-        De nieuwe intentie blijft actief.
+        De nieuwe intentie blijft volledig behouden in horizon.
     */
 
     intentChanged =
@@ -973,7 +924,7 @@ int JogPlanner::direction(
 // ============================================================
 
 bool JogPlanner::targetReached(
-    float machinePosition
+    float currentPosition
 ) const
 {
     if(!jogActive)
@@ -984,7 +935,7 @@ bool JogPlanner::targetReached(
 
     float distance =
         plannedTarget -
-        machinePosition;
+        currentPosition;
 
 
     if(
