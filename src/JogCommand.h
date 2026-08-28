@@ -7,41 +7,62 @@
 
 enum JogCommandType
 {
-    JOG_NONE,
+JOG_NONE,
 
-    /*
-        Start of vervolg van een jogbeweging.
-    */
-    JOG_MOVE,
+/*
+    Eén onafhankelijke beweging voor één tijdslot.
+*/
+JOG_MOVE,
 
-    /*
-        Annuleer de huidige jogbewefeeging.
+/*
+    Realtime cancel van een daadwerkelijk lopende GRBL jog.
 
-        Voor GRBL wordt dit uiteindelijk vertaald naar
-        de realtime jog-cancel 0x85.
-    */
-    JOG_CANCEL
+    De nieuwe planner heeft dit normaal gesproken niet nodig
+    voor richtingswisselingen: die worden in de intentiering
+    verwerkt.
+
+    Het blijft beschikbaar voor expliciete externe annulering.
+*/
+JOG_CANCEL
+
 };
-
 
 struct JogCommand
 {
-    JogCommandType type = JOG_NONE;
+JogCommandType type =
+JOG_NONE;
 
-    Axis axis = AXIS_NONE;
+/*
+    As waarop deze tijdslot-intentie betrekking heeft.
+*/
+Axis axis =
+    AXIS_NONE;
 
-    /*
-        Gewenste eindpositie in werkcoördinaten.
 
-        Dit is de gebruikershorizon van de JogPlanner.
-    */
-    float targetPosition = 0.0f;
+/*
+    Relatieve beweging voor dit tijdslot.
 
-    /*
-        Gewenste jog-feedrate in mm/min.
-    */
-    int feedrate = 0;
+    Dit is géén targetpositie.
+*/
+float delta =
+    0.0f;
+
+
+/*
+    Tijdsduur waarop deze intentie gebaseerd is.
+
+    Voor de huidige planner is dit SLOT_TIME = 50 ms.
+*/
+unsigned long duration =
+    0;
+
+
+/*
+    Feedrate in mm/min waarmee GRBL deze beweging uitvoert.
+*/
+int feedrate =
+    0;
+
 };
-
 
 #endif

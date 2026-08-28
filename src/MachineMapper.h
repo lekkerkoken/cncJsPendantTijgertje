@@ -5,37 +5,43 @@
 #include "MachineCommand.h"
 #include "MachineState.h"
 
-
 class MachineMapper
 {
 public:
 
-    void begin();
 
-    void update(
-        const JogCommand& jog,
-        const MachineState& machineState
-    );
+void begin();
 
-    bool available();
 
-    MachineCommand read();
+void update(
+    const JogCommand& jog,
+    const MachineState& machineState
+);
+
+
+bool available();
+
+
+MachineCommand read();
 
 
 private:
 
-    MachineCommand pendingCommand;
 
-    bool commandAvailable = false;
+MachineCommand pendingCommand;
+
+bool commandAvailable =
+    false;
 
 
-    MachineCommand mapJogMove(
-        const JogCommand& jog,
-        const MachineState& machineState
-    );
+MachineCommand mapJogMove(
+    const JogCommand& jog
+);
 
-    MachineCommand mapJogCancel();
+
+MachineCommand mapJogCancel();
+
+
 };
-
 
 #endif

@@ -3,963 +3,683 @@
 #include <Arduino.h>
 #include <math.h>
 
-
 // ============================================================
 // BEGIN
 // ============================================================
 
 void JogPlanner::begin()
 {
-    horizon =
-        0.0f;
+clearIntent();
 
-    positionKnown =
-        false;
+consumeIndex =
+    0;
 
-    selectedAxis =
-        AXIS_X;
+selectedAxis =
+    AXIS_X;
 
-    activeAxis =
-        AXIS_NONE;
+positionKnown =
+    false;
 
-    intentChanged =
-        false;
+lastUpdate =
+    millis();
 
-    reversePulseCount =
-        0;
-
-    reverseDirection =
-        0;
-
-    lastUpdate =
-        millis();
-
-    jogActive =
-        false;
-
-    plannedTarget =
-        0.0f;
-
-    activeDirection =
-        0;
 }
-
 
 // ============================================================
 // SET AXIS
 // ============================================================
 
 void JogPlanner::setAxis(
-    Axis axis
+Axis axis
 )
 {
-    if(axis == AXIS_NONE)
-    {
-        return;
-    }
-
-
-    /*
-        Wanneer de as verandert, moet de horizon opnieuw
-        worden gesynchroniseerd met de actuele positie van
-        de nieuwe as.
-
-        Een actieve jog op de oude as mag niet doorlopen
-        als nieuwe as-intentie.
-    */
-
-    if(axis != selectedAxis)
-    {
-        selectedAxis =
-            axis;
-
-        positionKnown =
-            false;
-
-        jogActive =
-            false;
-
-        activeAxis =
-            AXIS_NONE;
-
-        plannedTarget =
-            0.0f;
-
-        activeDirection =
-            0;
-
-        reversePulseCount =
-            0;
-
-        reverseDirection =
-            0;
-
-        intentChanged =
-            false;
-    }
+if(axis == AXIS_NONE)
+{
+return;
 }
 
+if(axis == selectedAxis)
+{
+    return;
+}
+
+
+/*
+    Intentie hoort altijd bij één specifieke as.
+
+    Bij een aswissel laten we daarom alle toekomstige
+    intentie vervallen. De nieuwe as begint schoon.
+*/
+
+selectedAxis =
+    axis;
+
+clearIntent();
+
+positionKnown =
+    false;
+
+
+Serial.print(
+    "[JogPlanner] Axis changed: "
+);
+
+switch(selectedAxis)
+{
+    case AXIS_X:
+        Serial.println("X");
+        break;
+
+    case AXIS_Y:
+        Serial.println("Y");
+        break;
+
+    case AXIS_Z:
+        Serial.println("Z");
+        break;
+
+    default:
+        Serial.println("NONE");
+        break;
+}
+
+}
 
 // ============================================================
 // ENCODER
 // ============================================================
 
 void JogPlanner::encoder(
-    const Event& event,
-    Axis axis
+const Event& event,
+Axis axis
 )
 {
-    if(
-        event.type !=
-        EVENT_ENCODER_PULSE
-    )
-    {
-        return;
-    }
+if(
+event.type !=
+EVENT_ENCODER_PULSE
+)
+{
+return;
+}
+
+if(event.value == 0)
+{
+    return;
+}
 
 
-    if(event.value == 0)
-    {
-        return;
-    }
+setAxis(axis);
 
 
+/*
+    Zonder geldige machineverbinding accepteren we nog geen
+    jogintentie.
+*/
+
+if(!positionKnown)
+{
+    Serial.println(
+        "[JogPlanner] Encoder ignored: position not known"
+    );
+
+    return;
+}
+
+
+int direction =
+    event.value > 0
+        ? +1
+        : -1;
+
+
+int pulses =
+    abs(event.value);
+
+
+for(int i = 0; i < pulses; ++i)
+{
     /*
-        De encoder hoort bij de op dit moment geselecteerde as.
+        Zelfde richting:
+
+            voeg één nieuwe intentiestap toe.
+
+        Tegengestelde richting:
+
+            breek de bestaande toekomstige intentie af.
     */
 
-    setAxis(axis);
-
-
-    /*
-        ========================================================
-        POSITIE NOG NIET GESYNCHRONISEERD
-        ========================================================
-
-        Er is nog geen geldige horizon voor deze as.
-
-        Zonder actuele machinepositie kunnen we de encoderstap
-        niet veilig aan een absolute horizon koppelen.
-
-        Daarom negeren we de puls hier.
-    */
-
-    if(!positionKnown)
-    {
-        Serial.println(
-            "[JogPlanner] Encoder ignored: position not known"
-        );
-
-        return;
-    }
-
-
-    float oldHorizon =
-        horizon;
-
-
-    /*
-        ========================================================
-        POSITIE IS WEL BEKEND
-        ========================================================
-
-        Iedere encoderpulse verandert de horizon met STEP_SIZE.
-    */
-
-    horizon +=
-        STEP_SIZE *
-        event.value;
-
-
-    intentChanged =
+    bool sameDirection =
         true;
 
 
-    /*
-        Wanneer er een actieve jog is en de encoder de andere
-        kant op wordt gedraaid, onthouden we iedere pulse.
-
-        Deze pulsen worden gebruikt om de huidige actieve jog
-        eerst gecontroleerd af te remmen.
-    */
-
-    if(
-        jogActive &&
-        activeDirection != 0
-    )
+    for(int slot = 0; slot < SLOT_COUNT; ++slot)
     {
-        int encoderDirection =
-            event.value > 0
-                ? +1
-                : -1;
-
-
         if(
-            encoderDirection !=
-            activeDirection
+            fabs(
+                intent[slot]
+            ) >
+            INTENT_EPSILON
         )
         {
-            reversePulseCount +=
-                abs(event.value);
+            int existingDirection =
+                intent[slot] > 0
+                    ? +1
+                    : -1;
 
-            reverseDirection =
-                encoderDirection;
-        }
-        else
-        {
-            reversePulseCount =
-                0;
 
-            reverseDirection =
-                0;
+            if(
+                existingDirection !=
+                direction
+            )
+            {
+                sameDirection =
+                    false;
+
+                break;
+            }
         }
     }
 
 
-    Serial.print(
-        "[JogPlanner] Horizon: "
-    );
-
-    Serial.print(
-        oldHorizon,
-        3
-    );
-
-    Serial.print(
-        " -> "
-    );
-
-    Serial.println(
-        horizon,
-        3
-    );
-
-
-    if(reversePulseCount > 0)
+    if(sameDirection)
     {
-        Serial.print(
-            "[JogPlanner] Reverse pulses: "
+        addIntent(
+            STEP_SIZE *
+            direction
         );
-
-        Serial.println(
-            reversePulseCount
+    }
+    else
+    {
+        reverseIntent(
+            direction
         );
     }
 }
 
+
+Serial.print(
+    "[JogPlanner] Encoder intent: "
+);
+
+Serial.print(
+    event.value
+);
+
+Serial.print(
+    "  direction="
+);
+
+Serial.println(
+    direction
+);
+
+}
 
 // ============================================================
 // UPDATE
 // ============================================================
 
 JogCommand JogPlanner::update(
-    const MachineState& machineState
+const MachineState& machineState
 )
 {
-    JogCommand noCommand;
+JogCommand noCommand;
+
+unsigned long now =
+    millis();
 
 
-    /*
-        Planner draait op vaste frequentie.
-    */
+/*
+    Eerste geldige machinepositie.
 
-    unsigned long now =
-        millis();
+    De positie is uitsluitend validatie/kalibratie.
+    Hij bepaalt NIET de inhoud van de intentiering.
+*/
 
-    if(
-        now - lastUpdate <
-        PLANNER_INTERVAL
-    )
+if(!positionKnown)
+{
+    if(!machineState.connected)
     {
         return noCommand;
     }
+
+
+    positionKnown =
+        true;
 
     lastUpdate =
         now;
 
 
-    /*
-        ========================================================
-        EERSTE MACHINEPOSITIE
-        ========================================================
+    Serial.print(
+        "[JogPlanner] Position synchronized: "
+    );
 
-        Bij startup is horizon nog geen geldige gebruikersintentie.
-
-        We synchroniseren de horizon daarom éénmalig met de
-        actuele positie van de geselecteerde as.
-
-        BELANGRIJK:
-
-        Deze update mag NOOIT zelf een jog veroorzaken.
-
-        De volgende update begint vanuit een stabiele toestand:
-
-            horizon == machinePosition
-    */
-
-    if(!positionKnown)
-    {
-        if(!machineState.connected)
-        {
-            return noCommand;
-        }
-        horizon =
-            machinePosition(
-                machineState,
-                selectedAxis
-            );
-
-
-        positionKnown =
-            true;
-
-
-        intentChanged =
-            false;
-
-        jogActive =
-            false;
-
-        activeAxis =
-            AXIS_NONE;
-
-        plannedTarget =
-            horizon;
-
-        activeDirection =
-            0;
-
-        reversePulseCount =
-            0;
-
-        reverseDirection =
-            0;
-
-
-        Serial.print(
-            "[JogPlanner] Initial position: "
-        );
-
-        Serial.println(
-            horizon,
-            3
-        );
-
-
-        return noCommand;
-    }
-
-
-    /*
-        MachineState is vanaf hier de werkelijkheid.
-    */
-
-    float currentPosition =
+    Serial.println(
         machinePosition(
             machineState,
             selectedAxis
-        );
+        ),
+        3
+    );
 
 
-    /*
-        ========================================================
-        ACTIEVE JOG
-        ========================================================
-    */
-
-    if(jogActive)
-    {
-        /*
-            Een tegengestelde encoderbeweging betekent dat de
-            huidige jog niet meer volledig overeenkomt met de
-            gebruikersintentie.
-
-            Eerst moet de lopende $J worden gecanceld.
-        */
-
-        if(
-            reversePulseCount > 0
-        )
-        {
-            reversePulseCount =
-                0;
-
-
-            reverseDirection =
-                0;
-
-
-            return requestCancel();
-        }
-
-
-        /*
-            Geen tegengestelde beweging.
-
-            Bepaal of de huidige geplande jog zijn doel heeft
-            bereikt.
-        */
-
-        if(
-            targetReached(
-                currentPosition
-            )
-        )
-        {
-            jogActive =
-                false;
-
-            plannedTarget =
-                currentPosition;
-
-            activeDirection =
-                0;
-
-            activeAxis =
-                AXIS_NONE;
-        }
-        else
-        {
-            /*
-                De huidige jog is nog onderweg.
-
-                Een wijziging in dezelfde richting verandert
-                alleen de horizon. De huidige $J blijft geldig.
-            */
-
-            return noCommand;
-        }
-    }
-
-
-    /*
-        ========================================================
-        GEEN ACTIEVE JOG
-        ========================================================
-    */
-
-    float remaining =
-        horizon -
-        currentPosition;
-
-
-    int desiredDirection =
-        direction(
-            remaining
-        );
-
-
-    /*
-        Horizon bereikt.
-    */
-
-    if(desiredDirection == 0)
-    {
-        intentChanged =
-            false;
-
-        return noCommand;
-    }
-
-
-    /*
-        Normale plannerlogica.
-    */
-
-    JogCommand command =
-        requestMove(
-            machineState
-        );
-
-
-    if(
-        command.type ==
-        JOG_MOVE
-    )
-    {
-        intentChanged =
-            false;
-    }
-
-
-    return command;
+    return noCommand;
 }
 
 
+/*
+    Planner draait op SLOT_TIME.
+
+    Alles wat vóór dit moment voor het volgende tijdslot
+    bedoeld was, wordt nu geconsumeerd.
+*/
+
+if(
+    now - lastUpdate <
+    SLOT_TIME
+)
+{
+    return noCommand;
+}
+
+
+lastUpdate +=
+    SLOT_TIME;
+
+
+/*
+    Consumeer precies één slot.
+
+    Een leeg/verlopen slot levert bewust géén command op.
+*/
+
+float delta =
+    consumeIntent();
+
+
+if(
+    fabs(delta) <=
+    INTENT_EPSILON
+)
+{
+    return noCommand;
+}
+
+
+/*
+    Eén slot is één onafhankelijke beweging.
+
+    Er is geen target en geen poging om een vorige jog
+    alsnog af te maken.
+*/
+
+JogCommand command;
+
+command.type =
+    JOG_MOVE;
+
+command.axis =
+    selectedAxis;
+
+command.delta =
+    delta;
+
+command.duration =
+    SLOT_TIME;
+
+
+command.feedrate =
+    calculateFeedrate(
+        delta
+    );
+
+
+Serial.println(
+    "[JogPlanner] JOG_MOVE"
+);
+
+Serial.print(
+    "  delta: "
+);
+
+Serial.println(
+    delta,
+    4
+);
+
+Serial.print(
+    "  duration: "
+);
+
+Serial.print(
+    command.duration
+);
+
+Serial.println(
+    " ms"
+);
+
+Serial.print(
+    "  feedrate: "
+);
+
+Serial.println(
+    command.feedrate
+);
+
+
+return command;
+
+}
+
 // ============================================================
-// MACHINE POSITION
+// NEXT INDEX
 // ============================================================
 
-float JogPlanner::machinePosition(
-    const MachineState& machineState,
-    Axis axis
+int JogPlanner::nextIndex(
+int index
 ) const
 {
-    switch(axis)
-    {
-        case AXIS_X:
+++index;
 
-            return machineState.workPosition.x;
-
-
-        case AXIS_Y:
-
-            return machineState.workPosition.y;
-
-
-        case AXIS_Z:
-
-            return machineState.workPosition.z;
-
-
-        case AXIS_NONE:
-
-        default:
-
-            return 0.0f;
-    }
-}
-
-
-// ============================================================
-// REQUEST MOVE
-// ============================================================
-
-JogCommand JogPlanner::requestMove(
-    const MachineState& machineState
-)
+if(index >= SLOT_COUNT)
 {
-    float currentPosition =
-        machinePosition(
-            machineState,
-            selectedAxis
-        );
-
-
-    float remaining =
-        horizon -
-        currentPosition;
-
-
-    int moveDirection =
-        direction(
-            remaining
-        );
-
-
-    if(moveDirection == 0)
-    {
-        JogCommand noCommand;
-
-        return noCommand;
-    }
-
-
-    float distance =
-        fabs(
-            remaining
-        );
-
-
-    float moveDistance =
-        min(
-            distance,
-            JOG_DISTANCE
-        );
-
-
-    return requestMove(
-        machineState,
-        moveDistance,
-        moveDirection
-    );
-}
-
-
-// ============================================================
-// REQUEST MOVE WITH DISTANCE
-// ============================================================
-
-JogCommand JogPlanner::requestMove(
-    const MachineState& machineState,
-    float moveDistance,
-    int moveDirection
-)
-{
-    JogCommand noCommand;
-
-
-    if(
-        moveDistance <=
-        POSITION_EPSILON
-    )
-    {
-        return noCommand;
-    }
-
-
-    if(moveDirection == 0)
-    {
-        return noCommand;
-    }
-
-
-    float currentPosition =
-        machinePosition(
-            machineState,
-            selectedAxis
-        );
-
-
-    float remainingToHorizon =
-        fabs(
-            horizon -
-            currentPosition
-        );
-
-
-    if(
-        remainingToHorizon <=
-        POSITION_EPSILON
-    )
-    {
-        return noCommand;
-    }
-
-
-    /*
-        Wanneer de beweging dezelfde richting heeft als de
-        horizon, mogen we nooit voorbij de horizon bewegen.
-    */
-
-    if(
-        direction(
-            horizon -
-            currentPosition
-        ) ==
-        moveDirection
-    )
-    {
-        moveDistance =
-            min(
-                moveDistance,
-                remainingToHorizon
-            );
-    }
-
-
-    if(
-        moveDistance <=
-        POSITION_EPSILON
-    )
-    {
-        return noCommand;
-    }
-
-
-    /*
-        Feedrate blijft automatisch gekoppeld aan de resterende
-        afstand naar de horizon.
-    */
-
-    int feedrate =
-        calculateFeedrate(
-            remainingToHorizon
-        );
-
-
-    float target =
-        currentPosition +
-        (
-            moveDirection *
-            moveDistance
-        );
-
-
-    JogCommand command;
-
-    command.type =
-        JOG_MOVE;
-
-    command.axis =
-        selectedAxis;
-
-    command.targetPosition =
-        target;
-
-    command.feedrate =
-        feedrate;
-
-
-    jogActive =
-        true;
-
-    activeAxis =
-        selectedAxis;
-
-    plannedTarget =
-        target;
-
-    activeDirection =
-        moveDirection;
-
-
-    Serial.println(
-        "[JogPlanner] JOG_MOVE"
-    );
-
-    Serial.print(
-        "  axis: "
-    );
-
-    switch(selectedAxis)
-    {
-        case AXIS_X:
-            Serial.println("X");
-            break;
-
-        case AXIS_Y:
-            Serial.println("Y");
-            break;
-
-        case AXIS_Z:
-            Serial.println("Z");
-            break;
-
-        default:
-            Serial.println("NONE");
-            break;
-    }
-
-    Serial.print(
-        "  machine: "
-    );
-
-    Serial.println(
-        currentPosition,
-        3
-    );
-
-    Serial.print(
-        "  horizon: "
-    );
-
-    Serial.println(
-        horizon,
-        3
-    );
-
-    Serial.print(
-        "  target: "
-    );
-
-    Serial.println(
-        target,
-        3
-    );
-
-    Serial.print(
-        "  distance: "
-    );
-
-    Serial.println(
-        moveDistance,
-        3
-    );
-
-    Serial.print(
-        "  remaining: "
-    );
-
-    Serial.println(
-        remainingToHorizon,
-        3
-    );
-
-    Serial.print(
-        "  feedrate: "
-    );
-
-    Serial.println(
-        feedrate
-    );
-
-
-    return command;
-}
-
-
-// ============================================================
-// REQUEST CANCEL
-// ============================================================
-
-JogCommand JogPlanner::requestCancel()
-{
-    JogCommand command;
-
-    command.type =
-        JOG_CANCEL;
-
-
-    /*
-        De huidige jog is niet langer geldig.
-
-        MachineState blijft de werkelijkheid.
-    */
-
-    jogActive =
-        false;
-
-    plannedTarget =
-        0.0f;
-
-    activeDirection =
+    index =
         0;
-
-    activeAxis =
-        AXIS_NONE;
+}
 
 
-    /*
-        De nieuwe intentie blijft volledig behouden in horizon.
-    */
+return index;
 
-    intentChanged =
-        true;
+}
 
-    positionKnown = false;
-    
-    Serial.println(
-        "[JogPlanner] JOG_CANCEL"
+// ============================================================
+// CLEAR INTENT
+// ============================================================
+
+void JogPlanner::clearIntent()
+{
+for(int i = 0; i < SLOT_COUNT; ++i)
+{
+intent[i] =
+0.0f;
+}
+}
+
+// ============================================================
+// ADD INTENT
+// ============================================================
+
+void JogPlanner::addIntent(
+float delta
+)
+{
+/*
+De volledige nieuwe encoderintentie wordt over alle
+toekomstige tijdslots verdeeld.
+
+    Daardoor blijft:
+
+        INTENT_LIFETIME == PLAN_AHEAD
+
+    en ontstaat geen onbeperkte toekomstbuffer.
+*/
+
+float perSlot =
+    delta /
+    SLOT_COUNT;
+
+
+for(int i = 0; i < SLOT_COUNT; ++i)
+{
+    int index =
+        (
+            consumeIndex +
+            i
+        ) %
+        SLOT_COUNT;
+
+
+    intent[index] +=
+        perSlot;
+}
+
+}
+
+// ============================================================
+// REVERSE INTENT
+// ============================================================
+
+void JogPlanner::reverseIntent(
+int direction
+)
+{
+/*
+Een richtingswisseling probeert NIET een bestaand
+commando te annuleren.
+
+    We veranderen de nog niet verlopen intentie.
+
+    Iedere tegengestelde encoderstap halveert de resterende
+    oude intentie.
+
+    Daardoor wordt bijvoorbeeld:
+
+        ++++++++
+
+    eerst:
+
+        ++++....
+
+    daarna:
+
+        ++......
+
+    daarna:
+
+        +.......
+
+    waarna de nieuwe richting de ring kan overnemen.
+*/
+
+bool oldIntentRemaining =
+    false;
+
+
+for(int i = 0; i < SLOT_COUNT; ++i)
+{
+    int index =
+        (
+            consumeIndex +
+            i
+        ) %
+        SLOT_COUNT;
+
+
+    intent[index] *=
+        REVERSAL_FACTOR;
+
+
+    if(
+        fabs(
+            intent[index]
+        ) >
+        INTENT_EPSILON
+    )
+    {
+        oldIntentRemaining =
+            true;
+    }
+}
+
+
+/*
+    Zodra de oude intentie praktisch verdwenen is, vullen we
+    de toekomst met de nieuwe richting.
+
+    De oude intentie hoeft nooit te worden teruggestuurd.
+*/
+
+if(!oldIntentRemaining)
+{
+    addIntent(
+        STEP_SIZE *
+        direction
     );
 
 
-    return command;
+    Serial.println(
+        "[JogPlanner] Direction reversed"
+    );
 }
 
+}
+
+// ============================================================
+// HAS INTENT
+// ============================================================
+
+bool JogPlanner::hasIntent() const
+{
+for(int i = 0; i < SLOT_COUNT; ++i)
+{
+if(
+fabs(
+intent[i]
+) >
+INTENT_EPSILON
+)
+{
+return true;
+}
+}
+
+return false;
+
+}
+
+// ============================================================
+// CONSUME INTENT
+// ============================================================
+
+float JogPlanner::consumeIntent()
+{
+float delta =
+intent[consumeIndex];
+
+/*
+    Dit slot is vanaf nu verleden tijd.
+
+    Wat hier zat kan nooit meer worden meegestuurd.
+*/
+
+intent[consumeIndex] =
+    0.0f;
+
+
+consumeIndex =
+    nextIndex(
+        consumeIndex
+    );
+
+
+return delta;
+
+}
 
 // ============================================================
 // CALCULATE FEEDRATE
 // ============================================================
 
 int JogPlanner::calculateFeedrate(
-    float remainingDistance
+float delta
 ) const
 {
-    float distance =
-        fabs(
-            remainingDistance
-        );
+float distance =
+fabs(
+delta
+);
+
+/*
+    mm / sec
+
+    De intentie van dit slot moet binnen de tijdsbasis
+    van het slot worden uitgevoerd.
+*/
+
+float velocity =
+    distance /
+    (
+        SLOT_TIME /
+        1000.0f
+    );
 
 
-    /*
-        mm / sec
-    */
+/*
+    mm / min
+*/
 
-    float velocity =
-        distance /
-        ARRIVAL_TIME;
-
-
-    /*
-        mm / min
-    */
-
-    float feedrate =
-        velocity *
-        60.0f;
+float feedrate =
+    velocity *
+    60.0f;
 
 
-    if(
-        feedrate <
-        MIN_FEEDRATE
-    )
-    {
-        feedrate =
-            MIN_FEEDRATE;
-    }
-
-
-    if(
-        feedrate >
-        MAX_FEEDRATE
-    )
-    {
-        feedrate =
-            MAX_FEEDRATE;
-    }
-
-
-    return (int)feedrate;
+if(
+    feedrate <
+    MIN_FEEDRATE
+)
+{
+    feedrate =
+        MIN_FEEDRATE;
 }
 
 
-// ============================================================
-// DIRECTION
-// ============================================================
-
-int JogPlanner::direction(
-    float distance
-) const
+if(
+    feedrate >
+    MAX_FEEDRATE
+)
 {
-    if(
-        distance >
-        POSITION_EPSILON
-    )
-    {
-        return +1;
-    }
-
-
-    if(
-        distance <
-        -POSITION_EPSILON
-    )
-    {
-        return -1;
-    }
-
-
-    return 0;
+    feedrate =
+        MAX_FEEDRATE;
 }
 
 
+return (int)feedrate;
+
+}
+
 // ============================================================
-// TARGET REACHED
+// MACHINE POSITION
 // ============================================================
 
-bool JogPlanner::targetReached(
-    float currentPosition
+float JogPlanner::machinePosition(
+const MachineState& machineState,
+Axis axis
 ) const
 {
-    if(!jogActive)
-    {
-        return true;
-    }
+switch(axis)
+{
+case AXIS_X:
+
+        return machineState.workPosition.x;
 
 
-    float distance =
-        plannedTarget -
-        currentPosition;
+    case AXIS_Y:
+
+        return machineState.workPosition.y;
 
 
-    if(
-        activeDirection > 0 &&
-        distance <= POSITION_EPSILON
-    )
-    {
-        return true;
-    }
+    case AXIS_Z:
+
+        return machineState.workPosition.z;
 
 
-    if(
-        activeDirection < 0 &&
-        distance >= -POSITION_EPSILON
-    )
-    {
-        return true;
-    }
+    case AXIS_NONE:
 
+    default:
 
-    return false;
+        return 0.0f;
+}
+
 }

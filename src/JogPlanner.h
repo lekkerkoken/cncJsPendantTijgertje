@@ -5,230 +5,176 @@
 #include "JogCommand.h"
 #include "MachineState.h"
 
-
 class JogPlanner
 {
 public:
 
-    void begin();
+void begin();
 
 
-    /*
-        Selecteer de as waarop de encoder jogt.
-
-        De planner is niet afhankelijk van PendantState;
-        main.cpp geeft alleen de geselecteerde Axis door.
-    */
-    void setAxis(
-        Axis axis
-    );
+/*
+    Selecteer de as waarop de encoder jogt.
+*/
+void setAxis(
+    Axis axis
+);
 
 
-    /*
-        Encoderinput verandert de gebruikersintentie/horizon.
+/*
+    Verwerk encoderintentie.
 
-        Een richtingsverandering tijdens een actieve jog wordt
-        door de planner gebruikt om de huidige jog af te bouwen.
-    */
-    void encoder(
-        const Event& event,
-        Axis axis
-    );
+    Iedere encoderstap wordt als intentie over het volledige
+    planvenster verdeeld.
+*/
+void encoder(
+    const Event& event,
+    Axis axis
+);
 
 
-    /*
-        Planner wordt vanuit loop() aangeroepen.
+/*
+    Consumeert maximaal één tijdslot uit de intentiering.
 
-        Geeft maximaal één JogCommand terug.
-    */
-    JogCommand update(
-        const MachineState& machineState
-    );
-
+    Het resultaat is één onafhankelijke JogCommand voor
+    het betreffende tijdslot.
+*/
+JogCommand update(
+    const MachineState& machineState
+);
 
 private:
 
-    // ========================================================
-    // USER INTENT
-    // ========================================================
+// ========================================================
+// TIME MODEL
+// ========================================================
 
-    /*
-        De positie waar de gebruiker uiteindelijk naartoe wil,
-        voor de momenteel geselecteerde as.
-    */
-    float horizon = 0.0f;
+/*
+    Intentie blijft maximaal 0.5 seconde relevant.
 
+    Bij 20 Hz betekent dit 10 tijdslots van 50 ms.
+*/
+static constexpr unsigned long SLOT_TIME = 50;
 
-    /*
-        Geldige machinepositie ontvangen?
-    */
-    bool positionKnown = false;
+static constexpr int SLOT_COUNT = 10;
 
 
-    /*
-        De momenteel geselecteerde jog-as.
-    */
-    Axis selectedAxis =
-        AXIS_X;
+/*
+    Eén encoderstap wordt over het volledige planvenster
+    verdeeld.
+*/
+static constexpr float STEP_SIZE = 0.1f;
 
 
-    /*
-        De as waarop de momenteel actieve jog daadwerkelijk
-        draait.
-
-        Dit is belangrijk wanneer de gebruiker tijdens een
-        actieve jog van as wisselt.
-    */
-    Axis activeAxis =
-        AXIS_NONE;
+/*
+    Wanneer een resterende intentie kleiner wordt dan deze
+    waarde, beschouwen we hem als praktisch verdwenen.
+*/
+static constexpr float INTENT_EPSILON = 0.001f;
 
 
-    /*
-        De gebruikersintentie is gewijzigd sinds de laatste
-        geplande beweging.
-    */
-    bool intentChanged = false;
+/*
+    Bij een richtingswisseling wordt de bestaande toekomstige
+    intentie telkens gehalveerd.
+
+    Zodra de resterende intentie voldoende klein is, kan de
+    nieuwe richting de ring vullen.
+*/
+static constexpr float REVERSAL_FACTOR = 0.5f;
 
 
-    // ========================================================
-    // ENCODER
-    // ========================================================
+// ========================================================
+// FEEDRATE
+// ========================================================
 
-    /*
-        Tijdelijke stapgrootte.
-
-        Dit correspondeert momenteel met STEP_0_1_MM.
-        Later halen we dit rechtstreeks uit PendantState.
-    */
-    static constexpr float STEP_SIZE = 0.1f;
+static constexpr int MIN_FEEDRATE = 100;
+static constexpr int MAX_FEEDRATE = 3000;
 
 
-    /*
-        Aantal encoderpulsen in de tegengestelde richting
-        sinds de actieve jog nog geldig was.
-    */
-    int reversePulseCount = 0;
+// ========================================================
+// RING BUFFER
+// ========================================================
+
+/*
+    Iedere entry is de gewenste relatieve beweging voor één
+    tijdslot van SLOT_TIME milliseconden.
+
+    De array is een logische ring:
+
+        writeIndex
+        consumeIndex
+
+    De planner hoeft daardoor geen absolute positie of
+    einddoel bij te houden.
+*/
+float intent[SLOT_COUNT];
 
 
-    /*
-        Richting van de laatste tegengestelde encoderbeweging.
-
-        Hiermee kunnen we ook bij zeer kleine resterende
-        afstanden correct bepalen wat de nieuwe intentie is.
-    */
-    int reverseDirection = 0;
+/*
+    Slot dat als volgende door update() wordt geconsumeerd.
+*/
+int consumeIndex = 0;
 
 
-    // ========================================================
-    // PLANNER
-    // ========================================================
-
-    /*
-        Plannerfrequentie:
-
-            20 Hz
-            50 ms
-    */
-    static constexpr unsigned long PLANNER_INTERVAL = 50;
-
-    unsigned long lastUpdate = 0;
+/*
+    Geselecteerde encoder-as.
+*/
+Axis selectedAxis =
+    AXIS_X;
 
 
-    /*
-        Gewenste tijd om de resterende afstand af te leggen.
-    */
-    static constexpr float ARRIVAL_TIME = 0.4f;
+/*
+    Geldige machinepositie ontvangen?
+
+    Dit voorkomt dat direct na startup encoderintentie wordt
+    toegevoegd zonder dat we weten of de machine beschikbaar is.
+*/
+bool positionKnown = false;
 
 
-    /*
-        Feedrategrenzen.
-    */
-    static constexpr int MIN_FEEDRATE = 100;
-    static constexpr int MAX_FEEDRATE = 3000;
+/*
+    Tijdstip waarop het huidige tijdslot beschikbaar komt.
+*/
+unsigned long lastUpdate = 0;
 
 
-    /*
-        Wanneer het verschil tussen horizon en machinepositie
-        zo klein is dat geen nieuwe jog nodig is.
-    */
-    static constexpr float POSITION_EPSILON = 0.01f;
+// ========================================================
+// INTERNAL
+// ========================================================
+
+int nextIndex(
+    int index
+) const;
 
 
-    /*
-        Maximale grootte van één normale geplande jogstap.
-    */
-    static constexpr float JOG_DISTANCE = 1.0f;
+void clearIntent();
 
 
-    // ========================================================
-    // ACTIVE JOG
-    // ========================================================
-
-    /*
-        Er is momenteel een door de planner uitgegeven jog
-        waarvan we nog niet via MachineState hebben vastgesteld
-        dat het doel is bereikt.
-    */
-    bool jogActive = false;
+void addIntent(
+    float delta
+);
 
 
-    /*
-        Het doel van de momenteel actieve jog.
-
-        Dit is een voorspeld/planningsdoel, geen machinefeedback.
-    */
-    float plannedTarget = 0.0f;
+void reverseIntent(
+    int direction
+);
 
 
-    /*
-        Richting van de actieve jog:
-
-            -1 = negatief
-             0 = geen richting
-            +1 = positief
-    */
-    int activeDirection = 0;
+bool hasIntent() const;
 
 
-    // ========================================================
-    // INTERNAL
-    // ========================================================
-
-    float machinePosition(
-        const MachineState& machineState,
-        Axis axis
-    ) const;
+float consumeIntent();
 
 
-    JogCommand requestMove(
-        const MachineState& machineState
-    );
+int calculateFeedrate(
+    float delta
+) const;
 
 
-    JogCommand requestMove(
-        const MachineState& machineState,
-        float moveDistance,
-        int moveDirection
-    );
+float machinePosition(
+    const MachineState& machineState,
+    Axis axis
+) const;
 
-
-    JogCommand requestCancel();
-
-
-    int calculateFeedrate(
-        float remainingDistance
-    ) const;
-
-
-    int direction(
-        float distance
-    ) const;
-
-
-    bool targetReached(
-        float machinePosition
-    ) const;
 };
-
 
 #endif
