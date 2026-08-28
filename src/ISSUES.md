@@ -154,3 +154,107 @@ Encoderverwerking
 Asselectie
 
 Dit maakt ook meteen duidelijk waarom dit een issue is: niet alleen de planner is fout, maar de JogStep uit PendantState is momenteel feitelijk geen echte statebron.
+
+ISS-005f — Jogstep selecteren met keys
+
+Status: OPEN
+
+Doel:
+
+De gebruiker moet vanaf de pendant de geselecteerde jogstep kunnen aanpassen met twee keys.
+
+Gewenst gedrag:
+
+KEY_6 vergroot de geselecteerde jogstep met één niveau.
+KEY_9 verkleint de geselecteerde jogstep met één niveau.
+De nieuwe selectie wordt opgeslagen in PendantState::jogStep.
+Het display toont na wijziging direct de nieuwe jogstep.
+Nieuwe jogbewegingen gebruiken automatisch de nieuwe jogstep.
+De bestaande centrale vertaling JogStep → mm blijft de enige bron voor de daadwerkelijke afstand.
+
+De beschikbare jogsteps zijn, van groot naar klein:
+
+STEP_10_MM
+STEP_1_MM
+STEP_0_1_MM
+STEP_0_01_MM
+
+Dus:
+
+KEY 6                           KEY 9
+  │                               │
+  ▼                               ▼
+groter                          kleiner
+
+0.01 ──► 0.1 ──► 1.0 ──► 10.0 mm
+       ◄───────────────
+
+Grenzen:
+
+Bij STEP_10_MM doet KEY_6 niets.
+Bij STEP_0_01_MM doet KEY_9 niets.
+Er wordt niet doorgelopen van de grootste naar de kleinste waarde of andersom.
+
+Architectuur:
+
+PendantController is verantwoordelijk voor het wijzigen van de geselecteerde jogstep, omdat de keuze van de jogstep onderdeel is van de pendant/state.
+
+KEY_6 / KEY_9
+      │
+      ▼
+PendantController
+      │
+      ▼
+PendantState.jogStep
+      │
+      ├──────────────► Display
+      │
+      ▼
+jogStepDistance()
+      │
+      ▼
+JogPlanner
+
+JogPlanner krijgt geen kennis van de keys en blijft onafhankelijk van PendantState.
+
+Niet onderdeel van dit issue:
+
+Nieuwe jogsteps toevoegen.
+De bestaande JogStep-enum wijzigen.
+Wijzigingen aan de centrale JogStep → mm-vertaling.
+Encoderverwerking wijzigen.
+Asselectie wijzigen.
+Jog-planning, horizon of timing wijzigen.
+Display-layout wijzigen.
+
+Acceptatiecriteria:
+
+Wanneer de gebruiker op key 6 drukt, wordt de jogstep één niveau groter. Wanneer de gebruiker op key 9 drukt, wordt deze één niveau kleiner. Het display toont de nieuwe waarde en de eerstvolgende nieuwe jogbeweging gebruikt dezelfde waarde.
+
+Voorbeeld:
+
+Bij startup:
+
+Step 1.00
+
+Na KEY_6:
+
+Step 10.00
+
+Nogmaals KEY_6:
+
+Step 10.00
+
+Na KEY_9:
+
+Step 1.00
+
+Daarna:
+
+KEY_9
+↓
+Step 0.10
+↓
+Step 0.01
+↓
+Step 0.01

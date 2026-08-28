@@ -123,6 +123,52 @@ void PendantController::handle(
 
 
         // ----------------------------------------------------
+        // JOG STEP GROTER
+        // ----------------------------------------------------
+
+        case EVENT_KEY_6:
+
+            if(
+                pendantState.jogStep !=
+                STEP_10_MM
+            )
+            {
+                pendantState.jogStep =
+                    static_cast<JogStep>(
+                        pendantState.jogStep - 1
+                    );
+
+                changed =
+                    true;
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
+        // JOG STEP KLEINER
+        // ----------------------------------------------------
+
+        case EVENT_KEY_9:
+
+            if(
+                pendantState.jogStep !=
+                STEP_0_01_MM
+            )
+            {
+                pendantState.jogStep =
+                    static_cast<JogStep>(
+                        pendantState.jogStep + 1
+                    );
+
+                changed =
+                    true;
+            }
+
+            break;
+
+
+        // ----------------------------------------------------
         // ENCODER PRESS
         // ----------------------------------------------------
 
@@ -157,10 +203,8 @@ void PendantController::handle(
 
 
         // ----------------------------------------------------
-        // KEY 9
+        // DEFAULT
         // ----------------------------------------------------
-
-        case EVENT_KEY_9:
 
         default:
 
