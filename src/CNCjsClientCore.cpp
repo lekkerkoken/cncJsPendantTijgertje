@@ -86,6 +86,9 @@ void CNCjsClientCore::begin()
     lastMachineStateTime =
         0;
 
+    lastHeartbeatPing =
+        0;
+
     lastCommandSendTime_ =
         0;
 
@@ -712,6 +715,9 @@ void CNCjsClientCore::updateConnection()
 
                 lastCncjsActivity =
                     millis();
+
+                lastHeartbeatPing =
+                    millis();
             }
 
             break;
@@ -787,6 +793,9 @@ void CNCjsClientCore::connectionFailed(
 
 
     lastCncjsActivity =
+        0;
+
+    lastHeartbeatPing =
         0;
 
 
@@ -1317,40 +1326,25 @@ void CNCjsClientCore::updateHeartbeat()
 
 
     /*
-        CNCjs is considered active as long as valid events
-        have recently arrived.
+        Heartbeat ping is rate limited independently from
+        CNCjs activity.
 
-        The heartbeat is therefore a watchdog rather than
-        a periodic activity.
+        Exactly one ping can be sent per HEARTBEAT_INTERVAL.
+        Incoming CNCjs activity does not affect this interval.
     */
 
     if (
-        now - lastCncjsActivity >=
-        CNCJS_ACTIVITY_TIMEOUT
+        now - lastHeartbeatPing >=
+        HEARTBEAT_INTERVAL
     )
     {
-        if (
-            sendStatusReport()
-        )
-        {
-            /*
-                Do not reset lastCncjsActivity here.
-
-                Sending the request is not activity.
-                Only an actual CNCjs event resets the
-                watchdog.
-            */
-
-            Serial.println(
-                "[CNCjs] Activity timeout - heartbeat sent"
-            );
-        }
+        heartbeatPing();
     }
 
 
     /*
         Machine-state timeout remains independent from the
-        CNCjs communication watchdog.
+        CNCjs communication heartbeat.
     */
 
     if (
@@ -1368,10 +1362,10 @@ void CNCjsClientCore::updateHeartbeat()
 
 
 // ============================================================
-// STATUS REPORT
+// HEARTBEAT PING
 // ============================================================
 
-bool CNCjsClientCore::sendStatusReport()
+bool CNCjsClientCore::heartbeatPing()
 {
     if (
         !socketConnectedState ||
@@ -1420,7 +1414,7 @@ bool CNCjsClientCore::sendStatusReport()
 
 
     Serial.print(
-        "[CNCjs] HEARTBEAT: "
+        "[CNCjs] HEARTBEAT PING: "
     );
 
     Serial.println(
@@ -1428,9 +1422,22 @@ bool CNCjsClientCore::sendStatusReport()
     );
 
 
-    return socketIO.sendEVENT(
-        output
-    );
+    bool sent =
+        socketIO.sendEVENT(
+            output
+        );
+
+
+    if (
+        sent
+    )
+    {
+        lastHeartbeatPing =
+            millis();
+    }
+
+
+    return sent;
 }
 
 
@@ -1489,6 +1496,9 @@ void CNCjsClientCore::handleSocketEvent(
             lastCncjsActivity =
                 0;
 
+            lastHeartbeatPing =
+                0;
+
 
             currentStatus_ =
                 CNCjsStatus::Offline;
@@ -1534,6 +1544,9 @@ void CNCjsClientCore::handleSocketEvent(
 
             listRequested =
                 false;
+
+            lastHeartbeatPing =
+                millis();
 
 
             currentStatus_ =

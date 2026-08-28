@@ -1,7 +1,5 @@
 # cncJsPendantTijgertje
 
-
-
 ## CNCjs client architecture
 
 The CNCjs client is deliberately split into three responsibilities:
@@ -35,40 +33,42 @@ The CNCjs client is deliberately split into three responsibilities:
                     │ DNS             │
                     │ HTTP auth       │
                     └─────────────────┘
-NetworkManager
+```
+
+### NetworkManager
 
 NetworkManager is responsible for network-level services only:
 
-WiFi connection
-DNS resolution
-HTTP communication
-HTTP authentication
-obtaining the CNCjs authentication token
+* WiFi connection
+* DNS resolution
+* HTTP communication
+* HTTP authentication
+* obtaining the CNCjs authentication token
 
 NetworkManager does not know about CNCjs protocol messages, Socket.IO events, controllers or machine state.
 
-CNCjsClientCore
+### CNCjsClientCore
 
 CNCjsClientCore is the implementation of the CNCjs client.
 
 It is responsible for:
 
-the CNCjs connection state machine
-Socket.IO communication
-CNCjs protocol and event handling
-controller and serial-port discovery
-controller selection and opening
-the CNCjs heartbeat
-processing CNCjs machine-state information
-updating MachineState
-executing and transmitting machine commands and G-code
-maintaining the internal CNCjs state used by the interface
+* the CNCjs connection state machine
+* Socket.IO communication
+* CNCjs protocol and event handling
+* controller and serial-port discovery
+* controller selection and opening
+* the CNCjs heartbeat
+* processing CNCjs machine-state information
+* updating MachineState
+* executing and transmitting machine commands and G-code
+* maintaining the internal CNCjs state used by the interface
 
 The network processing runs in the CNCjsClientCore FreeRTOS network task.
 
 CNCjsClientCore uses NetworkManager for WiFi, DNS and HTTP authentication, but does not implement those services itself.
 
-CNCjsInterface
+### CNCjsInterface
 
 CNCjsInterface is the application-facing boundary of the CNCjs client.
 
@@ -76,22 +76,23 @@ The rest of the application communicates with CNCjs through this interface and s
 
 The interface is responsible for:
 
-exposing the CNCjs functionality required by the application
-providing a stable application-facing API
-exposing connection, controller and machine status
-providing a consistent snapshot of the current CNCjs state
-forwarding application commands to CNCjsClientCore
+* exposing the CNCjs functionality required by the application
+* providing a stable application-facing API
+* exposing connection, controller and machine status
+* providing a consistent snapshot of the current CNCjs state
+* forwarding application commands to CNCjsClientCore
 
 CNCjsInterface does not implement:
 
-Socket.IO
-WiFi
-DNS
-HTTP authentication
-CNCjs protocol parsing
-the network task
-CNCjs connection handling
-State and synchronization
+* Socket.IO
+* WiFi
+* DNS
+* HTTP authentication
+* CNCjs protocol parsing
+* the network task
+* CNCjs connection handling
+
+### State and synchronization
 
 CNCjsClientCore owns and updates the live CNCjs state.
 
@@ -99,540 +100,677 @@ The application consumes that state through CNCjsInterface as a consistent snaps
 
 The network task and application-facing access are synchronized using the CNCjs network mutex. The synchronization boundary must be preserved when the implementation is refactored.
 
-Architectural rule
+### Architectural rule
 
 The separation is intentional:
 
-NetworkManager provides network services.
-CNCjsClientCore implements CNCjs.
-CNCjsInterface provides the application API.
+```text
+NetworkManager
+
+    provides network services.
+
+
+CNCjsClientCore
+
+    implements CNCjs.
+
+
+CNCjsInterface
+
+    provides the application API.
+```
 
 New functionality should be placed according to these responsibilities rather than simply added to the class that happens to be easiest to access.
 
-# JogPlanner – ontwerpmodel
+# JogPlanner – tijdgebaseerd intentiemodel
 
 ## Doel
 
-De JogPlanner vertaalt de menselijke interactie met de encoder naar een continue bewegingsintentie voor de CNC-machine.
+De JogPlanner vertaalt menselijke encoderinput naar een **tijdgebonden bewegingsintentie** voor de CNC-machine.
 
-De encoder wordt niet gezien als een knop die losse jogcommando's produceert. De gebruiker geeft met de encoder voortdurend aan:
+De encoder wordt niet gezien als een knop die een reeks onafhankelijke machinebewegingen produceert.
 
-* hoeveel de gewenste beweging verandert;
-* in welke richting;
-* en hoe snel de bewegingsintentie verandert.
+De gebruiker geeft voortdurend aan:
 
-De machinefeedback wordt gebruikt om deze intentie voortdurend bij te stellen.
+```text
+"Ik wil dat de machine deze kant op beweegt,
+met ongeveer deze intensiteit."
+```
 
----
+De planner vertaalt deze intentie naar een korte beweging in de nabije toekomst.
 
-## 1. De gebruiker creëert een bewegingshorizon
+De belangrijkste eigenschap van het model is dat **intentie een beperkte geldigheid heeft**.
 
-De belangrijkste interne toestand van de JogPlanner is de **gebruikershorizon**.
+Een intentie die te oud is om nog als reactie op de huidige gebruikersinput te voelen, mag niet alsnog door de machine worden uitgevoerd.
 
-Dit is de positie waar de gebruiker wil dat de machine uiteindelijk uitkomt.
+## 1. Geen absolute horizon meer
+
+Het oude model gebruikte een absolute gebruikershorizon:
+
+```text
+machinepositie → horizon
+```
+
+Concepten zoals:
+
+```text
+horizon
+target
+communicatedTarget
+jogActive
+```
+
+zijn daarom geen fundamentele onderdelen meer van het nieuwe model.
+
+De planner hoeft niet te onthouden:
+
+```text
+"de gebruiker wil uiteindelijk op positie X uitkomen."
+```
+
+In plaats daarvan onthoudt de planner:
+
+```text
+"dit is de bewegingsintentie voor de eerstvolgende
+stukken van de tijd."
+```
+
+De machinepositie uit `MachineState` blijft de werkelijkheid.
+
+De planner probeert daar niet een tweede voorspelde positie naast te zetten.
+
+# 2. De intentiering
+
+De gebruikersintentie wordt opgeslagen in een **ringbuffer**.
+
+De ring is een tijdvenster rond het heden.
+
+Voorlopig gebruiken we:
+
+```text
+INTENT_LIFETIME = 0,5 s
+PLAN_AHEAD      = 0,5 s
+PLANNER_RATE    = 20 Hz
+```
+
+Bij 20 Hz duurt één tijdslot:
+
+```text
+1 / 20 = 0,05 s
+```
+
+Daarmee ontstaan:
+
+```text
+0,5 / 0,05 = 10 slots
+```
+
+De ring bevat dus voorlopig **10 tijdslots**.
+
+## 3. De ring is een tijdas
+
+Conceptueel ziet de ring eruit als een bewegend planvenster:
+
+```text
+                     TOEKOMST
+                        →
+                        
+        ┌─────┬─────┬─────┬─────┬─────┐
+        │  1  │  2  │  3  │ ... │  10 │
+        └─────┴─────┴─────┴─────┴─────┘
+          ↑
+         NU
+```
+
+Maar de ring zelf is circulair.
+
+Terwijl de tijd verstrijkt, schuift het betekenisvolle tijdvenster door de ring:
+
+```text
+                    PLAN AHEAD
+                ──────────────────►
+
+        NET        NU              TOEKOMST
+         │          │                  │
+         ▼          ▼                  ▼
+
+      [verlopen] [actueel] [1] [2] [3] ... [10]
+```
+
+Een slot dat achter `NU` terechtkomt is verlopen.
+
+Een slot dat verder dan `PLAN_AHEAD` ligt, mag niet worden gevuld.
+
+De ring is daarmee geen queue van commando's.
+
+Het is een **tijdvenster van toekomstige bewegingsintentie**.
+
+# 4. Wat bevat een slot?
+
+Een slot bevat uitsluitend een bewegingsdelta:
+
+```text
+delta movement
+```
 
 Bijvoorbeeld:
 
 ```text
-machinepositie = 100 mm
-
-gebruiker draait +10 pulsen
-
-step size = 0,1 mm
-
-horizon = 101 mm
+slot 0   +0,010 mm
+slot 1   +0,010 mm
+slot 2   +0,010 mm
+slot 3   +0,010 mm
+...
 ```
 
-Wanneer de machine nog onderweg is en de gebruiker nogmaals +20 pulsen geeft:
+Het slot zegt daarmee:
 
 ```text
-horizon = 103 mm
+"Tijdens dit tijdsinterval wil de gebruiker
+deze hoeveelheid beweging."
 ```
 
-De tweede beweging wordt dus niet als een tweede jogcommando in een queue gezet. De bestaande gebruikersintentie wordt uitgebreid.
+Het slot bevat dus geen zelfstandig toekomstig absoluut target.
 
-Bij een verandering van richting kan de horizon eveneens teruglopen.
+De fysieke machinepositie wordt door GRBL bepaald.
 
----
+# 5. Encoderinput vult de toekomst
 
-## 2. De encoder verandert de horizon
+Een encoderbeweging is een nieuwe gebruikersintentie.
 
-De encoder heeft 30 pulsen per omwenteling.
-
-Bij een maximale menselijke draaisnelheid van ongeveer 2 omwentelingen per seconde ontstaan maximaal ongeveer 60 pulsen per seconde (ongeveer één puls per 17 ms).
-
-Iedere puls verandert de gebruikershorizon met:
+Wanneer de gebruiker bijvoorbeeld één stap van:
 
 ```text
-pulse × stepSize
++0,1 mm
 ```
 
-Bijvoorbeeld:
+geeft, wordt deze intentie niet als één grote beweging in één slot geplaatst.
+
+De stap wordt verdeeld over het beschikbare planvenster.
+
+Bij tien slots betekent dit bijvoorbeeld:
 
 ```text
-+1 puls → +0,1 mm
+encoder:
 
-+1 puls → +0,1 mm
++0,1 mm
 
--1 puls → -0,1 mm
+        ↓
+
+slot 1   +0,01
+slot 2   +0,01
+slot 3   +0,01
+slot 4   +0,01
+slot 5   +0,01
+slot 6   +0,01
+slot 7   +0,01
+slot 8   +0,01
+slot 9   +0,01
+slot 10  +0,01
 ```
 
-De encoderfrequentie bepaalt daarmee niet rechtstreeks de feedrate.
+De precieze verdeling is onderdeel van het planneralgoritme, maar het principe is:
 
-De encoderfrequentie vertelt vooral hoe snel de gebruiker zijn bewegingshorizon verandert.
+> Een nieuwe encoderintentie wordt uitgesmeerd over de nabije toekomst.
 
-Door de coalescing in `InputManager` kan de JogPlanner meerdere snel binnengekomen fysieke pulsen als één wijziging van de gebruikershorizon ontvangen.
+Daardoor ontstaat geen plotselinge grote machinebeweging als reactie op één encoderpuls.
 
----
+# 6. De verhouding tussen NU en TOEKOMST
 
-## 3. De gewenste aankomsttijd
+De planner houdt het tijdvenster bewust kort.
 
-De gebruiker wil bij een grote beweging niet noodzakelijk een bepaalde feedrate.
-
-De gebruiker wil impliciet:
+Voorlopig geldt:
 
 ```text
-"Breng mij snel naar de horizon."
+INTENT_LIFETIME = 0,5 s
+PLAN_AHEAD      = 0,5 s
 ```
 
-Daarom gebruiken we voorlopig een gewenste maximale aankomsttijd van:
+Dit betekent dat de planner ongeveer evenveel toekomst als directe tijd representeert.
+
+Conceptueel:
 
 ```text
-0,8 seconde
+              NU
+               │
+               ▼
+NET ───────────┼────────────── TOEKOMST
+               │
+        <------┼------------->
+            0,5 seconde
 ```
 
-De feedrate wordt vervolgens afgeleid uit:
+De verhouding tussen actuele tijd en geplande toekomst moet dicht bij `1:1` blijven.
+
+Een veel langere toekomst zou betekenen dat een encoderbeweging pas veel later zichtbaar wordt.
+
+Dat voelt niet meer als directe bediening.
+
+Een veel kortere toekomst zou juist weinig ruimte laten voor de communicatie- en motion-planningketen.
+
+# 7. Intentie heeft een houdbaarheid
+
+Dit is een fundamenteel onderdeel van het model.
+
+Een encoderbeweging van bijvoorbeeld 500 ms geleden is niet automatisch nog steeds relevante gebruikersintentie.
+
+Als die intentie nog niet door de machine is opgevolgd wanneer het betreffende tijdslot verloopt, wordt deze vergeten.
+
+Dus:
 
 ```text
-resterende afstand
-------------------
-gewenste aankomsttijd
+nieuwe intentie
+      ↓
+ringbuffer
+      ↓
+tijd verstrijkt
+      ↓
+slot bereikt NU
+      ↓
+slot wordt uitgevoerd
+      ↓
+slot verloopt
+      ↓
+verdwijnt uit de ring
 ```
 
-Bijvoorbeeld:
+Niet:
 
 ```text
-machinepositie = 100 mm
-
-horizon = 120 mm
-
-resterende afstand = 20 mm
-
-gewenste aankomsttijd = 0,8 s
+oude intentie
+      ↓
+niet verstuurd
+      ↓
+later alsnog versturen
 ```
 
-dan is de benodigde gemiddelde snelheid:
+Dat laatste zou namelijk een fundamenteel verkeerd gebruikersgevoel veroorzaken:
 
 ```text
-20 / 0,8 = 25 mm/s
-```
-
-oftewel:
-
-```text
-1500 mm/min
-```
-
----
-
-## 4. De feedrate volgt de bewegingshorizon
-
-Wanneer de gebruiker de horizon verder weg schuift, neemt de benodigde feedrate toe.
-
-Bijvoorbeeld:
-
-```text
-machine = 100 mm
-
-horizon = 120 mm
-
-afstand = 20 mm
-
-F ≈ 1500 mm/min
-```
-
-De gebruiker geeft vervolgens opnieuw input:
-
-```text
-horizon = 130 mm
-```
-
-dan:
-
-```text
-machine = 100 mm
-
-horizon = 130 mm
-
-afstand = 30 mm
-
-F ≈ 2250 mm/min
-```
-
-De machine versnelt dus omdat de horizon verder weg komt te liggen, terwijl de gewenste aankomsttijd ongeveer gelijk blijft.
-
----
-
-## 5. Als de gebruiker stopt
-
-Wanneer de gebruiker stopt met draaien, verandert de horizon niet meer.
-
-De machine beweegt vervolgens richting de bestaande horizon.
-
-Bijvoorbeeld:
-
-```text
-horizon = 130 mm
-
-machine:
-
-100 → 105 → 112 → 120 → 127 → 130 mm
-```
-
-De resterende afstand wordt:
-
-```text
-30 → 25 → 18 → 10 → 3 → 0 mm
-```
-
-De benodigde feedrate kan daardoor automatisch afnemen.
-
-De planner hoeft dus niet te wachten op een expliciete "stop"-actie van de gebruiker.
-
----
-
-## 6. Continue gebruikersintentie
-
-Een menselijke encoderbeweging wordt beschouwd als een continue interactie.
-
-Bijvoorbeeld:
-
-```text
-ZWIEP 1
-
+gebruiker draait
     ↓
-
-horizon +20 mm
-
-machine is onderweg
-
-ZWIEP 2
-
+wacht
     ↓
-
-horizon +30 mm
+draait inmiddels terug
+    ↓
+oude beweging wordt alsnog uitgevoerd
 ```
 
-De planner maakt daar:
+De machine zou dan reageren op de geschiedenis in plaats van op de actuele intentie.
+
+# 8. Verlopen intentie valt aan de achterkant uit de ring
+
+De ring heeft daarmee een natuurlijke vorm van garbage collection.
+
+Wanneer een slot verloopt:
 
 ```text
-oorspronkelijke horizon + 50 mm
+[ A ][ B ][ C ][ D ][ E ][ F ][ G ][ H ][ I ][ J ]
+  ↑
+  verlopen
 ```
 
-van.
+wordt het slot leeggemaakt.
 
-Er ontstaat geen queue van:
+Daarna kan dezelfde fysieke positie in de ring opnieuw worden gebruikt voor de toekomst:
 
 ```text
-+20 mm
-
-+30 mm
+[ nieuwe ][ B ][ C ][ D ][ E ][ F ][ G ][ H ][ I ][ J ]
 ```
 
-De horizon wordt voortdurend opnieuw berekend op basis van de gebruikersinput en de werkelijke machinepositie.
+De ring hoeft dus nooit groter te worden om steeds nieuwe intentie te bevatten.
 
----
+De tijd maakt oude intentie vanzelf ongeldig.
 
-## 7. Richtingsverandering
+# 9. Richtingsverandering
 
-Wanneer de gebruiker tijdens een beweging terugdraait, wordt de bestaande intentie aangepast.
+Een richtingsverandering is geen reden om eerst de oude beweging volledig uit te voeren.
+
+De nieuwe intentie moet de bestaande toekomstige intentie onmiddellijk beïnvloeden.
 
 Bijvoorbeeld:
 
 ```text
-horizon = +100 mm
+toekomstige intentie:
+
++ + + + + + + + + +
 ```
 
 De gebruiker draait terug:
 
 ```text
--20 mm
+-
 ```
 
-dan:
-
-```text
-horizon = +80 mm
-```
-
-De planner hoeft dus niet eerst +100 mm uit te voeren en daarna -20 mm.
-
-De gebruiker heeft zijn intentie gewijzigd.
-
-De werkelijke machinepositie blijft afkomstig uit MachineState.
-
----
-
-## 8. Bewegingshorizon en aankomsttijd
-
-De bewegingshorizon is dus primair.
-
-De feedrate is daarvan afgeleid.
+De planner breekt de bestaande toekomstige intentie geleidelijk af.
 
 Conceptueel:
 
 ```text
-encoder input
++ + + + + + + + + +
 
-      ↓
+        ↓ terugdraaien
 
-verandering horizon
-
-      ↓
-
-gebruikershorizon
-
-      ↓
-
-machinepositie uit MachineState
-
-      ↓
-
-resterende afstand
-
-      ↓
-
-gewenste aankomsttijd ≈ 0,8 s
-
-      ↓
-
-benodigde feedrate
++ + + + + - - - - -
 ```
 
-De causaliteit is dus:
+Daarbij wordt de bestaande delta herhaaldelijk gehalveerd:
 
 ```text
-gebruiker → horizon → aankomsttijd → feedrate
+oude delta
+
+    ↓ /2
+
+    ↓ /2
+
+    ↓ /2
+
+    ...
 ```
 
-en niet:
+totdat de resterende delta kleiner wordt dan een kleine plannergrens.
+
+Daarna wordt de nieuwe tegengestelde stap over de toekomstige slots verdeeld.
+
+Het belangrijke principe is:
+
+> De nieuwe gebruikersintentie wordt niet achter de oude intentie geplaatst. De toekomstige intentie zelf wordt aangepast.
+
+# 10. Geen cumulatieve straf voor intentie-afbraak
+
+Het afbreken van oude intentie mag niet leiden tot een cumulatieve vertraging.
+
+Als een gebruiker:
 
 ```text
-gebruiker → feedrate → afstand
++
++
++
++
+-
+-
+-
 ```
 
----
+draait, moet de machine niet uiteindelijk een lange reeks oude positieve bewegingen uitvoeren omdat die ooit in de planner terechtkwamen.
 
-## 9. Machinefeedback
+De oude positieve intentie valt vanzelf aan de achterkant uit de ring.
 
-De JogPlanner gebruikt MachineState om te bepalen waar de machine daadwerkelijk is.
-
-Belangrijke informatie is onder andere:
-
-* machinepositie;
-* werkpositie;
-* machine velocity / feedrate;
-* machine status;
-* alarm / error state.
-
-De planner moet onderscheid maken tussen:
+Daarmee is de hoeveelheid historische "schuld" begrensd door:
 
 ```text
-gewenste positie
-
-werkelijke positie
+INTENT_LIFETIME
 ```
 
-De gewenste positie is de gebruikershorizon.
+en niet door hoeveel encoderinput er in het verleden is geweest.
 
-De werkelijke positie komt van de machine.
+# 11. Fysieke machinebeweging is het resultaat van alle slots
 
----
+De slots zijn **geen fysieke machinebewegingen**.
 
-## 10. Plannerfrequentie
+GRBL ontvangt jogbewegingen en bepaalt vervolgens zelf hoe de machine fysiek accelereert, beweegt en afremt.
 
-De JogPlanner werkt voorlopig op:
+Conceptueel:
+
+```text
+Encoder
+   ↓
+Intentiering
+   ↓
+tijdslot
+   ↓
+$J
+   ↓
+GRBL motion planner
+   ↓
+fysieke beweging
+```
+
+De uiteindelijke machinebeweging is dus het resultaat van de verwerking van de opeenvolgende jogintenties door GRBL.
+
+De pendant probeert niet zelf de fysieke beweging te simuleren.
+
+# 12. Tijdslot → GRBL
+
+Elke plannerupdate vertegenwoordigt één tijdslot.
+
+Bij:
 
 ```text
 20 Hz
-
-1 update per 50 ms
 ```
 
-De encoderinput zelf kan veel sneller binnenkomen.
-
-20 Hz is dus de frequentie waarmee de planner zijn toestand opnieuw beoordeelt en eventueel nieuwe communicatie naar CNCjs genereert.
-
-De uiteindelijke optimale frequentie hangt mede af van:
-
-* CNCjs;
-* beschikbare buffers;
-* TinyG/GRBL;
-* motion planner;
-* machine acceleratie;
-* maximale machinesnelheid.
-
----
-
-## 11. Feedrategrenzen
-
-Voorlopig gebruiken we:
+is dat:
 
 ```text
-minimum = 100 mm/min
-
-maximum = 3000 mm/min
+50 ms
 ```
 
-Deze waarden zijn voorlopig.
+De planner bepaalt hoeveel beweging in dat tijdslot gewenst is.
 
-Idealiter worden deze grenzen later uit de machineconfiguratie of machine capabilities gehaald.
+Deze bewegingsdelta wordt vervolgens vertaald naar een `$J`-commando.
 
-De berekende feedrate is de feedrate die nodig is om de huidige bewegingshorizon binnen de gewenste aankomsttijd te bereiken.
+De tijdbasis van het plannerinterval moet daarbij expliciet onderdeel zijn van de vertaling.
 
----
-
-## 12. Relatieve jogcommando's
-
-Voor de communicatie met de motion controller gebruiken we bij voorkeur relatieve jogbewegingen:
+Het model is dus niet:
 
 ```text
-$J=G91 X10 F1200
-```
-
-Dit betekent:
-
-```text
-beweeg vanaf de huidige positie 10 mm in X
-
-met een feedrate van 1200 mm/min
-```
-
-De JogPlanner werkt echter intern met een gebruikershorizon.
-
-De uiteindelijke vertaling van:
-
-```text
-gebruikershorizon
-
-+
-
-werkelijke machinepositie
-
-+
-
-gewenste feedrate
-```
-
-naar concrete `$J=`-commando's wordt verzorgd door de MachineMapper/communicatielaag.
-
----
-
-## 13. Geen command queue voor gebruikersintentie
-
-De JogPlanner behandelt encoderinput als wijzigingen aan één bewegingsintentie.
-
-Dus niet:
-
-```text
-queue:
-
-    +100
-
-    +20
-
-    -10
+"beweeg X millimeter"
 ```
 
 maar:
 
 ```text
-horizon:
-
-    +100
-
-    → +120
-
-    → +110
+"beweeg deze delta gedurende het volgende tijdsinterval"
 ```
 
-De machine kan ondertussen al onderweg zijn.
+De feedrate die naar GRBL wordt gestuurd is daarmee een afgeleide van de gewenste beweging binnen de beschikbare tijd.
 
-Daarom is MachineState essentieel: de planner moet weten hoeveel van de intentie inmiddels daadwerkelijk gerealiseerd is.
+# 13. MIN_FEEDRATE en MAX_FEEDRATE
 
-De inputqueue is dus geen queue van geplande machinebewegingen.
+De planner gebruikt een minimale en maximale feedrate:
 
-De inputqueue transporteert alleen nog niet verwerkte gebruikersinput.
+```text
+MIN_FEEDRATE
+MAX_FEEDRATE
+```
 
-Na coalescing in `InputManager` wordt deze input vertaald naar een verandering van de gebruikershorizon.
+Deze grenzen zijn fysieke machinegrenzen, geen compensatie voor oude gebruikersintentie.
 
----
+Wanneer een gewenste beweging niet sneller kan worden uitgevoerd dan:
 
-## 14. Architectuur
+```text
+MAX_FEEDRATE
+```
+
+wordt de intentie niet eindeloos doorgeschoven.
+
+De niet-uitgevoerde intentie blijft immers niet onbeperkt geldig.
+
+Ze valt uiteindelijk aan de achterkant uit de ring.
+
+Dit voorkomt dat een overschrijding van een fysieke grens zich opstapelt tot een steeds groter wordende vertraging.
+
+# 14. Communicatie is niet hetzelfde als intentie
+
+Een belangrijk onderscheid is:
+
+```text
+gebruikersintentie
+```
+
+versus:
+
+```text
+communicatie met CNCjs
+```
+
+Een intentie die nog niet naar CNCjs is verstuurd is niet automatisch een "te bewaren commando".
+
+Het systeem mag dus niet redeneren:
+
+```text
+"Dit pakketje is nog niet verstuurd,
+dus ik bewaar het totdat de verbinding weer tijd heeft."
+```
+
+In plaats daarvan geldt:
+
+```text
+intentie heeft een tijdspositie
+
+        ↓
+
+tijdslot bereikt zijn moment
+
+        ↓
+
+communiceren indien mogelijk
+
+        ↓
+
+slot verloopt
+```
+
+Als communicatie tijdelijk niet beschikbaar is, kan actuele intentie daardoor gewoon verlopen.
+
+Dat is gewenst gedrag voor een interactieve pendant.
+
+# 15. Machinefeedback
+
+Machinefeedback is niet langer de bron van een voorspeld toekomstig target.
+
+`MachineState` vertelt ons:
+
+```text
+waar de machine werkelijk is
+```
+
+GRBL bepaalt zelf:
+
+```text
+hoe de machine beweegt
+```
+
+De planner gebruikt feedback daarom vooral om:
+
+* de actuele machinepositie te kennen;
+* de volgende intentie te kalibreren;
+* te controleren of de machine de verwachte beweging daadwerkelijk volgt;
+* afwijkingen, limieten of machinecondities te herkennen.
+
+De machinefeedback is daarmee feedback voor de gebruiker en voor de volgende plannerbeslissing.
+
+Niet:
+
+```text
+machinepositie → opnieuw een absolute targetpositie bouwen
+```
+
+maar:
+
+```text
+machinefeedback
+       ↓
+volgende intentie beter kalibreren
+```
+
+# 16. De ring als bewegend planvenster
+
+Het volledige model kan visueel worden voorgesteld als een ring:
+
+```text
+                         TOEKOMST
+                            │
+                            ▼
+
+                 ┌─────────────────────┐
+              ┌──┤ slot 6  slot 7      ├──┐
+            ┌─┘  │                     │  └─┐
+           │     │ slot 5       slot 8 │    │
+           │     │                     │    │
+           │     │ slot 4       slot 9 │    │
+           │     │                     │    │
+            └─┐  │ slot 3  slot 2     │  ┌─┘
+              └──┤ slot 1       NU    ├──┘
+                 └─────────────────────┘
+                            │
+                            ▼
+                           NET
+```
+
+Het planvenster beweegt voortdurend door de ring:
+
+```text
+NET → NU → 0,05 s → 0,10 s → ... → 0,50 s
+```
+
+Achter `NET` bestaat de intentie niet meer.
+
+Voorbij de maximale planhorizon bestaat de intentie nog niet.
+
+Daarmee geldt:
+
+```text
+NIET ─── NET ─── NU ───────────── TOEKOMST ─── NIET
+             <------ 0,5 s ------->
+```
+
+Dit maakt de ring tegelijkertijd:
+
+* een buffer;
+* een tijdmodel;
+* een natuurlijke begrenzing van latency;
+* een mechanisme om oude intentie te vergeten.
+
+# 17. Architectuur
 
 De gewenste architectuur is:
 
 ```text
 Encoder Task
-
-   ↓
-
+      │
+      ▼
 InputManager
-
-   ↓
-
-EVENT_ENCODER_PULSE
-
-   value = aantal samengevoegde pulsen
-
-   ↓
-
+      │
+      │ EVENT_ENCODER_PULSE
+      │
+      ▼
 JogPlanner
-
-   │
-
-   ├── gebruikershorizon
-
-   ├── encoderfrequentie
-
-   ├── resterende afstand
-
-   ├── gewenste aankomsttijd
-
-   └── gewenste feedrate
-
-   ↓
-
+      │
+      ├── actuele gebruikersintentie
+      │
+      ├── intentiering
+      │
+      ├── tijdslots
+      │
+      ├── intentielifetime
+      │
+      └── gewenste beweging voor volgend tijdslot
+      │
+      ▼
 MachineMapper
-
-   ↓
-
+      │
+      │ $J
+      ▼
 CNCjs
-
-   ↓
-
-TinyG / GRBL
-
-   ↓
-
+      │
+      ▼
+GRBL
+      │
+      ▼
 machine
 ```
 
 Machinefeedback loopt terug:
 
 ```text
-TinyG
-
+GRBL
    ↓
-
 CNCjs
-
    ↓
-
 MachineState
-
    ↓
-
 JogPlanner
 ```
 
@@ -641,61 +779,155 @@ De verantwoordelijkheden zijn daarmee:
 ```text
 JogPlanner
 
-    bepaalt WAT de gebruiker wil.
+    bepaalt de actuele, tijdgebonden gebruikersintentie.
+
 
 MachineMapper
 
-    bepaalt HOE deze intentie wordt vertaald naar CNCjs/TinyG.
+    vertaalt een tijdslot naar concrete GRBL/$J-communicatie.
 
-TinyG
 
-    bepaalt HOE de machine fysiek accelereert en beweegt.
+GRBL
+
+    bepaalt hoe de fysieke machine de ontvangen beweging
+    accelereert en uitvoert.
+
+
+MachineState
+
+    rapporteert wat de machine daadwerkelijk doet.
 ```
 
----
+# 18. Kernprincipes
 
-## Kernmodel
+Het nieuwe JogPlanner-model kan worden samengevat in een aantal regels:
 
-De JogPlanner kan uiteindelijk worden samengevat als:
+### 1. Intentie is tijdgebonden
+
+Een gebruikersintentie heeft een beperkte lifetime.
 
 ```text
-Encoder
-
-   ↓
-
-"waar wil de gebruiker heen?"
-
-   ↓
-
-Horizon
-
-   ↓
-
-"waar is de machine nu?"
-
-   ↓
-
-Resterende afstand
-
-   ↓
-
-"wanneer wil de gebruiker daar zijn?"
-
-   ↓
-
-≈ 0,8 seconde
-
-   ↓
-
-Feedrate
-
-   ↓
-
-Jogbeweging
+INTENT_LIFETIME = 0,5 s
 ```
 
-De 0,8 seconde is geen maximale afstand.
+### 2. Intentie is geen command queue
 
-Het is een gewenste tijdshorizon voor de aankomst.
+De ring bevat toekomstige bewegingsintentie, niet een rij commando's die gegarandeerd moet worden uitgevoerd.
 
-De afstand die binnen die tijd wordt afgelegd is afhankelijk van de resterende afstand en daarmee van de gebruikersintentie.
+### 3. De toekomst is beperkt
+
+```text
+PLAN_AHEAD = 0,5 s
+```
+
+De planner mag nooit onbeperkt vooruit plannen.
+
+### 4. Oude intentie wordt vergeten
+
+Als een slot verlopen is, wordt het geleegd.
+
+Er ontstaat geen backlog.
+
+### 5. Nieuwe intentie past de toekomst aan
+
+Een richtingswisseling wordt onmiddellijk verwerkt in de nog niet verstreken slots.
+
+### 6. De ring is circulair
+
+Vrijgekomen slots worden opnieuw gebruikt voor nieuwe toekomstige intentie.
+
+### 7. De machinepositie is werkelijkheid
+
+De planner houdt geen tweede absolute machinepositie bij die als waarheid kan gaan fungeren.
+
+### 8. GRBL bestuurt de fysieke beweging
+
+De planner bepaalt intentie.
+
+GRBL bepaalt de daadwerkelijke motion.
+
+# Kernmodel
+
+De JogPlanner is uiteindelijk geen planner van toekomstige posities.
+
+Het is een **tijdgebaseerde intentiebuffer**:
+
+```text
+              GEBRUIKER
+                  │
+                  ▼
+             encoderinput
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │     INTENTIERING    │
+        │                     │
+        │  [ ][ ][ ][ ][ ]   │
+        │  [ ][ ][ ][ ][ ]   │
+        │                     │
+        │    0 ──── 0,5 s     │
+        └─────────┬───────────┘
+                  │
+                  ▼
+             tijdslot
+                  │
+                  ▼
+                $J
+                  │
+                  ▼
+                GRBL
+                  │
+                  ▼
+              MACHINE
+                  │
+                  ▼
+            MachineState
+                  │
+                  └──────────────►
+                       volgende
+                       intentie
+```
+
+Of nog compacter:
+
+```text
+ENCODER
+
+   ↓
+
+ACTUELE INTENTIE
+
+   ↓
+
+10 tijdslots × 50 ms
+
+   ↓
+
+0,5 seconde toekomst
+
+   ↓
+
+$J
+
+   ↓
+
+GRBL
+
+   ↓
+
+FYSIEKE BEWEGING
+
+   ↓
+
+FEEDBACK
+
+   ↓
+
+VOLGENDE INTENTIE
+```
+
+Het essentiële ontwerpprincipe is:
+
+> **De pendant plant niet wat de machine over enkele seconden moet doen. Hij beschrijft alleen wat de gebruiker in de komende halve seconde wil dat de machine doet.**
+
+Daardoor blijft de machine altijd dicht bij de actuele menselijke intentie, terwijl GRBL verantwoordelijk blijft voor de daadwerkelijke fysieke beweging.
