@@ -92,6 +92,17 @@ void setup()
     jogPlanner.begin();
 
 
+    /*
+        De geselecteerde jogstep komt uit de pendant.
+
+        JogPlanner kent de PendantState zelf niet; main.cpp
+        vormt alleen de koppeling tussen beide onderdelen.
+    */
+    jogPlanner.setJogStepDistance(
+        controller.jogStepDistance()
+    );
+
+
     // --------------------------------------------------------
     // MACHINE MAPPER
     // --------------------------------------------------------
@@ -157,14 +168,17 @@ void loop()
                 "[TEST] Sending CNCjs statusreport"
             );
 
+
             bool success =
                 cnc.sendCommand(
                     "statusreport"
                 );
 
+
             Serial.print(
                 "[TEST] statusreport: "
             );
+
 
             Serial.println(
                 success
@@ -193,6 +207,7 @@ void loop()
                         separator
                     );
 
+
                 String controllerText =
                     command.substring(
                         separator + 1
@@ -201,6 +216,7 @@ void loop()
 
                 int portIndex =
                     portText.toInt();
+
 
                 int controllerIndex =
                     controllerText.toInt();
@@ -216,6 +232,7 @@ void loop()
                 Serial.print(
                     "[TEST] select: "
                 );
+
 
                 Serial.println(
                     success
@@ -243,8 +260,8 @@ void loop()
         De Core blijft eigenaar van zijn eigen state.
     */
 
-machineState =
-    cnc.machineStateSnapshot();
+    machineState =
+        cnc.machineStateSnapshot();
 
 
     // --------------------------------------------------------
@@ -253,13 +270,26 @@ machineState =
 
     input.update();
 
+
     if(input.available())
     {
         Event event =
             input.read();
 
+
         if(event.type == EVENT_ENCODER_PULSE)
         {
+            /*
+                De pendant is eigenaar van de geselecteerde
+                jogstep. De planner ontvangt alleen de concrete
+                afstand en blijft onafhankelijk van PendantState.
+            */
+
+            jogPlanner.setJogStepDistance(
+                controller.jogStepDistance()
+            );
+
+
             jogPlanner.encoder(
                 event,
                 controller.axis()
@@ -267,7 +297,9 @@ machineState =
         }
         else
         {
-            controller.handle(event);
+            controller.handle(
+                event
+            );
         }
     }
 
@@ -330,6 +362,7 @@ machineState =
             " type: "
         );
 
+
         Serial.println(
             command.type
         );
@@ -338,6 +371,7 @@ machineState =
         Serial.print(
             " command: "
         );
+
 
         Serial.println(
             command.command
@@ -360,6 +394,7 @@ machineState =
         Serial.print(
             "[CNCjs] execute: "
         );
+
 
         Serial.println(
             success

@@ -9,171 +9,188 @@ class JogPlanner
 {
 public:
 
-void begin();
+    void begin();
 
 
-/*
-    Selecteer de as waarop de encoder jogt.
-*/
-void setAxis(
-    Axis axis
-);
+    /*
+        Stel de jogafstand in die voor nieuwe encoderintentie
+        wordt gebruikt.
+
+        De waarde is afkomstig uit de pendant/state-laag,
+        maar JogPlanner hoeft die state zelf niet te kennen.
+    */
+    void setJogStepDistance(
+        float distance
+    );
 
 
-/*
-    Verwerk encoderintentie.
-
-    Iedere encoderstap wordt als intentie over het volledige
-    planvenster verdeeld.
-*/
-void encoder(
-    const Event& event,
-    Axis axis
-);
+    /*
+        Selecteer de as waarop de encoder jogt.
+    */
+    void setAxis(
+        Axis axis
+    );
 
 
-/*
-    Consumeert maximaal één tijdslot uit de intentiering.
+    /*
+        Verwerk encoderintentie.
 
-    Het resultaat is één onafhankelijke JogCommand voor
-    het betreffende tijdslot.
-*/
-JogCommand update(
-    const MachineState& machineState
-);
+        Iedere encoderstap wordt als intentie over het volledige
+        planvenster verdeeld.
+    */
+    void encoder(
+        const Event& event,
+        Axis axis
+    );
+
+
+    /*
+        Consumeert maximaal één tijdslot uit de intentiering.
+
+        Het resultaat is één onafhankelijke JogCommand voor
+        het betreffende tijdslot.
+    */
+    JogCommand update(
+        const MachineState& machineState
+    );
+
 
 private:
 
-// ========================================================
-// TIME MODEL
-// ========================================================
+    // ========================================================
+    // TIME MODEL
+    // ========================================================
 
-/*
-    Intentie blijft maximaal 0.5 seconde relevant.
+    /*
+        Intentie blijft maximaal 0.5 seconde relevant.
 
-    Bij 20 Hz betekent dit 10 tijdslots van 50 ms.
-*/
-static constexpr unsigned long SLOT_TIME = 50;
+        Bij 20 Hz betekent dit 10 tijdslots van 50 ms.
+    */
+    static constexpr unsigned long SLOT_TIME = 50;
 
-static constexpr int SLOT_COUNT = 10;
-
-
-/*
-    Eén encoderstap wordt over het volledige planvenster
-    verdeeld.
-*/
-static constexpr float STEP_SIZE = 0.1f;
+    static constexpr int SLOT_COUNT = 10;
 
 
-/*
-    Wanneer een resterende intentie kleiner wordt dan deze
-    waarde, beschouwen we hem als praktisch verdwenen.
-*/
-static constexpr float INTENT_EPSILON = 0.001f;
+    /*
+        Wanneer een resterende intentie kleiner wordt dan deze
+        waarde, beschouwen we hem als praktisch verdwenen.
+    */
+    static constexpr float INTENT_EPSILON = 0.001f;
 
 
-/*
-    Bij een richtingswisseling wordt de bestaande toekomstige
-    intentie telkens gehalveerd.
+    /*
+        Bij een richtingswisseling wordt de bestaande toekomstige
+        intentie telkens gehalveerd.
 
-    Zodra de resterende intentie voldoende klein is, kan de
-    nieuwe richting de ring vullen.
-*/
-static constexpr float REVERSAL_FACTOR = 0.5f;
-
-
-// ========================================================
-// FEEDRATE
-// ========================================================
-
-static constexpr int MIN_FEEDRATE = 100;
-static constexpr int MAX_FEEDRATE = 3000;
+        Zodra de resterende intentie voldoende klein is, kan de
+        nieuwe richting de ring vullen.
+    */
+    static constexpr float REVERSAL_FACTOR = 0.5f;
 
 
-// ========================================================
-// RING BUFFER
-// ========================================================
+    // ========================================================
+    // FEEDRATE
+    // ========================================================
 
-/*
-    Iedere entry is de gewenste relatieve beweging voor één
-    tijdslot van SLOT_TIME milliseconden.
+    static constexpr int MIN_FEEDRATE = 100;
 
-    De array is een logische ring:
-
-        writeIndex
-        consumeIndex
-
-    De planner hoeft daardoor geen absolute positie of
-    einddoel bij te houden.
-*/
-float intent[SLOT_COUNT];
+    static constexpr int MAX_FEEDRATE = 3000;
 
 
-/*
-    Slot dat als volgende door update() wordt geconsumeerd.
-*/
-int consumeIndex = 0;
+    // ========================================================
+    // RING BUFFER
+    // ========================================================
+
+    /*
+        Iedere entry is de gewenste relatieve beweging voor één
+        tijdslot van SLOT_TIME milliseconden.
+
+        De array is een logische ring:
+
+            writeIndex
+            consumeIndex
+
+        De planner hoeft daardoor geen absolute positie of
+        einddoel bij te houden.
+    */
+    float intent[SLOT_COUNT];
 
 
-/*
-    Geselecteerde encoder-as.
-*/
-Axis selectedAxis =
-    AXIS_X;
+    /*
+        Slot dat als volgende door update() wordt geconsumeerd.
+    */
+    int consumeIndex = 0;
 
 
-/*
-    Geldige machinepositie ontvangen?
-
-    Dit voorkomt dat direct na startup encoderintentie wordt
-    toegevoegd zonder dat we weten of de machine beschikbaar is.
-*/
-bool positionKnown = false;
+    /*
+        Geselecteerde encoder-as.
+    */
+    Axis selectedAxis =
+        AXIS_X;
 
 
-/*
-    Tijdstip waarop het huidige tijdslot beschikbaar komt.
-*/
-unsigned long lastUpdate = 0;
+    /*
+        Jogafstand voor nieuwe encoderintentie.
+
+        Deze waarde is afkomstig uit de pendant/state-laag.
+        JogPlanner kent bewust geen JogStep-enum.
+    */
+    float jogStepDistance =
+        1.0f;
 
 
-// ========================================================
-// INTERNAL
-// ========================================================
+    /*
+        Geldige machinepositie ontvangen?
 
-int nextIndex(
-    int index
-) const;
-
-
-void clearIntent();
+        Dit voorkomt dat direct na startup encoderintentie wordt
+        toegevoegd zonder dat we weten of de machine beschikbaar is.
+    */
+    bool positionKnown = false;
 
 
-void addIntent(
-    float delta
-);
+    /*
+        Tijdstip waarop het huidige tijdslot beschikbaar komt.
+    */
+    unsigned long lastUpdate = 0;
 
 
-void reverseIntent(
-    int direction
-);
+    // ========================================================
+    // INTERNAL
+    // ========================================================
+
+    int nextIndex(
+        int index
+    ) const;
 
 
-bool hasIntent() const;
+    void clearIntent();
 
 
-float consumeIntent();
+    void addIntent(
+        float delta
+    );
 
 
-int calculateFeedrate(
-    float delta
-) const;
+    void reverseIntent(
+        int direction
+    );
 
 
-float machinePosition(
-    const MachineState& machineState,
-    Axis axis
-) const;
+    bool hasIntent() const;
+
+
+    float consumeIntent();
+
+
+    int calculateFeedrate(
+        float delta
+    ) const;
+
+
+    float machinePosition(
+        const MachineState& machineState,
+        Axis axis
+    ) const;
 
 };
 

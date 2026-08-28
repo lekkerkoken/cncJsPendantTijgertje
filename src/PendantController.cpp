@@ -189,6 +189,19 @@ Axis PendantController::axis() const
 
 
 // ============================================================
+// JOG STEP DISTANCE
+// ============================================================
+
+float PendantController::jogStepDistance() const
+{
+    return ::jogStepDistance(
+        pendantState.jogStep
+    );
+}
+
+
+
+// ============================================================
 // UPDATE
 // ============================================================
 
@@ -620,9 +633,23 @@ void PendantController::updateNormalDisplay()
                 axisName()
             );
 
-            display->setLine2(
-                "Step 0.10"
-            );
+
+            {
+                char buffer[20];
+
+
+                snprintf(
+                    buffer,
+                    sizeof(buffer),
+                    "Step %.2f",
+                    jogStepDistance()
+                );
+
+
+                display->setLine2(
+                    buffer
+                );
+            }
 
             break;
 

@@ -75,3 +75,82 @@ Relatie met ISS-005d
 ISS-005d — Jogging correct en voorspelbaar maken blijft het functionele issue.
 
 ISS-006 onderzoekt specifiek of timing, concurrency en communicatievertraging de oorz
+
+ISS-005e — Jogstep centraal gebruiken
+
+Status: OPEN
+
+Doel:
+De geselecteerde jogstep van de pendant moet één centrale bron van waarheid hebben en daadwerkelijk door alle relevante onderdelen van de pendant worden gebruikt.
+
+Huidige situatie:
+
+PendantState bevat de jogstep als enum:
+
+enum JogStep
+{
+    STEP_10_MM,
+    STEP_1_MM,
+    STEP_0_1_MM,
+    STEP_0_01_MM
+};
+
+De daadwerkelijke waarde wordt echter op meerdere plaatsen genegeerd en hardcoded.
+
+1. JogPlanner
+
+JogPlanner gebruikt momenteel:
+
+static constexpr float STEP_SIZE = 0.1f;
+
+De geselecteerde PendantState::JogStep heeft hierdoor geen invloed op de daadwerkelijke jogafstand.
+
+2. PendantController
+
+Ook de weergave van de jogstep is hardcoded:
+
+display->setLine2(
+    "Step 0.10"
+);
+
+Hierdoor kan het display een andere waarde tonen dan de daadwerkelijk geselecteerde jogstep.
+
+Gewenst gedrag:
+
+PendantState::JogStep is de single source of truth voor de geselecteerde jogstep.
+Er bestaan geen hardcoded jogstep-waarden meer in PendantController of JogPlanner.
+PendantController toont de daadwerkelijk geselecteerde jogstep op het display.
+JogPlanner gebruikt de daadwerkelijk geselecteerde jogstep voor nieuwe jogbewegingen.
+De enum wordt centraal vertaald naar de bijbehorende afstand:
+STEP_10_MM → 10.0 mm
+STEP_1_MM → 1.0 mm
+STEP_0_1_MM → 0.1 mm
+STEP_0_01_MM → 0.01 mm
+De keuze van de jogstep blijft een verantwoordelijkheid van de pendant/state; JogPlanner hoeft niet rechtstreeks afhankelijk te worden van PendantState.
+De bestaande jog-planning, horizon en timing blijven verder ongewijzigd.
+
+Acceptatiecriteria:
+
+Wanneer de gebruiker de jogstep op de pendant verandert, toont het display de nieuwe waarde én gebruiken nieuwe jogbewegingen dezelfde waarde.
+
+Dus bijvoorbeeld:
+
+PendantState
+    │
+    │ JogStep
+    ▼
+PendantController ──────► Display
+    │
+    │ JogStep
+    ▼
+JogPlanner ─────────────► daadwerkelijke jogafstand
+
+Niet onderdeel van dit issue:
+
+Heartbeat/statusreport timing
+Jog timing
+Horizon/planning-algoritme
+Encoderverwerking
+Asselectie
+
+Dit maakt ook meteen duidelijk waarom dit een issue is: niet alleen de planner is fout, maar de JogStep uit PendantState is momenteel feitelijk geen echte statebron.

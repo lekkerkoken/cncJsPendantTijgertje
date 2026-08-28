@@ -38,14 +38,29 @@ public:
     Axis axis() const;
 
 
+    /*
+        Geeft de daadwerkelijk geselecteerde jogafstand
+        in millimeters terug.
+
+        De controller vertaalt hiermee de PendantState
+        naar een waarde die door de JogPlanner gebruikt kan
+        worden zonder dat de planner afhankelijk wordt van
+        PendantState of JogStep.
+    */
+    float jogStepDistance() const;
+
+
 
 private:
 
-    Display* display = nullptr;
+    Display* display =
+        nullptr;
 
-    MachineState* machineState = nullptr;
+    MachineState* machineState =
+        nullptr;
 
-    CNCjsInterface* cnc = nullptr;
+    CNCjsInterface* cnc =
+        nullptr;
 
 
     PendantState pendantState;
@@ -55,7 +70,8 @@ private:
     // DISPLAY STATE
     // ========================================================
 
-    bool displayDirty = true;
+    bool displayDirty =
+        true;
 
     CNCjsInterface::CNCjsStatus lastCncStatus =
         CNCjsInterface::CNCjsStatus::Offline;
