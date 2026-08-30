@@ -34,6 +34,9 @@ struct MachineState
     Position workPosition;
 
 
+    Position maxFeedrate;
+
+
     float feedrate = 0;
 
 

@@ -258,3 +258,69 @@ Step 0.10
 Step 0.01
 ↓
 Step 0.01
+
+## ISSUE 6 Max feedrate opslaan in MachineState
+
+### Doel
+
+De maximale feedrate van de CNC-machine beschikbaar maken via `MachineState`.
+
+Voor een Grbl-controller zijn de relevante instellingen:
+
+* `$110` — maximale X-feedrate
+* `$111` — maximale Y-feedrate
+* `$112` — maximale Z-feedrate
+
+Deze waarden zijn nodig zodat andere onderdelen van de pendant, zoals de `JogPlanner`, rekening kunnen houden met de maximale feedrate van de geselecteerde machine.
+
+### Ontwerp
+
+Voeg aan `MachineState` een `Position` toe:
+
+```cpp
+Position maxFeedrate;
+```
+
+Daarmee wordt de mapping:
+
+```text
+maxFeedrate.x → $110
+maxFeedrate.y → $111
+maxFeedrate.z → $112
+```
+
+De waarden zijn feedrates in **mm/min**.
+
+### CNCjs
+
+`CNCjsClientCore` ontvangt de machine-instellingen via het bestaande:
+
+```text
+controller:settings
+```
+
+event.
+
+De huidige handler doet hier nog niets mee. Deze moet worden uitgebreid zodat de waarden van `$110`, `$111` en `$112` uit de ontvangen controller settings worden gehaald en opgeslagen in:
+
+```text
+machineState_.maxFeedrate
+```
+
+De bestaande `machineStateSnapshot()` zorgt er vervolgens voor dat deze waarden thread-safe beschikbaar komen voor de rest van de applicatie.
+
+### Belangrijk
+
+De waarden moeten niet uit `Grbl:state` worden afgeleid. Het gaat om **machine-instellingen**, niet om de actuele feedrate.
+
+De implementatie moet aansluiten op de daadwerkelijke JSON-structuur van het `controller:settings` event van CNCjs 1.11.2. Dit kan momenteel nog niet live worden getest omdat de verbinding met de emulator niet beschikbaar is.
+
+### Acceptatiecriteria
+
+* [ ] `MachineState` bevat `maxFeedrate.x`, `.y` en `.z`.
+* [ ] `$110` wordt opgeslagen als `maxFeedrate.x`.
+* [ ] `$111` wordt opgeslagen als `maxFeedrate.y`.
+* [ ] `$112` wordt opgeslagen als `maxFeedrate.z`.
+* [ ] De waarden blijven beschikbaar via `machineStateSnapshot()`.
+* [ ] De bestaande machine-state verwerking blijft ongewijzigd.
+* [ ] Na herstel van de verbinding met de emulator wordt de daadwerkelijke `controller:settings` payload gecontroleerd en wordt de implementatie getest.

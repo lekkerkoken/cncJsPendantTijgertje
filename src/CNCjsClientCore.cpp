@@ -1962,6 +1962,47 @@ void CNCjsClientCore::handleSocketEvent(
                     "[CNCjs] Controller settings received"
                 );
 
+                JsonObject settings =
+                    array[1]["settings"];
+
+                if (
+                    !settings.isNull()
+                )
+                {
+                    JsonVariant xMax =
+                        settings["$110"];
+
+                    if (
+                        !xMax.isNull()
+                    )
+                    {
+                        machineState_.maxFeedrate.x =
+                            xMax.as<float>();
+                    }
+
+                    JsonVariant yMax =
+                        settings["$111"];
+
+                    if (
+                        !yMax.isNull()
+                    )
+                    {
+                        machineState_.maxFeedrate.y =
+                            yMax.as<float>();
+                    }
+
+                    JsonVariant zMax =
+                        settings["$112"];
+
+                    if (
+                        !zMax.isNull()
+                    )
+                    {
+                        machineState_.maxFeedrate.z =
+                            zMax.as<float>();
+                    }
+                }
+
                 break;
             }
 
