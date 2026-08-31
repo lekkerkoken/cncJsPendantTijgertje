@@ -3,9 +3,11 @@
 
 #include <Arduino.h>
 
+#include "JogCommand.h"
 #include "CNCjsClientCore.h"
 #include "MachineCommand.h"
 #include "MachineState.h"
+#include "MachineMapper.h"
 
 
 class CNCjsInterface
@@ -145,6 +147,9 @@ public:
         const MachineCommand& command
     );
 
+    bool execute(
+    const JogCommand& jog
+);
 
     bool sendGcode(
         const char* gcode
@@ -177,6 +182,7 @@ public:
 private:
 
     CNCjsClientCore core_;
+    MachineMapper machineMapper_;
 };
 
 

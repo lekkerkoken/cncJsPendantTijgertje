@@ -227,6 +227,29 @@ bool CNCjsInterface::execute(
     );
 }
 
+bool CNCjsInterface::execute(
+    const JogCommand& jog
+)
+{
+
+    MachineCommand command =
+        machineMapper_.map(
+            jog
+        );
+
+    if(
+        command.type ==
+        MACHINE_COMMAND_NONE
+    )
+    {
+        return false;
+    }
+
+    return core_.execute(
+        command
+    );
+}
+
 
 bool CNCjsInterface::sendGcode(
     const char* gcode

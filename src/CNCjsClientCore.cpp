@@ -703,9 +703,6 @@ void CNCjsClientCore::updateConnection()
                 );
 
 
-                machineState_.connected =
-                    false;
-
                 machineState_.machineStatus =
                     MACHINE_DISCONNECTED;
 
@@ -798,9 +795,6 @@ void CNCjsClientCore::connectionFailed(
     lastHeartbeatPing =
         0;
 
-
-    machineState_.connected =
-        false;
 
     machineState_.machineStatus =
         MACHINE_DISCONNECTED;
@@ -1228,10 +1222,6 @@ void CNCjsClientCore::updateMachineState(
         );
 
 
-    machineState_.connected =
-        true;
-
-
     JsonObject mpos =
         status["mpos"];
 
@@ -1352,8 +1342,6 @@ void CNCjsClientCore::updateHeartbeat()
         HEARTBEAT_TIMEOUT
     )
     {
-        machineState_.connected =
-            false;
 
         machineState_.machineStatus =
             MACHINE_DISCONNECTED;
@@ -1503,9 +1491,6 @@ void CNCjsClientCore::handleSocketEvent(
             currentStatus_ =
                 CNCjsStatus::Offline;
 
-
-            machineState_.connected =
-                false;
 
             machineState_.machineStatus =
                 MACHINE_DISCONNECTED;
@@ -1901,9 +1886,6 @@ void CNCjsClientCore::handleSocketEvent(
                     );
 
 
-                    machineState_.connected =
-                        false;
-
                     machineState_.machineStatus =
                         MACHINE_DISCONNECTED;
 
@@ -2103,9 +2085,6 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 machineHeartbeatReceived();
-
-                machineState_.connected =
-                    true;
 
 
                 const char* stateStart =
@@ -3860,10 +3839,6 @@ bool CNCjsClientCore::openControllerInternal(
     enterConnectionState(
         ConnectionState::OpeningController
     );
-
-
-    machineState_.connected =
-        false;
 
     machineState_.machineStatus =
         MACHINE_DISCONNECTED;

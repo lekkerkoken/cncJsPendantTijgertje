@@ -10,7 +10,6 @@
 #include "MachineState.h"
 #include "JogPlanner.h"
 #include "CNCjsInterface.h"
-#include "MachineMapper.h"
 
 
 ButtonMatrix matrix;
@@ -28,8 +27,6 @@ MachineState machineState;
 CNCjsInterface cnc;
 
 JogPlanner jogPlanner;
-
-MachineMapper machineMapper;
 
 
 // ============================================================
@@ -103,11 +100,6 @@ void setup()
     );
 
 
-    // --------------------------------------------------------
-    // MACHINE MAPPER
-    // --------------------------------------------------------
-
-    machineMapper.begin();
 }
 
 
@@ -254,7 +246,7 @@ void loop()
         De applicatie gebruikt hiervan een lokale snapshot.
 
         Deze snapshot is de enige MachineState die door
-        PendantController, JogPlanner en MachineMapper wordt
+        PendantController en JogPlanner
         gebruikt.
 
         De Core blijft eigenaar van zijn eigen state.
@@ -324,85 +316,14 @@ void loop()
     */
 
     JogCommand jog =
-        jogPlanner.update(
-            machineState
-        );
-
-
-    // --------------------------------------------------------
-    // MACHINE MAPPER
-    // --------------------------------------------------------
+    jogPlanner.update(
+        machineState
+    );
 
     if(jog.type != JOG_NONE)
     {
-        machineMapper.update(
-            jog,
-            machineState
+        cnc.execute(
+            jog
         );
-    }
-
-
-    // --------------------------------------------------------
-    // MACHINE COMMAND
-    // --------------------------------------------------------
-
-    if(machineMapper.available())
-    {
-        MachineCommand command =
-            machineMapper.read();
-
-
-        Serial.println();
-        Serial.println(
-            "[TEST] MachineCommand received"
-        );
-
-
-        Serial.print(
-            " type: "
-        );
-
-
-        Serial.println(
-            command.type
-        );
-
-
-        Serial.print(
-            " command: "
-        );
-
-
-        Serial.println(
-            command.command
-        );
-
-
-        /*
-            Nu daadwerkelijk naar CNCjs.
-
-            execute() plaatst G-code in de bestaande pending
-            command. De network task verstuurt deze vervolgens.
-        */
-
-        bool success =
-            cnc.execute(
-                command
-            );
-
-
-        Serial.print(
-            "[CNCjs] execute: "
-        );
-
-
-        Serial.println(
-            success
-                ? "OK"
-                : "FAILED"
-        );
-
-
-        Serial.println();
     }
 }
