@@ -2,7 +2,6 @@
 
 #include <Preferences.h>
 
-
 CNCjsClientCore* CNCjsClientCore::instance =
     nullptr;
 
@@ -1645,31 +1644,7 @@ void CNCjsClientCore::handleSocketEvent(
 
             const char* eventName =
                 array[0];
-if (
-    strcmp(
-        eventName,
-        "Grbl:settings"
-    ) == 0
-)
-{
-    Serial.println();
-    Serial.println(
-        "[TEST] Grbl:settings received"
-    );
 
-    Serial.print(
-        "[TEST] payload: "
-    );
-
-    Serial.write(
-        payload,
-        length
-    );
-
-    Serial.println();
-
-    break;
-}
 
             if (
                 eventName == nullptr
@@ -1999,51 +1974,41 @@ if (
                     "controller:settings"
                 ) == 0
             )
-            {
+            {   
+#ifdef IOC_DEBUG
+
+                delay(2000);
+#endif
                 Serial.println(
                     "[CNCjs] Controller settings received"
                 );
 
+
+                const char* controllerType =
+                    array[1];
+
+
                 JsonObject settings =
-                    array[1]["settings"];
+                    array[2]["settings"];
+
+
+                if (
+                    controllerType != nullptr
+                )
+                {
+                    controllerSettings_.controllerType =
+                        controllerType;
+                }
+
 
                 if (
                     !settings.isNull()
                 )
                 {
-                    JsonVariant xMax =
-                        settings["$110"];
-
-                    if (
-                        !xMax.isNull()
-                    )
-                    {
-                        machineSettings_.maxFeedrate.x =
-                            xMax.as<float>();
-                    }
-
-                    JsonVariant yMax =
-                        settings["$111"];
-
-                    if (
-                        !yMax.isNull()
-                    )
-                    {
-                        machineSettings_.maxFeedrate.y =
-                            yMax.as<float>();
-                    }
-
-                    JsonVariant zMax =
-                        settings["$112"];
-
-                    if (
-                        !zMax.isNull()
-                    )
-                    {
-                        machineSettings_.maxFeedrate.z =
-                            zMax.as<float>();
-                    }
+                    controllerSettings_.settings =
+                        settings;
                 }
+
 
                 break;
             }
@@ -2067,6 +2032,32 @@ if (
 
                 controllerReadyState =
                     true;
+
+
+                const char* controllerType =
+                    array[1];
+
+
+                JsonObject state =
+                    array[2];
+
+
+                if (
+                    controllerType != nullptr
+                )
+                {
+                    controllerState_.controllerType =
+                        controllerType;
+                }
+
+
+                if (
+                    !state.isNull()
+                )
+                {
+                    controllerState_.state =
+                        state;
+                }
 
 
                 enterConnectionState(
@@ -2314,7 +2305,6 @@ if (
             break;
     }
 }
-
 
 // ============================================================
 // REQUEST PORT LIST

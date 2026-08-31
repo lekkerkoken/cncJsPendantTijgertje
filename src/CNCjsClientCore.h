@@ -12,6 +12,7 @@
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
+#include "Config.h"
 
 
 class CNCjsClientCore
