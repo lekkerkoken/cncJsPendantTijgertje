@@ -1,6 +1,7 @@
 #ifndef MACHINE_STATE_H
 #define MACHINE_STATE_H
 
+#include "Position.h"
 
 enum MachineStatus
 {
@@ -9,14 +10,6 @@ enum MachineStatus
     MACHINE_RUN,
     MACHINE_HOLD,
     MACHINE_ALARM
-};
-
-
-struct Position
-{
-    float x = 0;
-    float y = 0;
-    float z = 0;
 };
 
 

@@ -8,7 +8,10 @@
 
 #include "MachineCommand.h"
 #include "MachineState.h"
+#include "MachineSettings.h"
 #include "NetworkManager.h"
+#include "ControllerSettingsSnapshot.h"
+#include "ControllerStateSnapshot.h"
 
 
 class CNCjsClientCore
@@ -118,6 +121,11 @@ public:
 
     MachineState machineStateSnapshot() const;
 
+    ControllerStateSnapshot
+    controllerStateSnapshot() const;
+
+    ControllerSettingsSnapshot
+    controllerSettingsSnapshot() const;
 
     // Kept for compatibility with existing code.
     MachineState getMachineState() const;
@@ -428,7 +436,10 @@ private:
     // ========================================================
 
     MachineState machineState_;
+    MachineSettings machineSettings_;
 
+    ControllerStateSnapshot controllerState_;
+    ControllerSettingsSnapshot controllerSettings_;
 
     void updateMachineState(
         JsonObject status,

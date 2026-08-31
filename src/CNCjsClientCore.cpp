@@ -273,6 +273,42 @@ MachineState CNCjsClientCore::machineStateSnapshot() const
 }
 
 
+ControllerStateSnapshot CNCjsClientCore::controllerStateSnapshot() const
+{
+    ControllerStateSnapshot snapshot;
+
+    if (!lock())
+    {
+        return snapshot;
+    }
+
+    snapshot =
+        controllerState_;
+
+    unlock();
+
+    return snapshot;
+}
+
+
+ControllerSettingsSnapshot CNCjsClientCore::controllerSettingsSnapshot() const
+{
+    ControllerSettingsSnapshot snapshot;
+
+    if (!lock())
+    {
+        return snapshot;
+    }
+
+    snapshot =
+        controllerSettings_;
+
+    unlock();
+
+    return snapshot;
+}
+
+
 // ============================================================
 // LEGACY MACHINE STATE GETTER
 // ============================================================
@@ -1609,7 +1645,31 @@ void CNCjsClientCore::handleSocketEvent(
 
             const char* eventName =
                 array[0];
+if (
+    strcmp(
+        eventName,
+        "Grbl:settings"
+    ) == 0
+)
+{
+    Serial.println();
+    Serial.println(
+        "[TEST] Grbl:settings received"
+    );
 
+    Serial.print(
+        "[TEST] payload: "
+    );
+
+    Serial.write(
+        payload,
+        length
+    );
+
+    Serial.println();
+
+    break;
+}
 
             if (
                 eventName == nullptr
@@ -1958,7 +2018,7 @@ void CNCjsClientCore::handleSocketEvent(
                         !xMax.isNull()
                     )
                     {
-                        machineState_.maxFeedrate.x =
+                        machineSettings_.maxFeedrate.x =
                             xMax.as<float>();
                     }
 
@@ -1969,7 +2029,7 @@ void CNCjsClientCore::handleSocketEvent(
                         !yMax.isNull()
                     )
                     {
-                        machineState_.maxFeedrate.y =
+                        machineSettings_.maxFeedrate.y =
                             yMax.as<float>();
                     }
 
@@ -1980,7 +2040,7 @@ void CNCjsClientCore::handleSocketEvent(
                         !zMax.isNull()
                     )
                     {
-                        machineState_.maxFeedrate.z =
+                        machineSettings_.maxFeedrate.z =
                             zMax.as<float>();
                     }
                 }

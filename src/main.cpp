@@ -163,7 +163,7 @@ void loop()
 
             bool success =
                 cnc.sendCommand(
-                    "statusreport"
+                    "config"
                 );
 
 
