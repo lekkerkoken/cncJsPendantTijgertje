@@ -12,11 +12,9 @@ CNCjsInterface::snapshot() const
 }
 
 
-MachineState
-CNCjsInterface::machineStateSnapshot() const
+MachineState CNCjsInterface::machineStateSnapshot() const
 {
-    
-    return core_.machineStateSnapshot();
+    return machine_.state;
 }
 
 MachineSettings
@@ -65,7 +63,10 @@ void CNCjsInterface::begin(
 
 void CNCjsInterface::update()
 {
-    core_.update();
+    machine_.state =
+        machineMapper_.map(
+            core_.controllerStateSnapshot()
+        );
 }
 
 

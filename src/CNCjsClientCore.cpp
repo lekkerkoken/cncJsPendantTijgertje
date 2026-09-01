@@ -156,21 +156,6 @@ void CNCjsClientCore::begin()
 
 
 // ============================================================
-// UPDATE
-// ============================================================
-
-void CNCjsClientCore::update()
-{
-    /*
-        Network processing runs in the dedicated FreeRTOS
-        network task.
-
-        This method remains for interface compatibility.
-    */
-}
-
-
-// ============================================================
 // SNAPSHOT
 // ============================================================
 

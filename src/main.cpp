@@ -249,7 +249,7 @@ void loop()
 
         De Core blijft eigenaar van zijn eigen state.
     */
-
+    cnc.update();
     machineState =
         cnc.machineStateSnapshot();
 
