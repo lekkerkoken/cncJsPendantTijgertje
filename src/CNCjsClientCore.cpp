@@ -1305,7 +1305,6 @@ void CNCjsClientCore::updateMachineState(
         0;
 
 
-    machineHeartbeatReceived();
 }
 
 
@@ -2099,6 +2098,7 @@ void CNCjsClientCore::handleSocketEvent(
                     parserstate
                 );
 
+                machineHeartbeatReceived();
 
                 break;
             }
