@@ -36,6 +36,35 @@ MachineCommand MachineMapper::map(
     }
 }
 
+MachineSettings MachineMapper::map(
+    const ControllerSettingsSnapshot& snapshot
+) const
+{
+    MachineSettings settings;
+
+
+    if(snapshot.settings.isNull())
+    {
+        return settings;
+    }
+
+
+    if(snapshot.controllerType == "Grbl")
+    {
+        settings.maxFeedrate.x =
+            snapshot.settings["$110"].as<float>();
+
+        settings.maxFeedrate.y =
+            snapshot.settings["$111"].as<float>();
+
+        settings.maxFeedrate.z =
+            snapshot.settings["$112"].as<float>();
+    }
+
+
+    return settings;
+}
+
 
 // ============================================================
 // MAP JOG MOVE

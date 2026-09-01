@@ -324,3 +324,87 @@ De implementatie moet aansluiten op de daadwerkelijke JSON-structuur van het `co
 * [ ] De waarden blijven beschikbaar via `machineStateSnapshot()`.
 * [ ] De bestaande machine-state verwerking blijft ongewijzigd.
 * [ ] Na herstel van de verbinding met de emulator wordt de daadwerkelijke `controller:settings` payload gecontroleerd en wordt de implementatie getest.
+
+ISS-XXX — ControllerStateSnapshot vertalen naar MachineState
+
+Doel
+
+MachineState niet langer rechtstreeks door CNCjsClientCore laten opbouwen. CNCjsClientCore levert alleen de controller-specifieke ControllerStateSnapshot aan. CNCjsInterface vertaalt deze naar de applicatiegerichte MachineState.
+
+Architectuur
+
+CNCjs
+  ↓
+CNCjsClientCore
+  ↓
+ControllerStateSnapshot
+  ↓
+CNCjsInterface
+  ↓
+Machine.state
+  ↓
+MachineState snapshot
+  ↓
+Applicatie
+
+Gedrag
+
+CNCjsClientCore ontvangt en bewaart de controller state.
+CNCjsClientCore weet niets van MachineState of Machine.
+CNCjsInterface::update() wordt iedere loop aangeroepen.
+Tijdens deze update wordt de actuele ControllerStateSnapshot vertaald naar Machine.state.
+De applicatie kan daarna binnen die loop een MachineState snapshot opvragen.
+De bestaande heartbeat-functionaliteit blijft onderdeel van de communicatie-/stateverwerking van Core en wordt niet onderdeel van MachineState.
+
+Resultaat
+
+MachineState wordt een applicatiegerichte representatie van de actuele machine, terwijl de controller-specifieke representatie volledig aan de CNCjs-kant blijft.
+
+ISS-XXX — ControllerSettingsSnapshot vertalen naar MachineSettings
+
+Doel
+
+Controller-specifieke settings losmaken van MachineSettings en de vertaling uitsluitend laten plaatsvinden in CNCjsInterface.
+
+Architectuur
+
+CNCjs
+  ↓
+CNCjsClientCore
+  ↓
+ControllerSettingsSnapshot
+  ↓
+CNCjsInterface
+  ↓
+Machine.settings
+  ↓
+MachineSettings snapshot
+  ↓
+Applicatie
+
+Gedrag
+
+CNCjsClientCore ontvangt en bewaart de controller settings.
+CNCjsClientCore weet niets van MachineSettings of Machine.
+Settings worden niet iedere loop vertaald.
+CNCjsInterface::update() verwerkt uitsluitend de state.
+Wanneer de applicatie MachineSettings nodig heeft, vraagt zij deze expliciet op via de interface.
+Bij die aanvraag controleert CNCjsInterface de settingsChanged-status.
+Alleen wanneer de settings sinds de vorige vertaling gewijzigd zijn, wordt de ControllerSettingsSnapshot vertaald naar Machine.settings.
+Daarna krijgt de applicatie een tijdelijke MachineSettings-snapshot.
+De applicatie hoeft geen kennis te hebben van de settingsChanged-flag of van controller-specifieke gegevens.
+
+Beoogd gebruik
+
+MachineSettings settings =
+    cnc.machineSettings();
+
+De verkregen MachineSettings is alleen een snapshot voor de betreffende scope. Er is geen noodzaak om dit object gedurende de verdere looptijd actief te synchroniseren.
+
+Resultaat
+
+Settings worden lazy en uitsluitend op aanvraag vertaald. Daarmee voorkomen we onnodige verwerking iedere loop en blijft de grens helder:
+
+CNCjsClientCore verzamelt controllerdata.
+CNCjsInterface vertaalt die data naar Machine.
+De applicatie werkt met tijdelijke, controller-onafhankelijke snapshots.

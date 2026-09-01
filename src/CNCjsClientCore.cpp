@@ -2006,6 +2006,7 @@ void CNCjsClientCore::handleSocketEvent(
                 {
                     controllerSettings_.settings =
                         settings;
+
                 }
 
 

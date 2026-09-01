@@ -10,6 +10,9 @@
 #include "MachineMapper.h"
 #include "Machine.h"
 
+#include "ControllerSettingsSnapshot.h"
+#include "ControllerStateSnapshot.h"
+
 
 
 class CNCjsInterface
@@ -33,10 +36,9 @@ public:
 
     CNCjsSnapshot snapshot() const;
 
-    Machine machineSnapshot() const;
-
     MachineState machineStateSnapshot() const;
 
+    MachineSettings machineSettingsSnapshot() const;
 
     // ========================================================
     // STATUS

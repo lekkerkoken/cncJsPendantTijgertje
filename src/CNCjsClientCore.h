@@ -8,7 +8,6 @@
 
 #include "MachineCommand.h"
 #include "MachineState.h"
-#include "MachineSettings.h"
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -437,7 +436,6 @@ private:
     // ========================================================
 
     MachineState machineState_;
-    MachineSettings machineSettings_;
 
     ControllerStateSnapshot controllerState_;
     ControllerSettingsSnapshot controllerSettings_;

@@ -3,6 +3,10 @@
 
 #include "JogCommand.h"
 #include "MachineCommand.h"
+#include "MachineSettings.h"
+
+#include "ControllerSettingsSnapshot.h"
+#include "ControllerStateSnapshot.h"
 
 class MachineMapper
 {
@@ -11,6 +15,10 @@ public:
     MachineCommand map(
         const JogCommand& jog
     );
+
+    MachineSettings map(
+        const ControllerSettingsSnapshot& snapshot
+    ) const;
 
 private:
 

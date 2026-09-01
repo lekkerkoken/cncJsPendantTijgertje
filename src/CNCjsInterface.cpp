@@ -11,18 +11,33 @@ CNCjsInterface::snapshot() const
     return core_.snapshot();
 }
 
-Machine
-CNCjsInterface::machineSnapshot() const
-{
-    return machine_;
-}
-
 
 MachineState
 CNCjsInterface::machineStateSnapshot() const
 {
     
     return core_.machineStateSnapshot();
+}
+
+MachineSettings
+CNCjsInterface::machineSettingsSnapshot() const
+{
+    MachineSettings settings;
+
+    ControllerSettingsSnapshot snapshot =
+        core_.controllerSettingsSnapshot();
+
+    if(
+        snapshot.settings.isNull()
+    )
+    {
+        // Geen geldige controller settings beschikbaar.
+        return settings;
+    }
+
+    return machineMapper_.map(
+        snapshot
+    );
 }
 
 

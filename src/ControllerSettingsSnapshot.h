@@ -11,7 +11,6 @@ struct ControllerSettingsSnapshot
 
     JsonDocument settings;
 
-
     void clear()
     {
         controllerType =
