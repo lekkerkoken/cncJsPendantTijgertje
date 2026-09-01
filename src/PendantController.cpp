@@ -174,33 +174,16 @@ void PendantController::handle(
 
         case EVENT_ENCODER_PRESS:
 
-            if(
-                pendantState.layer ==
-                LAYER_JOG
-            )
-            {
-                pendantState.layer =
-                    LAYER_INFO;
-            }
-            else if(
-                pendantState.layer ==
-                LAYER_INFO
-            )
-            {
-                pendantState.layer =
-                    LAYER_CONTROL;
-            }
-            else
-            {
-                pendantState.layer =
-                    LAYER_JOG;
-            }
+            if(pendantState.layer == LAYER_JOG)
+                setLayer(LAYER_INFO);
 
-            changed =
-                true;
+            else if(pendantState.layer == LAYER_INFO)
+                setLayer(LAYER_CONTROL);
+
+            else
+                setLayer(LAYER_JOG);
 
             break;
-
 
         // ----------------------------------------------------
         // DEFAULT
@@ -219,6 +202,24 @@ void PendantController::handle(
     }
 }
 
+
+void PendantController::setLayer(
+    PendantLayer layer
+)
+{
+    if(pendantState.layer == layer)
+        return;
+
+    pendantState.layer =
+        layer;
+
+    if(layer == LAYER_JOG)
+    {
+    }
+
+    displayDirty =
+        true;
+}
 
 
 // ============================================================

@@ -65,6 +65,10 @@ private:
 
     PendantState pendantState;
 
+    void setLayer(
+    PendantLayer layer
+);
+
 
     // ========================================================
     // DISPLAY STATE

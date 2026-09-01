@@ -35,7 +35,7 @@ void Encoder::begin(
 
     pinMode(
         this->buttonPin,
-        INPUT_PULLUP
+        INPUT
     );
 
 
