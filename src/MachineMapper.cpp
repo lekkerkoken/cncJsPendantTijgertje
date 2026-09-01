@@ -66,6 +66,89 @@ MachineSettings MachineMapper::map(
 }
 
 
+MachineState MachineMapper::map(
+    const ControllerStateSnapshot& snapshot
+) const
+{
+    MachineState state;
+
+
+    if(snapshot.state.isNull())
+    {
+        return state;
+    }
+
+
+    if(snapshot.controllerType == "Grbl")
+    {
+        JsonObjectConst status =
+            snapshot.state["status"].as<JsonObjectConst>();
+
+
+        if(status.isNull())
+        {
+            return state;
+        }
+
+
+        String activeState =
+            status["activeState"].as<String>();
+
+
+        if(activeState == "Idle")
+        {
+            state.machineStatus =
+                MACHINE_IDLE;
+        }
+        else if(activeState == "Run")
+        {
+            state.machineStatus =
+                MACHINE_RUN;
+        }
+        else if(activeState == "Hold")
+        {
+            state.machineStatus =
+                MACHINE_HOLD;
+        }
+        else if(activeState == "Alarm")
+        {
+            state.machineStatus =
+                MACHINE_ALARM;
+        }
+
+
+        state.machinePosition.x =
+            status["mpos"]["x"].as<float>();
+
+        state.machinePosition.y =
+            status["mpos"]["y"].as<float>();
+
+        state.machinePosition.z =
+            status["mpos"]["z"].as<float>();
+
+
+        state.workPosition.x =
+            status["wpos"]["x"].as<float>();
+
+        state.workPosition.y =
+            status["wpos"]["y"].as<float>();
+
+        state.workPosition.z =
+            status["wpos"]["z"].as<float>();
+
+
+        state.feedrate =
+            status["feedrate"].as<float>();
+
+
+        state.spindleSpeed =
+            status["spindle"].as<int>();
+    }
+
+
+    return state;
+}
+
 // ============================================================
 // MAP JOG MOVE
 // ============================================================

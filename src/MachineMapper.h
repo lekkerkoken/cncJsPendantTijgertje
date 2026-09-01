@@ -20,6 +20,10 @@ public:
         const ControllerSettingsSnapshot& snapshot
     ) const;
 
+    MachineState map(
+        const ControllerStateSnapshot& snapshot
+    ) const;
+
 private:
 
     MachineCommand mapJogMove(

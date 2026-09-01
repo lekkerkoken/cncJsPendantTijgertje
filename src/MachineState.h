@@ -18,9 +18,6 @@ struct MachineState
     MachineStatus machineStatus = MACHINE_DISCONNECTED;
 
 
-    bool connected = false;
-
-
     Position machinePosition;
 
 
