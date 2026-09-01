@@ -4,12 +4,15 @@
 #include "Event.h"
 #include "JogCommand.h"
 #include "MachineState.h"
+#include "MachineSettings.h"
 
 class JogPlanner
 {
 public:
 
-    void begin();
+    void begin(
+        const MachineSettings& machineSettings
+);
 
 
     /*
@@ -68,7 +71,7 @@ private:
     */
     static constexpr unsigned long SLOT_TIME = 50;
 
-    static constexpr int SLOT_COUNT = 10;
+    static constexpr int SLOT_COUNT = 8;
 
 
     /*
@@ -94,7 +97,7 @@ private:
 
     static constexpr int MIN_FEEDRATE = 100;
 
-    static constexpr int MAX_FEEDRATE = 3000;
+    Position maxFeedrate;
 
 
     // ========================================================
@@ -186,6 +189,7 @@ private:
         float delta
     ) const;
 
+    float maxDelta() const;
 
     float machinePosition(
         const MachineState& machineState,

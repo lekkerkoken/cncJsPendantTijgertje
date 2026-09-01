@@ -2,14 +2,19 @@
 
 #include <Arduino.h>
 #include <math.h>
+#include "MachineSettings.h"
 
 
 // ============================================================
 // BEGIN
 // ============================================================
 
-void JogPlanner::begin()
+void JogPlanner::begin(
+    const MachineSettings& settings
+)
 {
+    maxFeedrate = settings.maxFeedrate;
+
     clearIntent();
 
     consumeIndex =
@@ -283,7 +288,7 @@ JogCommand JogPlanner::update(
     if(!positionKnown)
     {
         if(!machineState.machineStatus == MACHINE_IDLE ||
-machineState.machineStatus == MACHINE_RUN)
+!machineState.machineStatus == MACHINE_RUN)
         {
             return noCommand;
         }
@@ -340,12 +345,12 @@ machineState.machineStatus == MACHINE_RUN)
         Een leeg/verlopen slot levert bewust géén command op.
     */
 
-    float delta =
+    float deltaIntent =
         consumeIntent();
 
 
     if(
-        fabs(delta) <=
+        fabs(deltaIntent) <=
         INTENT_EPSILON
     )
     {
@@ -353,36 +358,43 @@ machineState.machineStatus == MACHINE_RUN)
     }
 
 
-    /*
-        Eén slot is één onafhankelijke beweging.
-
-        Er is geen target en geen poging om een vorige jog
-        alsnog af te maken.
-    */
-
     JogCommand command;
-
 
     command.type =
         JOG_MOVE;
 
-
     command.axis =
         selectedAxis;
 
-
-    command.delta =
-        delta;
-
+    command.feedrate =
+        calculateFeedrate(
+            deltaIntent
+        );
 
     command.duration =
         SLOT_TIME;
 
 
-    command.feedrate =
-        calculateFeedrate(
-            delta
-        );
+    float maximumDelta =
+        maxDelta();
+
+
+    float calculatedDeltaAbs =
+        fabs(deltaIntent);
+
+
+    if(calculatedDeltaAbs > maximumDelta)
+    {
+        calculatedDeltaAbs =
+            maximumDelta;
+    }
+
+    float calculatedDelta =  deltaIntent > 0.0f
+            ? calculatedDeltaAbs
+            : -calculatedDeltaAbs;
+
+
+    command.delta = calculatedDelta;
 
 
     Serial.println(
@@ -396,7 +408,7 @@ machineState.machineStatus == MACHINE_RUN)
 
 
     Serial.println(
-        delta,
+        calculatedDelta,
         4
     );
 
@@ -703,20 +715,73 @@ int JogPlanner::calculateFeedrate(
             MIN_FEEDRATE;
     }
 
+    float maximum;
+
+    switch(selectedAxis)
+    {
+        case AXIS_X:
+            maximum = maxFeedrate.x;
+            break;
+
+        case AXIS_Y:
+            maximum = maxFeedrate.y;
+            break;
+
+        case AXIS_Z:
+            maximum = maxFeedrate.z;
+            break;
+
+        default:
+            maximum = 0.0f;
+            break;
+    }
 
     if(
         feedrate >
-        MAX_FEEDRATE
+        maximum
     )
     {
         feedrate =
-            MAX_FEEDRATE;
+            (int)maximum;
+            Serial.println(
+            "[JogPlanner] Max feedrate used"
+        );
+
     }
+
 
 
     return (int)feedrate;
 }
 
+float JogPlanner::maxDelta() const
+{
+    float maximum;
+
+    switch(selectedAxis)
+    {
+        case AXIS_X:
+            maximum = maxFeedrate.x;
+            break;
+
+        case AXIS_Y:
+            maximum = maxFeedrate.y;
+            break;
+
+        case AXIS_Z:
+            maximum = maxFeedrate.z;
+            break;
+
+        default:
+            return 0.0f;
+    }
+
+    return
+        maximum /
+        60.0f *
+        SLOT_TIME /
+        1000.0f;
+}
 
 
 // ============================================================

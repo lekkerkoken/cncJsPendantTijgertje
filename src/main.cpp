@@ -82,22 +82,6 @@ void setup()
     );
 
 
-    // --------------------------------------------------------
-    // JOG
-    // --------------------------------------------------------
-
-    jogPlanner.begin();
-
-
-    /*
-        De geselecteerde jogstep komt uit de pendant.
-
-        JogPlanner kent de PendantState zelf niet; main.cpp
-        vormt alleen de koppeling tussen beide onderdelen.
-    */
-    jogPlanner.setJogStepDistance(
-        controller.jogStepDistance()
-    );
 
 
 }
@@ -152,6 +136,20 @@ void loop()
             encoder.injectPulse(
                 1
             );
+        }else if(command == "j")
+        {
+            MachineSettings machineSettings =
+                cnc.machineSettingsSnapshot();
+
+            jogPlanner.begin(
+                machineSettings
+            );
+
+            jogPlanner.setJogStepDistance(
+                controller.jogStepDistance()
+            );
+
+            Serial.println("[TEST] Jog mode initialized");
         }
         else if(command == "s")
         {
