@@ -8,6 +8,8 @@
 #include "MachineCommand.h"
 #include "MachineState.h"
 #include "MachineMapper.h"
+#include "Machine.h"
+
 
 
 class CNCjsInterface
@@ -30,6 +32,8 @@ public:
     // ========================================================
 
     CNCjsSnapshot snapshot() const;
+
+    Machine machineSnapshot() const;
 
     MachineState machineStateSnapshot() const;
 
@@ -183,6 +187,7 @@ private:
 
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
+    Machine machine_;
 };
 
 
