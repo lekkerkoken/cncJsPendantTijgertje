@@ -92,9 +92,6 @@ void CNCjsClientCore::begin()
         0;
 
 
-    machineState_ =
-        MachineState();
-
 
     networkManager_.begin();
 
@@ -233,29 +230,6 @@ CNCjsClientCore::snapshot() const
 // MACHINE STATE SNAPSHOT
 // ============================================================
 
-MachineState CNCjsClientCore::machineStateSnapshot() const
-{
-    MachineState snapshot;
-
-
-    if (
-        !lock()
-    )
-    {
-        return snapshot;
-    }
-
-
-    snapshot =
-        machineState_;
-
-
-    unlock();
-
-
-    return snapshot;
-}
-
 
 ControllerStateSnapshot CNCjsClientCore::controllerStateSnapshot() const
 {
@@ -290,16 +264,6 @@ ControllerSettingsSnapshot CNCjsClientCore::controllerSettingsSnapshot() const
     unlock();
 
     return snapshot;
-}
-
-
-// ============================================================
-// LEGACY MACHINE STATE GETTER
-// ============================================================
-
-MachineState CNCjsClientCore::getMachineState() const
-{
-    return machineStateSnapshot();
 }
 
 
@@ -723,8 +687,7 @@ void CNCjsClientCore::updateConnection()
                 );
 
 
-                machineState_.machineStatus =
-                    MACHINE_DISCONNECTED;
+                controllerState_.clear();
 
 
                 lastMachineStateTime =
@@ -816,8 +779,7 @@ void CNCjsClientCore::connectionFailed(
         0;
 
 
-    machineState_.machineStatus =
-        MACHINE_DISCONNECTED;
+    controllerState_.clear();
 
 
     enterConnectionState(
@@ -1160,140 +1122,6 @@ void CNCjsClientCore::socketIOEvent(
 
 
 // ============================================================
-// MACHINE STATUS MAPPING
-// ============================================================
-
-MachineStatus CNCjsClientCore::machineStatusFromCNCjs(
-    const char* activeState
-) const
-{
-    if (
-        activeState == nullptr
-    )
-    {
-        return MACHINE_DISCONNECTED;
-    }
-
-
-    if (
-        strcmp(
-            activeState,
-            "Idle"
-        ) == 0
-    )
-    {
-        return MACHINE_IDLE;
-    }
-
-
-    if (
-        strcmp(
-            activeState,
-            "Run"
-        ) == 0
-    )
-    {
-        return MACHINE_RUN;
-    }
-
-
-    if (
-        strcmp(
-            activeState,
-            "Hold"
-        ) == 0
-    )
-    {
-        return MACHINE_HOLD;
-    }
-
-
-    if (
-        strcmp(
-            activeState,
-            "Alarm"
-        ) == 0
-    )
-    {
-        return MACHINE_ALARM;
-    }
-
-
-    return MACHINE_DISCONNECTED;
-}
-
-
-// ============================================================
-// UPDATE MACHINE STATE
-// ============================================================
-
-void CNCjsClientCore::updateMachineState(
-    JsonObject status,
-    JsonObject parserstate
-)
-{
-    const char* activeState =
-        status["activeState"];
-
-
-    machineState_.machineStatus =
-        machineStatusFromCNCjs(
-            activeState
-        );
-
-
-    JsonObject mpos =
-        status["mpos"];
-
-
-    if (
-        !mpos.isNull()
-    )
-    {
-        machineState_.machinePosition.x =
-            mpos["x"].as<float>();
-
-        machineState_.machinePosition.y =
-            mpos["y"].as<float>();
-
-        machineState_.machinePosition.z =
-            mpos["z"].as<float>();
-    }
-
-
-    JsonObject wpos =
-        status["wpos"];
-
-
-    if (
-        !wpos.isNull()
-    )
-    {
-        machineState_.workPosition.x =
-            wpos["x"].as<float>();
-
-        machineState_.workPosition.y =
-            wpos["y"].as<float>();
-
-        machineState_.workPosition.z =
-            wpos["z"].as<float>();
-    }
-
-
-    machineState_.feedrate =
-        status["feedrate"] |
-        0.0f;
-
-
-    machineState_.spindleSpeed =
-        status["spindle"] |
-        0;
-
-
-}
-
-
-// ============================================================
 // CNCjs ACTIVITY RECEIVED
 // ============================================================
 
@@ -1362,8 +1190,7 @@ void CNCjsClientCore::updateHeartbeat()
     )
     {
 
-        machineState_.machineStatus =
-            MACHINE_DISCONNECTED;
+        controllerState_.clear();
     }
 }
 
@@ -1511,8 +1338,7 @@ void CNCjsClientCore::handleSocketEvent(
                 CNCjsStatus::Offline;
 
 
-            machineState_.machineStatus =
-                MACHINE_DISCONNECTED;
+            controllerState_.clear();
 
 
             Serial.println(
@@ -1905,8 +1731,7 @@ void CNCjsClientCore::handleSocketEvent(
                     );
 
 
-                    machineState_.machineStatus =
-                        MACHINE_DISCONNECTED;
+                    controllerState_.clear();
 
 
                     Serial.println();
@@ -2071,19 +1896,6 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
-                JsonObject status =
-                    array[1]["status"];
-
-
-                JsonObject parserstate =
-                    array[1]["parserstate"];
-
-
-                updateMachineState(
-                    status,
-                    parserstate
-                );
-
                 machineHeartbeatReceived();
 
                 break;
@@ -2122,129 +1934,6 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 machineHeartbeatReceived();
-
-
-                const char* stateStart =
-                    response + 1;
-
-
-                const char* stateEnd =
-                    strchr(
-                        stateStart,
-                        '|'
-                    );
-
-
-                if (
-                    stateEnd != nullptr
-                )
-                {
-                    size_t stateLength =
-                        stateEnd -
-                        stateStart;
-
-
-                    if (
-                        stateLength < 20
-                    )
-                    {
-                        char activeState[20];
-
-
-                        memcpy(
-                            activeState,
-                            stateStart,
-                            stateLength
-                        );
-
-
-                        activeState[
-                            stateLength
-                        ] =
-                            '\0';
-
-
-                        machineState_.machineStatus =
-                            machineStatusFromCNCjs(
-                                activeState
-                            );
-                    }
-                }
-
-
-                const char* mposStart =
-                    strstr(
-                        response,
-                        "MPos:"
-                    );
-
-
-                if (
-                    mposStart != nullptr
-                )
-                {
-                    mposStart +=
-                        5;
-
-
-                    float x;
-                    float y;
-                    float z;
-
-
-                    if (
-                        sscanf(
-                            mposStart,
-                            "%f,%f,%f",
-                            &x,
-                            &y,
-                            &z
-                        ) == 3
-                    )
-                    {
-                        machineState_.machinePosition.x =
-                            x;
-
-                        machineState_.machinePosition.y =
-                            y;
-
-                        machineState_.machinePosition.z =
-                            z;
-                    }
-                }
-
-
-                const char* fsStart =
-                    strstr(
-                        response,
-                        "FS:"
-                    );
-
-
-                if (
-                    fsStart != nullptr
-                )
-                {
-                    fsStart +=
-                        3;
-
-
-                    float feedrate;
-
-
-                    if (
-                        sscanf(
-                            fsStart,
-                            "%f",
-                            &feedrate
-                        ) == 1
-                    )
-                    {
-                        machineState_.feedrate =
-                            feedrate;
-                    }
-                }
-
 
                 break;
             }
@@ -3876,8 +3565,7 @@ bool CNCjsClientCore::openControllerInternal(
         ConnectionState::OpeningController
     );
 
-    machineState_.machineStatus =
-        MACHINE_DISCONNECTED;
+    controllerState_.clear();
 
 
     JsonDocument doc;

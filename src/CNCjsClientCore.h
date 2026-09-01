@@ -7,7 +7,6 @@
 #include <ArduinoJson.h>
 
 #include "MachineCommand.h"
-#include "MachineState.h"
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -95,11 +94,8 @@ public:
     // commando → thread-safe naar Core
     // state     → snapshot uit Core
     //
-    // CNCjsClientCore bezit zijn eigen MachineState.
-    //
     // Publieke commando-methodes zijn thread-safe.
     //
-    // State wordt uitsluitend als snapshot naar buiten gegeven.
     //
     // ========================================================
 
@@ -116,16 +112,11 @@ public:
 
     CNCjsSnapshot snapshot() const;
 
-    MachineState machineStateSnapshot() const;
-
     ControllerStateSnapshot
     controllerStateSnapshot() const;
 
     ControllerSettingsSnapshot
     controllerSettingsSnapshot() const;
-
-    // Kept for compatibility with existing code.
-    MachineState getMachineState() const;
 
 
     // ========================================================
@@ -429,23 +420,11 @@ private:
 
 
     // ========================================================
-    // MACHINE STATE
+    // CONTROLLER STATE
     // ========================================================
-
-    MachineState machineState_;
 
     ControllerStateSnapshot controllerState_;
     ControllerSettingsSnapshot controllerSettings_;
-
-    void updateMachineState(
-        JsonObject status,
-        JsonObject parserstate
-    );
-
-
-    MachineStatus machineStatusFromCNCjs(
-        const char* activeState
-    ) const;
 
 
     // ========================================================
