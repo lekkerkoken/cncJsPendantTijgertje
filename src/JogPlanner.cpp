@@ -287,8 +287,10 @@ JogCommand JogPlanner::update(
 
     if(!positionKnown)
     {
-        if(!machineState.machineStatus == MACHINE_IDLE ||
+        if(
+            !(machineState.machineStatus == MACHINE_IDLE ||
 machineState.machineStatus == MACHINE_RUN)
+)
         {
             return noCommand;
         }
