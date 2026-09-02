@@ -174,17 +174,15 @@ void PendantController::handle(
 
         case EVENT_ENCODER_PRESS:
 
-            if(pendantState.layer == LAYER_JOG)
-                setLayer(LAYER_INFO);
-
-            else if(pendantState.layer == LAYER_INFO)
-                setLayer(LAYER_CONTROL);
-
-            else
-                setLayer(LAYER_JOG);
+            toggleLayer();
 
             break;
+        
+        case EVENT_ENCODER_PULSE:
 
+            handleJogEncoder(event);
+
+            break;
         // ----------------------------------------------------
         // DEFAULT
         // ----------------------------------------------------
@@ -203,6 +201,19 @@ void PendantController::handle(
 }
 
 
+void PendantController::toggleLayer()
+{
+    if(pendantState.layer == LAYER_JOG)
+        setLayer(LAYER_INFO);
+
+    else if(pendantState.layer == LAYER_INFO)
+        setLayer(LAYER_CONTROL);
+
+    else
+        setLayer(LAYER_JOG);
+}
+
+
 void PendantController::setLayer(
     PendantLayer layer
 )
@@ -210,15 +221,37 @@ void PendantController::setLayer(
     if(pendantState.layer == layer)
         return;
 
-    pendantState.layer =
-        layer;
+    pendantState.layer = layer;
 
-    if(layer == LAYER_JOG)
+    switch(layer)
     {
+        case LAYER_JOG:
+            enterJogLayer();
+            break;
+
+        case LAYER_INFO:
+            break;
+
+        case LAYER_CONTROL:
+            break;
     }
 
     displayDirty =
         true;
+}
+
+void PendantController::enterJogLayer()
+{
+    MachineSettings machineSettings =
+        cnc->machineSettingsSnapshot();
+
+    jogPlanner.begin(
+        machineSettings
+    );
+
+    jogPlanner.setJogStepDistance(
+        jogStepDistance()
+    );
 }
 
 
@@ -244,6 +277,20 @@ float PendantController::jogStepDistance() const
     );
 }
 
+void PendantController::handleJogEncoder(
+    const Event& event
+)
+{
+    jogPlanner.setJogStepDistance(
+        jogStepDistance()
+    );
+
+    jogPlanner.encoder(
+        event,
+        axis()
+    );
+}
+
 
 
 // ============================================================
@@ -258,6 +305,19 @@ void PendantController::update()
 
         We kijken alleen of een externe status veranderd is.
     */
+
+    JogCommand jog =
+        jogPlanner.update(
+            *machineState
+        );
+
+    if(jog.type != JOG_NONE)
+    {
+        cnc->execute(
+            jog
+        );
+    }
+    
 
     checkStatusChanges();
 

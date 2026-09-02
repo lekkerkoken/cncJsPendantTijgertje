@@ -8,7 +8,6 @@
 #include "Display.h"
 #include "PendantController.h"
 #include "MachineState.h"
-#include "JogPlanner.h"
 #include "CNCjsInterface.h"
 
 
@@ -25,8 +24,6 @@ PendantController controller;
 MachineState machineState;
 
 CNCjsInterface cnc;
-
-JogPlanner jogPlanner;
 
 
 // ============================================================
@@ -136,22 +133,7 @@ void loop()
             encoder.injectPulse(
                 1
             );
-        }else if(command == "j")
-        {
-            MachineSettings machineSettings =
-                cnc.machineSettingsSnapshot();
-
-            jogPlanner.begin(
-                machineSettings
-            );
-
-            jogPlanner.setJogStepDistance(
-                controller.jogStepDistance()
-            );
-
-            Serial.println("[TEST] Jog mode initialized");
-        }
-        else if(command == "s")
+        }else if(command == "s")
         {
             Serial.println();
             Serial.println(
@@ -266,31 +248,9 @@ void loop()
         Event event =
             input.read();
 
-
-        if(event.type == EVENT_ENCODER_PULSE)
-        {
-            /*
-                De pendant is eigenaar van de geselecteerde
-                jogstep. De planner ontvangt alleen de concrete
-                afstand en blijft onafhankelijk van PendantState.
-            */
-
-            jogPlanner.setJogStepDistance(
-                controller.jogStepDistance()
-            );
-
-
-            jogPlanner.encoder(
-                event,
-                controller.axis()
-            );
-        }
-        else
-        {
-            controller.handle(
-                event
-            );
-        }
+        controller.handle(
+            event
+        );
     }
 
 
@@ -300,28 +260,4 @@ void loop()
 
     controller.update();
 
-
-    // --------------------------------------------------------
-    // JOG PLANNER
-    // --------------------------------------------------------
-
-    /*
-        De planner gebruikt de actuele MachineState-snapshot
-        als werkelijkheid.
-
-        update() levert direct één JogCommand terug.
-        Als er niets hoeft te gebeuren is het type JOG_NONE.
-    */
-
-    JogCommand jog =
-    jogPlanner.update(
-        machineState
-    );
-
-    if(jog.type != JOG_NONE)
-    {
-        cnc.execute(
-            jog
-        );
-    }
 }

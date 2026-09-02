@@ -931,3 +931,487 @@ Het essentiële ontwerpprincipe is:
 > **De pendant plant niet wat de machine over enkele seconden moet doen. Hij beschrijft alleen wat de gebruiker in de komende halve seconde wil dat de machine doet.**
 
 Daardoor blijft de machine altijd dicht bij de actuele menselijke intentie, terwijl GRBL verantwoordelijk blijft voor de daadwerkelijke fysieke beweging.
+
+1. De hoofdgedachte
+
+PendantController wordt de application controller van de hele pendant.
+
+Niet: “de class die het display bestuurt”.
+
+Maar:
+
+Alles wat de pendant als systeem doet, wordt vanuit PendantController gecoördineerd.
+
+Daarmee wordt main.cpp bewust dom.
+
+                    ┌─────────────────────────────┐
+                    │      PendantController      │
+                    │                             │
+                    │       ORCHESTRATOR          │
+                    └──────────────┬──────────────┘
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+          │                        │                        │
+          ▼                        ▼                        ▼
+   ┌─────────────┐         ┌───────────────┐        ┌───────────┐
+   │ InputManager│         │ CNCjsInterface│        │  Display  │
+   └──────┬──────┘         └───────┬───────┘        └───────────┘
+          │                        │
+          ▼                        ▼
+       Events                 MachineState
+                                  │
+                                  ▼
+                           ┌─────────────┐
+                           │ JogPlanner  │
+                           └──────┬──────┘
+                                  │
+                                  ▼
+                             JogCommand
+                                  │
+                                  ▼
+                           CNCjsInterface
+2. main.cpp wordt bijna alleen composition root
+
+Uiteindelijk wil ik hier ongeveer dit conceptueel overhouden:
+
+main.cpp
+
+setup()
+    initialise hardware
+    initialise infrastructure
+    controller.begin(...)
+
+loop()
+    controller.update()
+
+Dus geen:
+
+if(input.available()) ...
+jogPlanner.update() ...
+cnc.update() ...
+machineState = ...
+cnc.execute() ...
+
+Dat zijn allemaal systeemregels en horen niet in main.
+
+De serial testcode mag voorlopig een uitzondering blijven, omdat dat testinfrastructuur is en geen pendant-functionaliteit.
+
+3. Wat krijgt PendantController als dependencies?
+
+Ik zou hem expliciet toegang geven tot:
+
+PendantController
+    │
+    ├── InputManager
+    ├── Display
+    ├── CNCjsInterface
+    └── JogPlanner
+
+Dus conceptueel:
+
+controller.begin(
+    input,
+    display,
+    cnc,
+    jogPlanner
+);
+
+De MachineState geef je niet meer vanuit main mee.
+
+Waarom?
+
+Omdat MachineState afkomstig is van CNCjsInterface.
+
+De controller kan zelf:
+
+cnc.machineStateSnapshot()
+
+ophalen wanneer hij zijn update uitvoert.
+
+Daarmee verdwijnt deze merkwaardige constructie:
+
+MachineState machineState;
+
+...
+
+machineState =
+    cnc.machineStateSnapshot();
+
+uit main.
+
+4. Ownership wordt dan heel duidelijk
+
+Er zijn drie verschillende soorten state.
+
+Pendant state
+
+Eigendom van:
+
+PendantController
+        │
+        └── PendantState
+
+Bijvoorbeeld:
+
+layer
+axis
+jogStep
+
+Dit is wat de gebruiker op de pendant heeft geselecteerd.
+
+Machine state
+
+Eigendom van:
+
+CNCjsClientCore
+        │
+        └── MachineState
+
+Bijvoorbeeld:
+
+machineStatus
+machinePosition
+workPosition
+feedrate
+spindleSpeed
+
+Dit is de werkelijkheid van de machine.
+
+De controller gebruikt hiervan snapshots.
+
+Machine settings
+
+Ook afkomstig van CNCjs:
+
+CNCjsClientCore
+        │
+        └── MachineSettings
+                │
+                └── maxFeedrate
+
+De controller haalt deze op wanneer dat functioneel nodig is.
+
+Bijvoorbeeld bij:
+
+→ entering LAYER_JOG
+
+en initialiseert daarmee de JogPlanner.
+
+5. De definitieve update() flow
+
+Dit vind ik het belangrijkste onderdeel.
+
+Iedere loop:
+
+PendantController::update()
+
+doet:
+
+┌─────────────────────────────┐
+│ 1. Update CNCjs             │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 2. Snapshot MachineState    │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 3. Update InputManager      │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 4. Verwerk input events     │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 5. Update JogPlanner        │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 6. Execute JogCommand       │
+└──────────────┬──────────────┘
+               ▼
+┌─────────────────────────────┐
+│ 7. Update display            │
+└─────────────────────────────┘
+
+Dat maakt de hele applicatieflow op één plek zichtbaar.
+
+6. Input wordt volledig door de Controller gecoördineerd
+
+Nu staat dit nog in main:
+
+input.update()
+    ↓
+input.read()
+    ↓
+if encoder pulse
+    → JogPlanner
+else
+    → PendantController
+
+Dat wil ik niet meer.
+
+De Controller wordt:
+
+InputManager
+      │
+      ▼
+ PendantController
+      │
+      ├── encoder pulse → JogPlanner
+      │
+      ├── encoder press → layer logic
+      │
+      └── keys → pendant logic
+
+Dus InputManager detecteert alleen wat er gebeurd is.
+
+Hij bepaalt niet wat de gebeurtenis betekent.
+
+De Controller bepaalt dat.
+
+Dat past ook precies bij onze eerdere beslissing dat de encoder-input via de pendantlogica loopt.
+
+7. JogPlanner blijft bewust dom
+
+Dit is belangrijk.
+
+We maken PendantController niet tot een nieuwe JogPlanner.
+
+De verantwoordelijkheden blijven:
+
+PendantController
+"De gebruiker draait de encoder."
+        ↓
+"Welke as is geselecteerd?"
+        ↓
+"Welke jogstep is geselecteerd?"
+        ↓
+"Wij zitten in JOG."
+        ↓
+JogPlanner.encoder(...)
+JogPlanner
+"Ik heb een jog-intentie."
+        ↓
+"Ik plan daar een beweging voor."
+        ↓
+"Wat is de maximale feedrate?"
+        ↓
+JogCommand
+
+En daarna:
+
+PendantController
+        ↓
+cnc.execute(jogCommand)
+
+Dus:
+
+PendantController = WAT / WANNEER
+JogPlanner        = HOE JOGGEN
+CNCjsInterface    = HOE NAAR CNCjs
+
+Dat is een heel mooie scheiding.
+
+8. Layer transitions krijgen een echte betekenis
+
+Dit is nu extra belangrijk voor het komende werk aan PendantLayers.
+
+We willen niet alleen:
+
+pendantState.layer = LAYER_JOG;
+
+maar conceptueel:
+
+setLayer(LAYER_JOG)
+        │
+        ├── exit huidige layer
+        │
+        ├── wijzig state
+        │
+        ├── enter nieuwe layer
+        │
+        └── markeer display dirty
+
+Dus:
+
+             setLayer()
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+   onLayerExit()     onLayerEnter()
+                           │
+                           ├── JOG
+                           │     └── initialise JogPlanner
+                           │
+                           ├── INFO
+                           │
+                           └── CONTROL
+
+En hier hoort dus die eerder besproken initialisatie:
+
+ENTER JOG
+   ↓
+cnc.machineSettingsSnapshot()
+   ↓
+jogPlanner.begin(settings)
+   ↓
+jogPlanner.setJogStepDistance(...)
+
+Niet in main.
+
+Niet via een j-commando.
+
+Niet ergens verborgen in JogPlanner.
+
+9. Dat geeft ons een heel duidelijke JOG-flow
+
+Bijvoorbeeld encoder rechts:
+
+Encoder
+   ↓
+InputManager
+   ↓
+EVENT_ENCODER_PULSE
+   ↓
+PendantController
+   ↓
+layer == JOG?
+   ↓ yes
+JogPlanner.encoder(
+    event,
+    pendantState.axis
+)
+   ↓
+JogPlanner intent
+   ↓
+JogPlanner.update(machineState)
+   ↓
+JogCommand
+   ↓
+CNCjsInterface.execute()
+
+En een key:
+
+KEY_6
+  ↓
+InputManager
+  ↓
+PendantController
+  ↓
+jogStep--
+  ↓
+displayDirty
+
+En encoder press:
+
+ENCODER_PRESS
+      ↓
+PendantController
+      ↓
+JOG → INFO
+      ↓
+layer transition
+      ↓
+displayDirty
+10. Display blijft output
+
+Ook dit zou ik nu definitief vastleggen.
+
+Display weet niets van:
+
+PendantState
+MachineState
+CNCjs
+JogPlanner
+input
+layers
+
+De Controller vertaalt alles naar display-informatie.
+
+Dus:
+
+MachineState
+     ↓
+PendantController
+     ↓
+"ALARM"
+"X12.30 Y4.20"
+"Z-1.00"
+     ↓
+Display
+
+en:
+
+PendantState
+     ↓
+PendantController
+     ↓
+"JOG"
+"Axis X"
+"Step 0.10"
+     ↓
+Display
+
+Dat maakt straks het ontwerpen van de PendantLayers UI veel schoner.
+
+11. De uiteindelijke architectuur
+
+Alles bij elkaar:
+
+                         ┌─────────────────────────┐
+                         │          main           │
+                         │                         │
+                         │  setup()                │
+                         │  loop()                 │
+                         └────────────┬────────────┘
+                                      │
+                                      │ update()
+                                      ▼
+                    ╔═══════════════════════════════╗
+                    ║       PendantController       ║
+                    ║                               ║
+                    ║  PendantState                 ║
+                    ║  layer management             ║
+                    ║  input routing                ║
+                    ║  machine-state coordination   ║
+                    ║  jog coordination             ║
+                    ║  display coordination         ║
+                    ╚═══════════════╤═══════════════╝
+                                    │
+          ┌─────────────────────────┼─────────────────────────┐
+          │                         │                         │
+          ▼                         ▼                         ▼
+ ┌─────────────────┐       ┌──────────────────┐       ┌──────────────┐
+ │  InputManager   │       │ CNCjsInterface   │       │   Display    │
+ │                 │       │                  │       │              │
+ │ ButtonMatrix    │       │ CNCjsClientCore  │       │ OLED         │
+ │ Encoder         │       │ MachineState     │       │              │
+ └─────────────────┘       │ MachineSettings  │       └──────────────┘
+                           └────────┬─────────┘
+                                    │
+                                    │ JogCommand
+                                    ▼
+                           ┌──────────────────┐
+                           │    JogPlanner    │
+                           │                  │
+                           │ intent           │
+                           │ feedrate         │
+                           │ movement         │
+                           └──────────────────┘
+En één belangrijke regel
+
+De controller orkestreert, maar bezit niet de verantwoordelijkheden van de andere classes.
+
+Dus niet:
+
+PendantController doet alles.
+
+Maar:
+
+PendantController bepaalt wie wat wanneer doet.
+
+Dat is volgens mij precies de architectuur die we de afgelopen refactors eigenlijk langzaam aan het bereiken waren.
+
+En hiermee hebben we ook een solide basis om nu terug te gaan naar jouw oorspronkelijke doel: de hoofdstructuur van de Pendant en de UI van de PendantLayers.

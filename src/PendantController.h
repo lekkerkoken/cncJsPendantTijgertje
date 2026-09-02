@@ -8,6 +8,8 @@
 #include "MachineState.h"
 #include "CNCjsInterface.h"
 
+#include "JogPlanner.h"
+
 
 class PendantController
 {
@@ -62,13 +64,21 @@ private:
     CNCjsInterface* cnc =
         nullptr;
 
+    JogPlanner jogPlanner;
 
     PendantState pendantState;
 
-    void setLayer(
-    PendantLayer layer
-);
+    void toggleLayer();
 
+    void setLayer(
+        PendantLayer layer
+    );
+
+    void enterJogLayer();
+
+    void handleJogEncoder(
+        const Event& event
+    );
 
     // ========================================================
     // DISPLAY STATE
