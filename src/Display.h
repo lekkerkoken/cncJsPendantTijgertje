@@ -22,6 +22,9 @@ public:
 
 
 private:
+    // TODO:
+    // toekomstige OLED hardware/driver komt hier.
+    // moet via begin binnenkomen en zoals de andere hardware dingen hoort hij uit main.cpp te komen (via controller)
 
     bool dirty = true;
 
