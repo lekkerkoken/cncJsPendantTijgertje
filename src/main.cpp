@@ -7,7 +7,6 @@
 #include "InputManager.h"
 #include "Display.h"
 #include "PendantController.h"
-#include "MachineState.h"
 #include "CNCjsInterface.h"
 
 
@@ -20,8 +19,6 @@ InputManager input;
 Display display;
 
 PendantController controller;
-
-MachineState machineState;
 
 CNCjsInterface cnc;
 
@@ -74,7 +71,6 @@ void setup()
 
     controller.begin(
         display,
-        machineState,
         cnc
     );
 
@@ -232,8 +228,6 @@ void loop()
         De Core blijft eigenaar van zijn eigen state.
     */
     cnc.update();
-    machineState =
-        cnc.machineStateSnapshot();
 
 
     // --------------------------------------------------------

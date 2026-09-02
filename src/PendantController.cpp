@@ -9,15 +9,12 @@
 
 void PendantController::begin(
     Display& display,
-    MachineState& machineState,
     CNCjsInterface& cnc
 )
 {
     this->display =
         &display;
 
-    this->machineState =
-        &machineState;
 
     this->cnc =
         &cnc;
@@ -36,7 +33,7 @@ void PendantController::begin(
 
 
     lastMachineStatus =
-        machineState.machineStatus;
+        cnc.machineStateSnapshot().machineStatus;
 
 
     updateDisplay();
@@ -306,9 +303,12 @@ void PendantController::update()
         We kijken alleen of een externe status veranderd is.
     */
 
+    MachineState machineState =
+        cnc->machineStateSnapshot();
+
     JogCommand jog =
         jogPlanner.update(
-            *machineState
+            machineState
         );
 
     if(jog.type != JOG_NONE)
@@ -344,68 +344,65 @@ void PendantController::update()
 
 void PendantController::checkStatusChanges()
 {
-    if(cnc != nullptr)
+    MachineState machineState =
+        cnc->machineStateSnapshot();
+
+
+    CNCjsInterface::CNCjsStatus currentCncStatus =
+        cnc->status();
+
+
+    if(
+        currentCncStatus !=
+        lastCncStatus
+    )
     {
-        CNCjsInterface::CNCjsStatus currentCncStatus =
-            cnc->status();
+        lastCncStatus =
+            currentCncStatus;
 
 
-        if(
-            currentCncStatus !=
-            lastCncStatus
-        )
-        {
-            lastCncStatus =
-                currentCncStatus;
+        displayDirty =
+            true;
 
 
-            displayDirty =
-                true;
+        Serial.print(
+            "[Pendant] CNCjs status changed: "
+        );
 
 
-            Serial.print(
-                "[Pendant] CNCjs status changed: "
-            );
-
-
-            Serial.println(
-                cncStatusName()
-            );
-        }
+        Serial.println(
+            cncStatusName()
+        );
     }
 
 
-    if(machineState != nullptr)
+    MachineStatus currentMachineStatus =
+        machineState.machineStatus;
+
+
+    if(
+        currentMachineStatus !=
+        lastMachineStatus
+    )
     {
-        MachineStatus currentMachineStatus =
-            machineState->machineStatus;
+        lastMachineStatus =
+            currentMachineStatus;
 
 
-        if(
-            currentMachineStatus !=
-            lastMachineStatus
-        )
-        {
-            lastMachineStatus =
-                currentMachineStatus;
+        displayDirty =
+            true;
 
 
-            displayDirty =
-                true;
+        Serial.print(
+            "[Pendant] Machine status changed: "
+        );
 
 
-            Serial.print(
-                "[Pendant] Machine status changed: "
-            );
-
-
-            Serial.println(
-                machineStatusName()
-            );
-        }
+        Serial.println(
+            machineStatusName()
+        );
     }
 }
-
 
 
 // ============================================================
@@ -414,6 +411,9 @@ void PendantController::checkStatusChanges()
 
 void PendantController::updateDisplay()
 {
+    MachineState machineState =
+    cnc->machineStateSnapshot();
+
     if(display == nullptr)
     {
         return;
@@ -433,32 +433,30 @@ void PendantController::updateDisplay()
         --------------------------------------------------------
     */
 
-    if(machineState != nullptr)
+
+    if(
+        machineState.machineStatus ==
+        MACHINE_ALARM
+    )
     {
-        if(
-            machineState->machineStatus ==
-            MACHINE_ALARM
-        )
-        {
-            updateMachineStatus();
+        updateMachineStatus();
 
-            display->update();
+        display->update();
 
-            return;
-        }
+        return;
+    }
 
 
-        if(
-            machineState->machineStatus ==
-            MACHINE_HOLD
-        )
-        {
-            updateMachineStatus();
+    if(
+        machineState.machineStatus ==
+        MACHINE_HOLD
+    )
+    {
+        updateMachineStatus();
 
-            display->update();
+        display->update();
 
-            return;
-        }
+        return;
     }
 
 
@@ -673,13 +671,8 @@ void PendantController::updateCncStatus()
 
 void PendantController::updateMachineStatus()
 {
-    if(
-        machineState == nullptr
-    )
-    {
-        return;
-    }
-
+    MachineState machineState =
+        cnc->machineStateSnapshot();
 
     display->setStatus(
         machineStatusName()
@@ -693,8 +686,8 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "X%.2f Y%.2f",
-        machineState->workPosition.x,
-        machineState->workPosition.y
+        machineState.workPosition.x,
+        machineState.workPosition.y
     );
 
 
@@ -707,7 +700,7 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "Z%.2f",
-        machineState->workPosition.z
+        machineState.workPosition.z
     );
 
 
@@ -849,42 +842,32 @@ PendantController::axisName() const
 // MACHINE STATUS NAME
 // ============================================================
 
-const char*
-PendantController::machineStatusName() const
+const char* PendantController::machineStatusName() const
 {
-    if(machineState == nullptr)
+    MachineState machineState =
+        cnc->machineStateSnapshot();
+
+    switch(machineState.machineStatus)
     {
-        return "OFFLINE";
-    }
-
-
-    switch(machineState->machineStatus)
-    {
-
-        case MACHINE_ALARM:
-            return "ALARM";
-
-
-        case MACHINE_HOLD:
-            return "HOLD";
-
-
-        case MACHINE_RUN:
-            return "RUN";
-
+        case MACHINE_DISCONNECTED:
+            return "Disconnected";
 
         case MACHINE_IDLE:
-            return "IDLE";
+            return "Idle";
 
+        case MACHINE_RUN:
+            return "Run";
 
-        case MACHINE_DISCONNECTED:
-            return "OFFLINE";
+        case MACHINE_HOLD:
+            return "Hold";
+
+        case MACHINE_ALARM:
+            return "Alarm";
+
+        default:
+            return "Unknown";
     }
-
-
-    return "";
 }
-
 
 
 // ============================================================

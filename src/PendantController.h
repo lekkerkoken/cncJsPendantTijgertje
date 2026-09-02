@@ -18,7 +18,6 @@ public:
 
     void begin(
         Display& display,
-        MachineState& machineState,
         CNCjsInterface& cnc
     );
 
@@ -56,9 +55,6 @@ public:
 private:
 
     Display* display =
-        nullptr;
-
-    MachineState* machineState =
         nullptr;
 
     CNCjsInterface* cnc =
