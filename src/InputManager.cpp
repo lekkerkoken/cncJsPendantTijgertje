@@ -80,26 +80,6 @@ void InputManager::begin(
 
 
 // ============================================================
-// UPDATE
-// ============================================================
-
-void InputManager::update()
-{
-    /*
-        InputManager wordt nu zelfstandig verwerkt door
-        de FreeRTOS task.
-
-        Deze functie blijft voorlopig bestaan als
-        compatibility interface.
-
-        Hierdoor hoeft de bestaande main loop niet
-        meteen aangepast te worden.
-    */
-}
-
-
-
-// ============================================================
 // TASK ENTRY
 // ============================================================
 

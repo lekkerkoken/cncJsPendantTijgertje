@@ -8,16 +8,34 @@
 // ============================================================
 
 void PendantController::begin(
-    Display& display,
-    CNCjsInterface& cnc
+    ButtonMatrix& matrix,
+    Encoder& encoder
 )
 {
-    this->display =
-        &display;
+    /*
+        PendantController bezit zowel CNCjsInterface,
+        Display als InputManager.
+
+        ButtonMatrix en Encoder blijven voorlopig
+        externe hardware-objecten.
+    */
+
+    cnc.begin();
+
+    display.begin();
 
 
-    this->cnc =
-        &cnc;
+    /*
+        InputManager start zijn eigen FreeRTOS task.
+
+        De hardware moet daarom al geïnitialiseerd zijn
+        voordat deze aan InputManager wordt doorgegeven.
+    */
+
+    input.begin(
+        matrix,
+        encoder
+    );
 
 
     /*
@@ -34,6 +52,16 @@ void PendantController::begin(
 
     lastMachineStatus =
         cnc.machineStateSnapshot().machineStatus;
+
+
+    /*
+        De initiële layer is JOG.
+
+        Omdat setLayer() bij een reeds actieve layer niets doet,
+        moet JogPlanner hier expliciet worden geïnitialiseerd.
+    */
+
+    enterJogLayer();
 
 
     updateDisplay();
@@ -174,12 +202,21 @@ void PendantController::handle(
             toggleLayer();
 
             break;
-        
+
+
+        // ----------------------------------------------------
+        // ENCODER PULSE
+        // ----------------------------------------------------
+
         case EVENT_ENCODER_PULSE:
 
-            handleJogEncoder(event);
+            handleJogEncoder(
+                event
+            );
 
             break;
+
+
         // ----------------------------------------------------
         // DEFAULT
         // ----------------------------------------------------
@@ -197,6 +234,11 @@ void PendantController::handle(
     }
 }
 
+
+
+// ============================================================
+// LAYER
+// ============================================================
 
 void PendantController::toggleLayer()
 {
@@ -218,38 +260,57 @@ void PendantController::setLayer(
     if(pendantState.layer == layer)
         return;
 
-    pendantState.layer = layer;
+
+    pendantState.layer =
+        layer;
+
 
     switch(layer)
     {
         case LAYER_JOG:
+
             enterJogLayer();
+
             break;
+
 
         case LAYER_INFO:
+
             break;
 
+
         case LAYER_CONTROL:
+
             break;
     }
+
 
     displayDirty =
         true;
 }
 
+
 void PendantController::enterJogLayer()
 {
     MachineSettings machineSettings =
-        cnc->machineSettingsSnapshot();
+        cnc.machineSettingsSnapshot();
+
 
     jogPlanner.begin(
         machineSettings
     );
 
+
     jogPlanner.setJogStepDistance(
         jogStepDistance()
     );
+
+
+    jogPlanner.setAxis(
+        axis()
+    );
 }
+
 
 
 // ============================================================
@@ -274,6 +335,12 @@ float PendantController::jogStepDistance() const
     );
 }
 
+
+
+// ============================================================
+// JOG ENCODER
+// ============================================================
+
 void PendantController::handleJogEncoder(
     const Event& event
 )
@@ -281,6 +348,7 @@ void PendantController::handleJogEncoder(
     jogPlanner.setJogStepDistance(
         jogStepDistance()
     );
+
 
     jogPlanner.encoder(
         event,
@@ -297,27 +365,71 @@ void PendantController::handleJogEncoder(
 void PendantController::update()
 {
     /*
-        Dit gebeurt iedere loop, maar veroorzaakt zelf
-        géén display-update.
+        CNCjs is onderdeel van de PendantController.
 
-        We kijken alleen of een externe status veranderd is.
+        Daarom wordt de interface hier geüpdatet en niet meer
+        rechtstreeks vanuit main.cpp.
+    */
+
+    cnc.update();
+
+
+    /*
+        --------------------------------------------------------
+        INPUT
+        --------------------------------------------------------
+
+        InputManager wordt zelfstandig verwerkt door zijn
+        FreeRTOS task.
+
+        De controller consumeert hier alle beschikbare
+        events uit de event queue.
+        --------------------------------------------------------
+    */
+
+    while(
+        input.available()
+    )
+    {
+        Event event =
+            input.read();
+
+
+        handle(
+            event
+        );
+    }
+
+
+    /*
+        --------------------------------------------------------
+        MACHINE STATE
+        --------------------------------------------------------
+
+        Vanaf hier zijn de snapshots actueel voor deze loop.
+        --------------------------------------------------------
     */
 
     MachineState machineState =
-        cnc->machineStateSnapshot();
+        cnc.machineStateSnapshot();
+
 
     JogCommand jog =
         jogPlanner.update(
             machineState
         );
 
-    if(jog.type != JOG_NONE)
+
+    if(
+        jog.type !=
+        JOG_NONE
+    )
     {
-        cnc->execute(
+        cnc.execute(
             jog
         );
     }
-    
+
 
     checkStatusChanges();
 
@@ -345,11 +457,11 @@ void PendantController::update()
 void PendantController::checkStatusChanges()
 {
     MachineState machineState =
-        cnc->machineStateSnapshot();
+        cnc.machineStateSnapshot();
 
 
     CNCjsInterface::CNCjsStatus currentCncStatus =
-        cnc->status();
+        cnc.status();
 
 
     if(
@@ -405,6 +517,7 @@ void PendantController::checkStatusChanges()
 }
 
 
+
 // ============================================================
 // DISPLAY
 // ============================================================
@@ -412,15 +525,10 @@ void PendantController::checkStatusChanges()
 void PendantController::updateDisplay()
 {
     MachineState machineState =
-    cnc->machineStateSnapshot();
-
-    if(display == nullptr)
-    {
-        return;
-    }
+        cnc.machineStateSnapshot();
 
 
-    display->setTitle(
+    display.setTitle(
         "Pendant"
     );
 
@@ -433,7 +541,6 @@ void PendantController::updateDisplay()
         --------------------------------------------------------
     */
 
-
     if(
         machineState.machineStatus ==
         MACHINE_ALARM
@@ -441,7 +548,7 @@ void PendantController::updateDisplay()
     {
         updateMachineStatus();
 
-        display->update();
+        display.update();
 
         return;
     }
@@ -454,7 +561,7 @@ void PendantController::updateDisplay()
     {
         updateMachineStatus();
 
-        display->update();
+        display.update();
 
         return;
     }
@@ -469,39 +576,36 @@ void PendantController::updateDisplay()
         --------------------------------------------------------
     */
 
-    if(cnc != nullptr)
+    CNCjsInterface::CNCjsStatus status =
+        cnc.status();
+
+
+    switch(status)
     {
-        CNCjsInterface::CNCjsStatus status =
-            cnc->status();
+        case CNCjsInterface::CNCjsStatus::Offline:
+
+        case CNCjsInterface::CNCjsStatus::WiFiConnecting:
+
+        case CNCjsInterface::CNCjsStatus::Authenticating:
+
+        case CNCjsInterface::CNCjsStatus::Connecting:
+
+        case CNCjsInterface::CNCjsStatus::WaitingForLists:
+
+        case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
+
+        case CNCjsInterface::CNCjsStatus::OpeningController:
+
+            updateCncStatus();
+
+            display.update();
+
+            return;
 
 
-        switch(status)
-        {
-            case CNCjsInterface::CNCjsStatus::Offline:
+        default:
 
-            case CNCjsInterface::CNCjsStatus::WiFiConnecting:
-
-            case CNCjsInterface::CNCjsStatus::Authenticating:
-
-            case CNCjsInterface::CNCjsStatus::Connecting:
-
-            case CNCjsInterface::CNCjsStatus::WaitingForLists:
-
-            case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
-
-            case CNCjsInterface::CNCjsStatus::OpeningController:
-
-                updateCncStatus();
-
-                display->update();
-
-                return;
-
-
-            default:
-
-                break;
-        }
+            break;
     }
 
 
@@ -513,7 +617,7 @@ void PendantController::updateDisplay()
 
     updateNormalDisplay();
 
-    display->update();
+    display.update();
 }
 
 
@@ -524,34 +628,24 @@ void PendantController::updateDisplay()
 
 void PendantController::updateCncStatus()
 {
-    if(
-        display == nullptr ||
-        cnc == nullptr
-    )
-    {
-        return;
-    }
-
-
     CNCjsInterface::CNCjsStatus status =
-        cnc->status();
+        cnc.status();
 
 
-    display->setStatus(
+    display.setStatus(
         cncStatusName()
     );
 
 
     switch(status)
     {
-
         case CNCjsInterface::CNCjsStatus::Offline:
 
-            display->setLine1(
+            display.setLine1(
                 "Offline"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Reconnect"
             );
 
@@ -560,11 +654,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::WiFiConnecting:
 
-            display->setLine1(
+            display.setLine1(
                 "WiFi"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Connecting"
             );
 
@@ -573,11 +667,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::Authenticating:
 
-            display->setLine1(
+            display.setLine1(
                 "CNCjs"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Authenticating"
             );
 
@@ -586,11 +680,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::Connecting:
 
-            display->setLine1(
+            display.setLine1(
                 "CNCjs"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Connecting"
             );
 
@@ -599,11 +693,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::WaitingForLists:
 
-            display->setLine1(
+            display.setLine1(
                 "CNCjs"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Waiting..."
             );
 
@@ -612,11 +706,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
 
-            display->setLine1(
+            display.setLine1(
                 "Controller"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Select"
             );
 
@@ -625,11 +719,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::OpeningController:
 
-            display->setLine1(
+            display.setLine1(
                 "Opening"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Controller"
             );
 
@@ -638,11 +732,11 @@ void PendantController::updateCncStatus()
 
         case CNCjsInterface::CNCjsStatus::Error:
 
-            display->setLine1(
+            display.setLine1(
                 "CNCjs"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Error"
             );
 
@@ -651,11 +745,11 @@ void PendantController::updateCncStatus()
 
         default:
 
-            display->setLine1(
+            display.setLine1(
                 "CNCjs"
             );
 
-            display->setLine2(
+            display.setLine2(
                 ""
             );
 
@@ -672,9 +766,10 @@ void PendantController::updateCncStatus()
 void PendantController::updateMachineStatus()
 {
     MachineState machineState =
-        cnc->machineStateSnapshot();
+        cnc.machineStateSnapshot();
 
-    display->setStatus(
+
+    display.setStatus(
         machineStatusName()
     );
 
@@ -691,7 +786,7 @@ void PendantController::updateMachineStatus()
     );
 
 
-    display->setLine1(
+    display.setLine1(
         buffer
     );
 
@@ -704,7 +799,7 @@ void PendantController::updateMachineStatus()
     );
 
 
-    display->setLine2(
+    display.setLine2(
         buffer
     );
 }
@@ -717,17 +812,16 @@ void PendantController::updateMachineStatus()
 
 void PendantController::updateNormalDisplay()
 {
-    display->setStatus(
+    display.setStatus(
         layerName()
     );
 
 
     switch(pendantState.layer)
     {
-
         case LAYER_JOG:
 
-            display->setLine1(
+            display.setLine1(
                 axisName()
             );
 
@@ -744,7 +838,7 @@ void PendantController::updateNormalDisplay()
                 );
 
 
-                display->setLine2(
+                display.setLine2(
                     buffer
                 );
             }
@@ -754,11 +848,11 @@ void PendantController::updateNormalDisplay()
 
         case LAYER_INFO:
 
-            display->setLine1(
+            display.setLine1(
                 "WCS G54"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Offsets"
             );
 
@@ -767,11 +861,11 @@ void PendantController::updateNormalDisplay()
 
         case LAYER_CONTROL:
 
-            display->setLine1(
+            display.setLine1(
                 "Machine"
             );
 
-            display->setLine2(
+            display.setLine2(
                 "Ready"
             );
 
@@ -790,14 +884,11 @@ PendantController::layerName() const
 {
     switch(pendantState.layer)
     {
-
         case LAYER_JOG:
             return "JOG";
 
-
         case LAYER_INFO:
             return "INFO";
-
 
         case LAYER_CONTROL:
             return "CONTROL";
@@ -818,18 +909,14 @@ PendantController::axisName() const
 {
     switch(pendantState.axis)
     {
-
         case AXIS_X:
             return "Axis X";
-
 
         case AXIS_Y:
             return "Axis Y";
 
-
         case AXIS_Z:
             return "Axis Z";
-
 
         default:
             return "";
@@ -842,10 +929,12 @@ PendantController::axisName() const
 // MACHINE STATUS NAME
 // ============================================================
 
-const char* PendantController::machineStatusName() const
+const char*
+PendantController::machineStatusName() const
 {
     MachineState machineState =
-        cnc->machineStateSnapshot();
+        cnc.machineStateSnapshot();
+
 
     switch(machineState.machineStatus)
     {
@@ -870,6 +959,7 @@ const char* PendantController::machineStatusName() const
 }
 
 
+
 // ============================================================
 // CNC STATUS NAME
 // ============================================================
@@ -877,46 +967,31 @@ const char* PendantController::machineStatusName() const
 const char*
 PendantController::cncStatusName() const
 {
-    if(cnc == nullptr)
+    switch(cnc.status())
     {
-        return "CNCjs";
-    }
-
-
-    switch(cnc->status())
-    {
-
         case CNCjsInterface::CNCjsStatus::Offline:
             return "OFFLINE";
-
 
         case CNCjsInterface::CNCjsStatus::WiFiConnecting:
             return "CONNECTING";
 
-
         case CNCjsInterface::CNCjsStatus::Authenticating:
             return "AUTHENTICATING";
-
 
         case CNCjsInterface::CNCjsStatus::Connecting:
             return "CONNECTING";
 
-
         case CNCjsInterface::CNCjsStatus::WaitingForLists:
             return "WAITING";
-
 
         case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
             return "SELECT";
 
-
         case CNCjsInterface::CNCjsStatus::OpeningController:
             return "CONNECTING";
 
-
         case CNCjsInterface::CNCjsStatus::Ready:
             return "READY";
-
 
         case CNCjsInterface::CNCjsStatus::Error:
             return "ERROR";
