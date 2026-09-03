@@ -902,7 +902,7 @@ void PendantController::updateNormalDisplay()
 
 
                 display.iconRightTextView(
-                    nullptr,
+                    INFO_ICON,
                     wcsBuffer,
                     "Offsets"
                 );
