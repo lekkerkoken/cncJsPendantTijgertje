@@ -3,6 +3,9 @@
 
 #include "Position.h"
 
+#include <Arduino.h>
+
+
 enum MachineStatus
 {
     MACHINE_DISCONNECTED,
@@ -15,7 +18,8 @@ enum MachineStatus
 
 struct MachineState
 {
-    MachineStatus machineStatus = MACHINE_DISCONNECTED;
+    MachineStatus machineStatus =
+        MACHINE_DISCONNECTED;
 
 
     Position machinePosition;
@@ -24,10 +28,16 @@ struct MachineState
     Position workPosition;
 
 
-    float feedrate = 0;
+    float feedrate =
+        0;
 
 
-    int spindleSpeed = 0;
+    int spindleSpeed =
+        0;
+
+
+    String activeWcs =
+        "";
 };
 
 

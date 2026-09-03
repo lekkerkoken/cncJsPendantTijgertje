@@ -89,6 +89,8 @@ private:
 
     const char* cncStatusName() const;
 
+    String lastActiveWcs = "";
+
     const uint8_t* iconForAxis(
         Axis axis
     ) const;

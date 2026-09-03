@@ -36,6 +36,7 @@ MachineCommand MachineMapper::map(
     }
 }
 
+
 MachineSettings MachineMapper::map(
     const ControllerSettingsSnapshot& snapshot
 ) const
@@ -75,23 +76,28 @@ MachineState MachineMapper::map(
 
     MachineState state;
 
+
     if(snapshot.state.isNull())
     {
         return state;
     }
+
 
     if(snapshot.controllerType == "Grbl")
     {
         JsonObjectConst status =
             snapshot.state["status"].as<JsonObjectConst>();
 
+
         if(status.isNull())
         {
             return state;
         }
 
+
         String activeState =
             status["activeState"].as<String>();
+
 
         if(activeState == "Idle")
         {
@@ -118,13 +124,41 @@ MachineState MachineMapper::map(
             return state;
         }
 
+
+        /*
+            ----------------------------------------------------
+            ACTIVE WCS
+
+            CNCjs levert de actieve work coordinate system
+            via:
+
+                parserstate.modal.wcs
+
+            Bijvoorbeeld:
+                "G54"
+                "G55"
+
+            Als deze informatie ontbreekt, blijft activeWcs
+            leeg. Dit maakt de machine state niet ongeldig.
+            ----------------------------------------------------
+        */
+
+        state.activeWcs =
+            snapshot.state["parserstate"]["modal"]["wcs"]
+                .as<String>();
+
+
         // overige mapping...
+
 
         valid = true;
     }
 
+
     return state;
 }
+
+
 // ============================================================
 // MAP JOG MOVE
 // ============================================================

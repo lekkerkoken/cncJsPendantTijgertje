@@ -30,8 +30,11 @@ void PendantController::begin(
     lastCncStatus =
         cnc.status();
 
+    MachineState machineState =
+        cnc.machineStateSnapshot();
+
     lastMachineStatus =
-        cnc.machineStateSnapshot().machineStatus;
+        machineState.machineStatus;
 
     enterJogLayer();
 
@@ -484,6 +487,52 @@ void PendantController::checkStatusChanges()
             machineStatusName()
         );
     }
+
+
+    /*
+        --------------------------------------------------------
+        ACTIVE WCS
+        --------------------------------------------------------
+
+        Een wijziging van G54 -> G55 (of andersom) maakt
+        het display dirty, zodat de INFO-laag onmiddellijk
+        wordt bijgewerkt.
+        --------------------------------------------------------
+    */
+
+    if(
+        machineState.activeWcs !=
+        lastActiveWcs
+    )
+    {
+        lastActiveWcs =
+            machineState.activeWcs;
+
+
+        displayDirty =
+            true;
+
+
+        Serial.print(
+            "[Pendant] Active WCS changed: "
+        );
+
+
+        if(
+            lastActiveWcs.length() > 0
+        )
+        {
+            Serial.println(
+                lastActiveWcs
+            );
+        }
+        else
+        {
+            Serial.println(
+                "(none)"
+            );
+        }
+    }
 }
 
 
@@ -786,30 +835,35 @@ void PendantController::updateNormalDisplay()
         layerName()
     );
 
+
     display.setStatus("");
 
 
     switch(pendantState.layer)
     {
         case LAYER_JOG:
-            display.clear();     
-                char buffer[20];
+
+            display.clear();
+
+            char buffer[20];
 
 
-                snprintf(
-                    buffer,
-                    sizeof(buffer),
-                    "Step %.2f",
-                    jogStepDistance()
-                );
+            snprintf(
+                buffer,
+                sizeof(buffer),
+                "Step %.2f",
+                jogStepDistance()
+            );
 
-                display.iconLeftTextView(
-                    iconForAxis(
-                        pendantState.axis
-                    ),
-                    axisName(),
-                    buffer
-                );
+
+            display.iconLeftTextView(
+                iconForAxis(
+                    pendantState.axis
+                ),
+                axisName(),
+                buffer
+            );
+
             break;
 
 
@@ -817,24 +871,60 @@ void PendantController::updateNormalDisplay()
 
             display.clear();
 
-            display.iconRightTextView(
-                nullptr,
-                "WCS G54",
-                "Offsets"
-            );
+
+            {
+                MachineState machineState =
+                    cnc.machineStateSnapshot();
+
+
+                char wcsBuffer[20];
+
+
+                if(
+                    machineState.activeWcs.length() > 0
+                )
+                {
+                    snprintf(
+                        wcsBuffer,
+                        sizeof(wcsBuffer),
+                        "WCS %s",
+                        machineState.activeWcs.c_str()
+                    );
+                }
+                else
+                {
+                    snprintf(
+                        wcsBuffer,
+                        sizeof(wcsBuffer),
+                        "WCS"
+                    );
+                }
+
+
+                display.iconRightTextView(
+                    nullptr,
+                    wcsBuffer,
+                    "Offsets"
+                );
+            }
 
             break;
 
 
         case LAYER_CONTROL:
-                    
+
             display.clear();
 
-            display.setIcon(nullptr, ICON_RIGHT);
+            display.setIcon(
+                nullptr,
+                ICON_RIGHT
+            );
+
 
             display.setLine1(
                 "Machine"
             );
+
 
             display.setLine2(
                 "Ready"
@@ -842,8 +932,9 @@ void PendantController::updateNormalDisplay()
 
             break;
     }
-                    display.update();
 
+
+    display.update();
 }
 
 
@@ -893,7 +984,7 @@ PendantController::axisName() const
         case AXIS_Z:
             return "Axis Z";
 
-        default:
+            default:
             return "";
     }
 }
@@ -933,7 +1024,9 @@ PendantController::machineStatusName() const
     }
 }
 
-const uint8_t* PendantController::iconForAxis(
+
+const uint8_t*
+PendantController::iconForAxis(
     Axis axis
 ) const
 {
@@ -961,6 +1054,8 @@ const uint8_t* PendantController::iconForAxis(
             return nullptr;
     }
 }
+
+
 
 // ============================================================
 // CNC STATUS NAME
