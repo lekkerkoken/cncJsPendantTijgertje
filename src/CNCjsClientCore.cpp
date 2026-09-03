@@ -1246,7 +1246,7 @@ bool CNCjsClientCore::heartbeatPing()
         output
     );
 
-
+#ifdef SOCKETIO_DEBUG
     Serial.print(
         "[CNCjs] HEARTBEAT PING: "
     );
@@ -1254,7 +1254,7 @@ bool CNCjsClientCore::heartbeatPing()
     Serial.println(
         output
     );
-
+#endif
 
     bool sent =
         socketIO.sendEVENT(
@@ -1401,6 +1401,7 @@ void CNCjsClientCore::handleSocketEvent(
 
         case sIOtype_EVENT:
         {
+#ifdef SOCKETIO_DEBUG
             Serial.print(
                 "[IOc] EVENT: "
             );
@@ -1412,7 +1413,7 @@ void CNCjsClientCore::handleSocketEvent(
 
             Serial.println();
 
-
+#endif
             JsonDocument doc;
 
 

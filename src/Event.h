@@ -23,7 +23,8 @@ enum EventType
     // Encoder
 
     EVENT_ENCODER_PULSE,
-    EVENT_ENCODER_PRESS
+    EVENT_ENCODER_PRESS,
+    EVENT_ENCODER_LONG_PRESS
 };
 
 

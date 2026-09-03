@@ -21,7 +21,8 @@ public:
     ) const;
 
     MachineState map(
-        const ControllerStateSnapshot& snapshot
+        const ControllerStateSnapshot& snapshot,
+        bool& valid
     ) const;
 
 private:

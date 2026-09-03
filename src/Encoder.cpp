@@ -1,7 +1,5 @@
 #include "Encoder.h"
 
-#include <Arduino.h>
-
 
 // ============================================================
 // BEGIN
@@ -24,24 +22,32 @@ void Encoder::begin(
 
 
     pinMode(
-        this->pinA,
+        pinA,
         INPUT_PULLUP
     );
 
     pinMode(
-        this->pinB,
+        pinB,
         INPUT_PULLUP
     );
 
+    /*
+        External 10k pull-up to 3.3V.
+
+        Button:
+        HIGH = released
+        LOW  = pressed
+    */
+
     pinMode(
-        this->buttonPin,
-        INPUT
+        buttonPin,
+        INPUT_PULLDOWN
     );
 
 
-    // --------------------------------------------------------
-    // Event queue
-    // --------------------------------------------------------
+    // ========================================================
+    // EVENT QUEUE
+    // ========================================================
 
     eventQueue =
         xQueueCreate(
@@ -50,92 +56,94 @@ void Encoder::begin(
         );
 
 
-    if(eventQueue == nullptr)
-    {
-        Serial.println(
-            "[Encoder] ERROR: Could not create event queue"
-        );
-
-        return;
-    }
-
-
-    // --------------------------------------------------------
-    // Encoder initial state
-    // --------------------------------------------------------
+    // ========================================================
+    // ROTARY ENCODER
+    // ========================================================
 
     lastEncoderState =
-        (digitalRead(this->pinA) << 1) |
-         digitalRead(this->pinB);
+        (
+            (digitalRead(pinA) << 1) |
+            digitalRead(pinB)
+        );
 
 
-    portENTER_CRITICAL(&encoderMux);
+    portENTER_CRITICAL(
+        &encoderMux
+    );
 
     encoderAccumulator =
         0;
 
-    portEXIT_CRITICAL(&encoderMux);
+    buttonChanged =
+        false;
+
+    portEXIT_CRITICAL(
+        &encoderMux
+    );
 
 
-    // --------------------------------------------------------
-    // Button initial state
-    // --------------------------------------------------------
+    // ========================================================
+    // BUTTON
+    // ========================================================
 
-    stableButtonState =
-        digitalRead(this->buttonPin);
+    if(
+        digitalRead(buttonPin) ==
+        LOW
+    )
+    {
+        buttonState =
+            BUTTON_DEBOUNCING_PRESS;
+    }
+    else
+    {
+        buttonState =
+            BUTTON_RELEASED;
+    }
 
-    candidateButtonState =
-        stableButtonState;
 
-    candidateButtonSince =
+    buttonStateSince =
         millis();
 
 
-    // --------------------------------------------------------
-    // Encoder interrupts
-    // --------------------------------------------------------
+    // ========================================================
+    // INTERRUPTS
+    // ========================================================
 
     attachInterruptArg(
-        this->pinA,
+        pinA,
         Encoder::encoderISR,
         this,
         CHANGE
     );
 
     attachInterruptArg(
-        this->pinB,
+        pinB,
         Encoder::encoderISR,
         this,
         CHANGE
     );
 
-
-    // --------------------------------------------------------
-    // Encoder task
-    // --------------------------------------------------------
-
-    BaseType_t result =
-        xTaskCreate(
-            Encoder::taskEntry,
-            "Encoder",
-            TASK_STACK_SIZE,
-            this,
-            TASK_PRIORITY,
-            &taskHandle
-        );
+    attachInterruptArg(
+        buttonPin,
+        Encoder::buttonISR,
+        this,
+        CHANGE
+    );
 
 
-    if(result != pdPASS)
-    {
-        taskHandle =
-            nullptr;
+    // ========================================================
+    // FREERTOS TASK
+    // ========================================================
 
-        Serial.println(
-            "[Encoder] ERROR: Could not create task"
-        );
-    }
+    xTaskCreate(
+        Encoder::taskEntry,
+        "Encoder",
+        TASK_STACK_SIZE,
+        this,
+        TASK_PRIORITY,
+        &taskHandle
+    );
 }
-
 
 
 // ============================================================
@@ -145,14 +153,12 @@ void Encoder::begin(
 void Encoder::update()
 {
     /*
-        Encoder wordt nu zelfstandig verwerkt door
-        de FreeRTOS task en GPIO interrupts.
+        Compatibility function.
 
-        Deze functie blijft voorlopig bestaan als
-        compatibility interface.
+        Encoder processing is handled by
+        the FreeRTOS task.
     */
 }
-
 
 
 // ============================================================
@@ -167,34 +173,67 @@ void ARDUINO_ISR_ATTR Encoder::encoderISR(
         static_cast<Encoder*>(parameter);
 
 
-    if(encoder == nullptr)
+    if(
+        encoder ==
+        nullptr
+    )
+    {
         return;
+    }
 
 
     encoder->handleEncoderTransition();
 }
 
 
+// ============================================================
+// BUTTON ISR
+// ============================================================
+
+void ARDUINO_ISR_ATTR Encoder::buttonISR(
+    void* parameter
+)
+{
+    Encoder* encoder =
+        static_cast<Encoder*>(parameter);
+
+
+    if(
+        encoder ==
+        nullptr
+    )
+    {
+        return;
+    }
+
+
+    /*
+        ISR doet uitsluitend signaleren
+        dat de GPIO veranderd is.
+
+        Debouncing en timing gebeuren
+        buiten de ISR.
+    */
+
+    portENTER_CRITICAL_ISR(
+        &encoder->encoderMux
+    );
+
+    encoder->buttonChanged =
+        true;
+
+    portEXIT_CRITICAL_ISR(
+        &encoder->encoderMux
+    );
+}
+
 
 // ============================================================
-// HANDLE ENCODER TRANSITION
+// ENCODER TRANSITION
 // ============================================================
 
 void Encoder::handleEncoderTransition()
 {
-    /*
-        Quadrature transition table.
-
-        Index:
-            previous state << 2 | current state
-
-        Geldige overgang:
-            0001, 0111, 1110, 1000 = +1
-
-        Tegengestelde richting:
-            0010, 1011, 1101, 0100 = -1
-    */
-
     static const int8_t transitionTable[16] =
     {
          0, -1,  1,  0,
@@ -205,39 +244,44 @@ void Encoder::handleEncoderTransition()
 
 
     uint8_t currentState =
-        (digitalRead(pinA) << 1) |
-         digitalRead(pinB);
+        (
+            (digitalRead(pinA) << 1) |
+            digitalRead(pinB)
+        );
 
 
-    if(currentState == lastEncoderState)
-        return;
-
-
-    uint8_t transition =
-        (lastEncoderState << 2) |
-        currentState;
+    uint8_t index =
+        (
+            (lastEncoderState << 2) |
+            currentState
+        );
 
 
     int8_t delta =
-        transitionTable[transition];
+        transitionTable[index];
 
 
     lastEncoderState =
         currentState;
 
 
-    if(delta == 0)
-        return;
+    if(
+        delta !=
+        0
+    )
+    {
+        portENTER_CRITICAL_ISR(
+            &encoderMux
+        );
 
+        encoderAccumulator +=
+            delta;
 
-    portENTER_CRITICAL_ISR(&encoderMux);
-
-    encoderAccumulator +=
-        delta;
-
-    portEXIT_CRITICAL_ISR(&encoderMux);
+        portEXIT_CRITICAL_ISR(
+            &encoderMux
+        );
+    }
 }
-
 
 
 // ============================================================
@@ -252,15 +296,19 @@ void Encoder::taskEntry(
         static_cast<Encoder*>(parameter);
 
 
-    if(encoder != nullptr)
+    if(
+        encoder !=
+        nullptr
+    )
     {
         encoder->task();
     }
 
 
-    vTaskDelete(nullptr);
+    vTaskDelete(
+        nullptr
+    );
 }
-
 
 
 // ============================================================
@@ -272,55 +320,49 @@ void Encoder::task()
     for(;;)
     {
         // ====================================================
-        // ROTARY ENCODER
+        // ENCODER
         // ====================================================
 
         int delta =
             0;
 
 
-        portENTER_CRITICAL(&encoderMux);
+        portENTER_CRITICAL(
+            &encoderMux
+        );
 
-        /*
-            Eén volledige quadrature cyclus bestaat uit
-            vier geldige transities.
-
-            De ISR verzamelt de transities.
-            De task vertaalt volledige cycli naar
-            fysieke encoderpulsen.
-        */
-
-        while(encoderAccumulator >= 2)
+        if(
+            encoderAccumulator >=
+            2
+        )
         {
-            delta++;
+            delta =
+                1;
 
-            encoderAccumulator -=
-                2;
+            encoderAccumulator =
+                0;
+        }
+        else if(
+            encoderAccumulator <=
+            -2
+        )
+        {
+            delta =
+                -1;
+
+            encoderAccumulator =
+                0;
         }
 
-
-        while(encoderAccumulator <= -2)
-        {
-            delta--;
-
-            encoderAccumulator +=
-                2;
-        }
+        portEXIT_CRITICAL(
+            &encoderMux
+        );
 
 
-        portEXIT_CRITICAL(&encoderMux);
-
-
-        /*
-            Meerdere fysieke stappen die sinds de vorige
-            task-run zijn gemaakt worden hier samengevoegd.
-
-            Dit is nog steeds een EncoderEvent-stream:
-            de echte applicatie-coalescing gebeurt later
-            in InputManager.
-        */
-
-        if(delta != 0)
+        if(
+            delta !=
+            0
+        )
         {
             EncoderEvent event;
 
@@ -336,7 +378,43 @@ void Encoder::task()
                 &event,
                 0
             );
+
+
+#ifdef ENCODER_DEBUG
+
+            Serial.print(
+                "[Encoder] Pulse: "
+            );
+
+            Serial.println(
+                delta
+            );
+
+#endif
         }
+
+
+        // ====================================================
+        // BUTTON CHANGE FLAG
+        // ====================================================
+
+        bool changed =
+            false;
+
+
+        portENTER_CRITICAL(
+            &encoderMux
+        );
+
+        changed =
+            buttonChanged;
+
+        buttonChanged =
+            false;
+
+        portEXIT_CRITICAL(
+            &encoderMux
+        );
 
 
         // ====================================================
@@ -346,91 +424,364 @@ void Encoder::task()
         updateButton();
 
 
+        // ====================================================
+        // TASK DELAY
+        // ====================================================
+
         vTaskDelay(
-            pdMS_TO_TICKS(TASK_DELAY_MS)
+            pdMS_TO_TICKS(
+                TASK_DELAY_MS
+            )
         );
     }
 }
 
 
-
 // ============================================================
-// UPDATE BUTTON
+// BUTTON STATE MACHINE
 // ============================================================
 
 void Encoder::updateButton()
 {
-    bool currentButtonState =
-        digitalRead(buttonPin);
+    const bool pressed =
+        digitalRead(buttonPin) ==
+        HIGH;
 
 
-    /*
-        Fysieke toestand veranderd:
-        start opnieuw met debouncen.
-    */
-
-    if(currentButtonState != candidateButtonState)
-    {
-        candidateButtonState =
-            currentButtonState;
-
-        candidateButtonSince =
-            millis();
-
-        return;
-    }
+    const unsigned long now =
+        millis();
 
 
-    /*
-        Toestand moet lang genoeg stabiel zijn.
-    */
-
-    if(
-        millis() - candidateButtonSince <
-        BUTTON_DEBOUNCE_TIME
+    switch(
+        buttonState
     )
     {
-        return;
-    }
+        // ====================================================
+        // RELEASED
+        // ====================================================
+
+        case BUTTON_RELEASED:
+
+            if(
+                pressed
+            )
+            {
+                buttonState =
+                    BUTTON_DEBOUNCING_PRESS;
+
+                buttonStateSince =
+                    now;
 
 
-    /*
-        Toestand is stabiel en anders dan
-        de laatst geaccepteerde toestand.
-    */
+#ifdef ENCODER_DEBUG
 
-    if(candidateButtonState == stableButtonState)
-        return;
+                Serial.println(
+                    "[Encoder] Debouncing press"
+                );
 
+#endif
+            }
 
-    stableButtonState =
-        candidateButtonState;
-
-
-    /*
-        Alleen indrukken is een event.
-        Loslaten niet.
-    */
-
-    if(stableButtonState == LOW)
-    {
-        EncoderEvent event;
-
-        event.type =
-            ENCODER_PRESS;
-
-        event.value =
-            0;
+            break;
 
 
-        xQueueSend(
-            eventQueue,
-            &event,
-            0
-        );
+        // ====================================================
+        // DEBOUNCING PRESS
+        // ====================================================
+
+        case BUTTON_DEBOUNCING_PRESS:
+
+            if(
+                !pressed
+            )
+            {
+                buttonState =
+                    BUTTON_RELEASED;
+
+
+#ifdef ENCODER_DEBUG
+
+                Serial.println(
+                    "[Encoder] Debouncing press cancelled"
+                );
+
+#endif
+
+                break;
+            }
+
+
+            if(
+                now - buttonStateSince >=
+                BUTTON_DEBOUNCE_TIME
+            )
+            {
+                buttonState =
+                    BUTTON_PRESSED;
+
+                buttonStateSince =
+                    now;
+
+
+#ifdef ENCODER_DEBUG
+
+                Serial.print(
+                    "[Encoder] Button pressed: "
+                );
+
+                Serial.println(
+                    buttonStateSince
+                );
+
+#endif
+            }
+
+            break;
+
+
+        // ====================================================
+        // PRESSED
+        // ====================================================
+
+        case BUTTON_PRESSED:
+
+            if(
+                !pressed
+            )
+            {
+                buttonState =
+                    BUTTON_DEBOUNCING_RELEASE_AFTER_PRESS;
+
+
+                /*
+                    Vanaf hier bewaren we de oorspronkelijke
+                    indruktijd niet meer in buttonStateSince.
+
+                    De indruktijd wordt daarom eerst berekend
+                    voordat buttonStateSince wordt aangepast.
+                */
+
+                const unsigned long duration =
+                    now - buttonStateSince;
+
+
+#ifdef ENCODER_DEBUG
+
+                Serial.print(
+                    "[Encoder] Button released: "
+                );
+
+                Serial.print(
+                    now
+                );
+
+                Serial.print(
+                    " duration="
+                );
+
+                Serial.print(
+                    duration
+                );
+
+                Serial.println(
+                    " ms"
+                );
+
+#endif
+
+
+                /*
+                    Het uiteindelijke event wordt bepaald
+                    door de totale indruktijd.
+                */
+
+                if(
+                    duration >=
+                    BUTTON_LONG_PRESS_TIME
+                )
+                {
+                    EncoderEvent event;
+
+                    event.type =
+                        ENCODER_LONG_PRESS;
+
+                    event.value =
+                        duration;
+
+
+                    xQueueSend(
+                        eventQueue,
+                        &event,
+                        0
+                    );
+
+
+#ifdef ENCODER_DEBUG
+
+                    Serial.println(
+                        "[Encoder] EVENT: LONG_PRESS"
+                    );
+
+#endif
+                }
+                else
+                {
+                    EncoderEvent event;
+
+                    event.type =
+                        ENCODER_PRESS;
+
+                    event.value =
+                        duration;
+
+
+                    xQueueSend(
+                        eventQueue,
+                        &event,
+                        0
+                    );
+
+
+#ifdef ENCODER_DEBUG
+
+                    Serial.println(
+                        "[Encoder] EVENT: PRESS"
+                    );
+
+#endif
+                }
+
+
+                /*
+                    buttonStateSince wordt nu gebruikt
+                    voor de debounce van de release.
+                */
+
+                buttonStateSince =
+                    now;
+
+                break;
+            }
+
+            break;
+
+
+        // ====================================================
+        // DEBOUNCING RELEASE
+        // ====================================================
+
+        case BUTTON_DEBOUNCING_RELEASE_AFTER_PRESS:
+
+            if(
+                pressed
+            )
+            {
+                /*
+                    Release was bounce.
+
+                    We gaan terug naar PRESSED.
+                    De oorspronkelijke press-tijd moet opnieuw
+                    worden gestart vanaf het moment waarop de
+                    knop weer stabiel als pressed wordt gezien.
+                */
+
+                buttonState =
+                    BUTTON_DEBOUNCING_PRESS;
+
+                buttonStateSince =
+                    now;
+
+
+#ifdef ENCODER_DEBUG
+
+                Serial.println(
+                    "[Encoder] Release bounce detected"
+                );
+
+#endif
+
+                break;
+            }
+
+
+            if(
+                now - buttonStateSince >=
+                BUTTON_DEBOUNCE_TIME
+            )
+            {
+                buttonState =
+                    BUTTON_RELEASED;
+
+
+#ifdef ENCODER_DEBUG
+
+                Serial.println(
+                    "[Encoder] Button release debounced"
+                );
+
+#endif
+            }
+
+            break;
     }
 }
 
+
+// ============================================================
+// AVAILABLE
+// ============================================================
+
+bool Encoder::available()
+{
+    if(
+        eventQueue ==
+        nullptr
+    )
+    {
+        return false;
+    }
+
+
+    return uxQueueMessagesWaiting(
+        eventQueue
+    ) > 0;
+}
+
+
+// ============================================================
+// READ
+// ============================================================
+
+EncoderEvent Encoder::read()
+{
+    EncoderEvent event;
+
+
+    event.type =
+        ENCODER_NONE;
+
+    event.value =
+        0;
+
+
+    if(
+        eventQueue ==
+        nullptr
+    )
+    {
+        return event;
+    }
+
+
+    xQueueReceive(
+        eventQueue,
+        &event,
+        0
+    );
+
+
+    return event;
+}
 
 
 // ============================================================
@@ -441,12 +792,13 @@ void Encoder::injectPulse(
     int value
 )
 {
-    if(value == 0)
+    if(
+        eventQueue ==
+        nullptr
+    )
+    {
         return;
-
-
-    if(eventQueue == nullptr)
-        return;
+    }
 
 
     EncoderEvent event;
@@ -463,52 +815,4 @@ void Encoder::injectPulse(
         &event,
         0
     );
-}
-
-
-
-// ============================================================
-// AVAILABLE
-// ============================================================
-
-bool Encoder::available()
-{
-    if(eventQueue == nullptr)
-        return false;
-
-
-    return uxQueueMessagesWaiting(
-        eventQueue
-    ) > 0;
-}
-
-
-
-// ============================================================
-// READ
-// ============================================================
-
-EncoderEvent Encoder::read()
-{
-    EncoderEvent event;
-
-    event.type =
-        ENCODER_NONE;
-
-    event.value =
-        0;
-
-
-    if(eventQueue == nullptr)
-        return event;
-
-
-    xQueueReceive(
-        eventQueue,
-        &event,
-        0
-    );
-
-
-    return event;
 }

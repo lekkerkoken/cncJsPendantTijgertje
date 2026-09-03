@@ -1,99 +1,220 @@
 #include "Display.h"
 
-#include <Arduino.h>
 #include <string.h>
 
 
-#ifdef DISPLAY_DEBUG
+// ============================================================
+// BEGIN
+// ============================================================
 
-
-bool Display::begin()
+bool Display::begin(
+    OLED& oled
+)
 {
-    Serial.println("Display initialized: DEBUG");
+    this->oled =
+        &oled;
+
+    dirty =
+        true;
+
 
     return true;
 }
 
 
+// ============================================================
+// CLEAR
+// ============================================================
+
 void Display::clear()
 {
-    Serial.println("----------------");
+    if(
+        oled == nullptr
+    )
+    {
+        return;
+    }
+
+
+    oled->clear();
+    oled->display();
+
+
+    dirty =
+        false;
 }
 
 
-#else
+// ============================================================
+// SET TITLE
+// ============================================================
 
-// OLED komt hier later
-
-
-#endif
-
-
-
-void Display::setTitle(const char* text)
+void Display::setTitle(
+    const char* text
+)
 {
-    strncpy(title, text, sizeof(title) - 1);
-    title[sizeof(title)-1] = '\0';
+    strncpy(
+        title,
+        text ? text : "",
+        sizeof(title) - 1
+    );
 
-    dirty = true;
+    title[sizeof(title) - 1] =
+        '\0';
+
+
+    dirty =
+        true;
 }
 
 
+// ============================================================
+// SET STATUS
+// ============================================================
 
-void Display::setStatus(const char* text)
+void Display::setStatus(
+    const char* text
+)
 {
-    strncpy(status, text, sizeof(status) - 1);
-    status[sizeof(status)-1] = '\0';
+    strncpy(
+        status,
+        text ? text : "",
+        sizeof(status) - 1
+    );
 
-    dirty = true;
+    status[sizeof(status) - 1] =
+        '\0';
+
+
+    dirty =
+        true;
 }
 
 
+// ============================================================
+// SET LINE 1
+// ============================================================
 
-void Display::setLine1(const char* text)
+void Display::setLine1(
+    const char* text
+)
 {
-    strncpy(line1, text, sizeof(line1) - 1);
-    line1[sizeof(line1)-1] = '\0';
+    strncpy(
+        line1,
+        text ? text : "",
+        sizeof(line1) - 1
+    );
 
-    dirty = true;
+    line1[sizeof(line1) - 1] =
+        '\0';
+
+
+    dirty =
+        true;
 }
 
 
+// ============================================================
+// SET LINE 2
+// ============================================================
 
-void Display::setLine2(const char* text)
+void Display::setLine2(
+    const char* text
+)
 {
-    strncpy(line2, text, sizeof(line2) - 1);
-    line2[sizeof(line2)-1] = '\0';
+    strncpy(
+        line2,
+        text ? text : "",
+        sizeof(line2) - 1
+    );
 
-    dirty = true;
+    line2[sizeof(line2) - 1] =
+        '\0';
+
+
+    dirty =
+        true;
 }
 
 
+// ============================================================
+// UPDATE
+// ============================================================
 
 void Display::update()
 {
-    if(!dirty)
+    if(
+        oled == nullptr ||
+        !dirty
+    )
+    {
         return;
+    }
 
 
-#ifdef DISPLAY_DEBUG
+    oled->clear();
 
-    Serial.println();
-    Serial.println("----------------");
-    Serial.println(title);
-    Serial.println(status);
-    Serial.println(line1);
-    Serial.println(line2);
-    Serial.println("----------------");
+    oled->setTextSize(
+        1
+    );
 
+    oled->setTextColor(
+        true
+    );
 
-#else
-
-    // OLED rendering komt later
-
-
-#endif
+    oled->setTextWrap(
+        false
+    );
 
 
-    dirty = false;
+    // --------------------------------------------------------
+    // 128 x 32 OLED
+    // Vier regels van 8 pixels
+    // --------------------------------------------------------
+
+    oled->setCursor(
+        0,
+        0
+    );
+
+    oled->print(
+        title
+    );
+
+
+    oled->setCursor(
+        0,
+        8
+    );
+
+    oled->print(
+        status
+    );
+
+
+    oled->setCursor(
+        0,
+        16
+    );
+
+    oled->print(
+        line1
+    );
+
+
+    oled->setCursor(
+        0,
+        24
+    );
+
+    oled->print(
+        line2
+    );
+
+
+    oled->display();
+
+
+    dirty =
+        false;
 }

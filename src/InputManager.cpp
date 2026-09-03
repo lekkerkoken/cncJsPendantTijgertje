@@ -19,9 +19,9 @@ void InputManager::begin(
         &encoder;
 
 
-    // --------------------------------------------------------
-    // Output event queue
-    // --------------------------------------------------------
+    // ========================================================
+    // OUTPUT EVENT QUEUE
+    // ========================================================
 
     eventQueue =
         xQueueCreate(
@@ -40,9 +40,9 @@ void InputManager::begin(
     }
 
 
-    // --------------------------------------------------------
-    // Encoder coalescing state
-    // --------------------------------------------------------
+    // ========================================================
+    // ENCODER COALESCING STATE
+    // ========================================================
 
     encoderCoalescedDelta =
         0;
@@ -51,9 +51,9 @@ void InputManager::begin(
         0;
 
 
-    // --------------------------------------------------------
-    // InputManager task
-    // --------------------------------------------------------
+    // ========================================================
+    // INPUTMANAGER TASK
+    // ========================================================
 
     BaseType_t result =
         xTaskCreate(
@@ -78,7 +78,6 @@ void InputManager::begin(
 }
 
 
-
 // ============================================================
 // TASK ENTRY
 // ============================================================
@@ -101,7 +100,6 @@ void InputManager::taskEntry(
 }
 
 
-
 // ============================================================
 // TASK
 // ============================================================
@@ -120,17 +118,13 @@ void InputManager::task()
 
         if(encoder != nullptr)
         {
-            while(
-                encoder->available()
-            )
+            while(encoder->available())
             {
                 EncoderEvent encoderEventData =
                     encoder->read();
 
 
-                switch(
-                    encoderEventData.type
-                )
+                switch(encoderEventData.type)
                 {
                     // ========================================
                     // ROTARY PULSE
@@ -233,8 +227,49 @@ void InputManager::task()
                     }
 
 
-                    case ENCODER_NONE:
+                    // ========================================
+                    // ENCODER LONG PRESS
+                    // ========================================
 
+                    case ENCODER_LONG_PRESS:
+                    {
+                        /*
+                            Een long press is een afzonderlijk
+                            event en vormt een harde grens voor
+                            eventuele encodercoalescing.
+                        */
+
+                        flushEncoderDelta();
+
+
+                        Event event =
+                            encoderEvent(
+                                encoderEventData
+                            );
+
+
+                        if(event.type != EVENT_NONE)
+                        {
+                            xQueueSend(
+                                eventQueue,
+                                &event,
+                                0
+                            );
+                        }
+
+
+                        didWork =
+                            true;
+
+                        break;
+                    }
+
+
+                    // ========================================
+                    // NONE
+                    // ========================================
+
+                    case ENCODER_NONE:
                         break;
                 }
             }
@@ -260,9 +295,7 @@ void InputManager::task()
 
         if(matrix != nullptr)
         {
-            while(
-                matrix->available()
-            )
+            while(matrix->available())
             {
                 int key =
                     matrix->read();
@@ -285,9 +318,7 @@ void InputManager::task()
                         true;
 
 
-                    // ------------------------------------------------
                     // DEBUG
-                    // ------------------------------------------------
 
                     Serial.print(
                         "[InputManager] Key event: "
@@ -326,7 +357,6 @@ void InputManager::task()
         }
     }
 }
-
 
 
 // ============================================================
@@ -372,7 +402,6 @@ void InputManager::flushEncoderDelta()
 }
 
 
-
 // ============================================================
 // BUTTON EVENT
 // ============================================================
@@ -382,7 +411,6 @@ Event InputManager::buttonEvent(
 )
 {
     Event event;
-
 
     event.type =
         EVENT_NONE;
@@ -394,81 +422,45 @@ Event InputManager::buttonEvent(
     switch(key)
     {
         case 1:
-
-            event.type =
-                EVENT_KEY_1;
-
+            event.type = EVENT_KEY_1;
             break;
-
 
         case 2:
-
-            event.type =
-                EVENT_KEY_2;
-
+            event.type = EVENT_KEY_2;
             break;
-
 
         case 3:
-
-            event.type =
-                EVENT_KEY_3;
-
+            event.type = EVENT_KEY_3;
             break;
-
 
         case 4:
-
-            event.type =
-                EVENT_KEY_4;
-
+            event.type = EVENT_KEY_4;
             break;
-
 
         case 5:
-
-            event.type =
-                EVENT_KEY_5;
-
+            event.type = EVENT_KEY_5;
             break;
-
 
         case 6:
-
-            event.type =
-                EVENT_KEY_6;
-
+            event.type = EVENT_KEY_6;
             break;
-
 
         case 7:
-
-            event.type =
-                EVENT_KEY_7;
-
+            event.type = EVENT_KEY_7;
             break;
-
 
         case 8:
-
-            event.type =
-                EVENT_KEY_8;
-
+            event.type = EVENT_KEY_8;
             break;
 
-
         case 9:
-
-            event.type =
-                EVENT_KEY_9;
-
+            event.type = EVENT_KEY_9;
             break;
     }
 
 
     return event;
 }
-
 
 
 // ============================================================
@@ -480,7 +472,6 @@ Event InputManager::encoderEvent(
 )
 {
     Event result;
-
 
     result.type =
         EVENT_NONE;
@@ -510,6 +501,14 @@ Event InputManager::encoderEvent(
             break;
 
 
+        case ENCODER_LONG_PRESS:
+
+            result.type =
+                EVENT_ENCODER_LONG_PRESS;
+
+            break;
+
+
         case ENCODER_NONE:
 
             break;
@@ -518,7 +517,6 @@ Event InputManager::encoderEvent(
 
     return result;
 }
-
 
 
 // ============================================================
@@ -535,7 +533,6 @@ bool InputManager::available()
         eventQueue
     ) > 0;
 }
-
 
 
 // ============================================================

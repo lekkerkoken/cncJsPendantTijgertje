@@ -9,64 +9,34 @@
 
 void PendantController::begin(
     ButtonMatrix& matrix,
-    Encoder& encoder
+    Encoder& encoder,
+    OLED& oled
 )
 {
-    /*
-        PendantController bezit zowel CNCjsInterface,
-        Display als InputManager.
-
-        ButtonMatrix en Encoder blijven voorlopig
-        externe hardware-objecten.
-    */
-
     cnc.begin();
 
-    display.begin();
-
-
-    /*
-        InputManager start zijn eigen FreeRTOS task.
-
-        De hardware moet daarom al geïnitialiseerd zijn
-        voordat deze aan InputManager wordt doorgegeven.
-    */
+    display.begin(
+        oled
+    );
 
     input.begin(
         matrix,
         encoder
     );
 
-
-    /*
-        Forceer één eerste display-update.
-    */
-
     displayDirty =
         true;
-
 
     lastCncStatus =
         cnc.status();
 
-
     lastMachineStatus =
         cnc.machineStateSnapshot().machineStatus;
 
-
-    /*
-        De initiële layer is JOG.
-
-        Omdat setLayer() bij een reeds actieve layer niets doet,
-        moet JogPlanner hier expliciet worden geïnitialiseerd.
-    */
-
     enterJogLayer();
-
 
     updateDisplay();
 }
-
 
 
 // ============================================================
@@ -812,9 +782,11 @@ void PendantController::updateMachineStatus()
 
 void PendantController::updateNormalDisplay()
 {
-    display.setStatus(
+    display.setTitle(
         layerName()
     );
+
+    display.setStatus("");
 
 
     switch(pendantState.layer)

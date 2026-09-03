@@ -39,6 +39,8 @@ const int MATRIX_COL_PINS[MATRIX_COLS] =
 #define SCL_PIN       5
 
 #define IOC_DEBUG
+//#define SOCKETIO_DEBUG
+//#define ENCODER_DEBUG
 #define DISPLAY_DEBUG
 
 #endif

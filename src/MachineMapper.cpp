@@ -67,33 +67,31 @@ MachineSettings MachineMapper::map(
 
 
 MachineState MachineMapper::map(
-    const ControllerStateSnapshot& snapshot
+    const ControllerStateSnapshot& snapshot,
+    bool& valid
 ) const
 {
-    MachineState state;
+    valid = false;
 
+    MachineState state;
 
     if(snapshot.state.isNull())
     {
         return state;
     }
 
-
     if(snapshot.controllerType == "Grbl")
     {
         JsonObjectConst status =
             snapshot.state["status"].as<JsonObjectConst>();
-
 
         if(status.isNull())
         {
             return state;
         }
 
-
         String activeState =
             status["activeState"].as<String>();
-
 
         if(activeState == "Idle")
         {
@@ -115,40 +113,18 @@ MachineState MachineMapper::map(
             state.machineStatus =
                 MACHINE_ALARM;
         }
+        else
+        {
+            return state;
+        }
 
+        // overige mapping...
 
-        state.machinePosition.x =
-            status["mpos"]["x"].as<float>();
-
-        state.machinePosition.y =
-            status["mpos"]["y"].as<float>();
-
-        state.machinePosition.z =
-            status["mpos"]["z"].as<float>();
-
-
-        state.workPosition.x =
-            status["wpos"]["x"].as<float>();
-
-        state.workPosition.y =
-            status["wpos"]["y"].as<float>();
-
-        state.workPosition.z =
-            status["wpos"]["z"].as<float>();
-
-
-        state.feedrate =
-            status["feedrate"].as<float>();
-
-
-        state.spindleSpeed =
-            status["spindle"].as<int>();
+        valid = true;
     }
-
 
     return state;
 }
-
 // ============================================================
 // MAP JOG MOVE
 // ============================================================

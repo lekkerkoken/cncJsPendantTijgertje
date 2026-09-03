@@ -63,10 +63,31 @@ void CNCjsInterface::begin(
 
 void CNCjsInterface::update()
 {
-    machine_.state =
+    if(
+        !core_.controllerReady()
+    )
+    {
+        machine_.state.machineStatus =
+            MACHINE_DISCONNECTED;
+
+        return;
+    }
+
+
+    bool valid = false;
+
+    MachineState state =
         machineMapper_.map(
-            core_.controllerStateSnapshot()
+            core_.controllerStateSnapshot(),
+            valid
         );
+
+
+    if(valid)
+    {
+        machine_.state =
+            state;
+    }
 }
 
 

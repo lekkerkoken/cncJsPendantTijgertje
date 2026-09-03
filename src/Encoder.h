@@ -2,27 +2,36 @@
 #define ENCODER_H
 
 #include <Arduino.h>
+#include "Config.h"
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
 
+// ============================================================
+// ENCODER EVENT
+// ============================================================
+
 enum EncoderEventType
 {
     ENCODER_NONE,
     ENCODER_PULSE,
-    ENCODER_PRESS
+    ENCODER_PRESS,
+    ENCODER_LONG_PRESS
 };
 
 
 struct EncoderEvent
 {
     EncoderEventType type = ENCODER_NONE;
-
     int value = 0;
 };
 
+
+// ============================================================
+// ENCODER
+// ============================================================
 
 class Encoder
 {
@@ -34,23 +43,14 @@ public:
         int buttonPin
     );
 
-    // --------------------------------------------------------
     // Compatibility
-    // --------------------------------------------------------
-
     void update();
 
     bool available();
-//nu kan input ook zijn llllll
-//of lllr
-//of rrrrrr
 
     EncoderEvent read();
 
-    // --------------------------------------------------------
     // Test / event injection
-    // --------------------------------------------------------
-
     void injectPulse(
         int value
     );
@@ -63,9 +63,9 @@ private:
     int buttonPin = -1;
 
 
-    // --------------------------------------------------------
-    // FreeRTOS
-    // --------------------------------------------------------
+    // ========================================================
+    // FREERTOS
+    // ========================================================
 
     QueueHandle_t eventQueue = nullptr;
 
@@ -88,14 +88,23 @@ private:
     void task();
 
 
-    // --------------------------------------------------------
-    // Rotary encoder
-    // --------------------------------------------------------
+    // ========================================================
+    // ROTARY ENCODER
+    // ========================================================
 
     volatile int encoderAccumulator = 0;
 
     uint8_t lastEncoderState = 1;
 
+
+    /*
+        Gedeelde critical section voor:
+
+        - encoderAccumulator
+        - buttonChanged
+
+        Zowel encoder- als button-ISR kunnen deze gebruiken.
+    */
 
     portMUX_TYPE encoderMux =
         portMUX_INITIALIZER_UNLOCKED;
@@ -108,21 +117,70 @@ private:
     void handleEncoderTransition();
 
 
-    // --------------------------------------------------------
-    // Encoder button
-    // --------------------------------------------------------
+    // ========================================================
+    // ENCODER BUTTON
+    // ========================================================
+
+    /*
+        De ISR zet deze flag wanneer de fysieke GPIO
+        van de button verandert.
+
+        De flag wordt NIET gebruikt om direct een event
+        te genereren.
+
+        De Encoder task leest de flag en laat vervolgens
+        de normale button state machine het werk doen.
+    */
+
+    volatile bool buttonChanged = false;
+
+
+    static void ARDUINO_ISR_ATTR buttonISR(
+        void* parameter
+    );
+
 
     static constexpr unsigned long BUTTON_DEBOUNCE_TIME = 10;
 
-    bool stableButtonState = HIGH;
+    /*
+        Tijdelijk hoog ingesteld voor debuggen.
 
-    bool candidateButtonState = HIGH;
+        Later terugzetten naar bijvoorbeeld 800 ms.
+    */
 
-    unsigned long candidateButtonSince = 0;
+    static constexpr unsigned long BUTTON_LONG_PRESS_TIME = 1200;
+
+
+    enum ButtonState
+    {
+        BUTTON_RELEASED,
+
+        BUTTON_DEBOUNCING_PRESS,
+
+        BUTTON_PRESSED,
+
+        BUTTON_LONG_PRESS,
+
+        BUTTON_DEBOUNCING_RELEASE_AFTER_PRESS,
+
+        BUTTON_DEBOUNCING_RELEASE_AFTER_LONG_PRESS
+    };
+
+
+    ButtonState buttonState =
+        BUTTON_RELEASED;
+
+
+    /*
+        Tijdstip waarop de huidige button-state
+        is begonnen.
+    */
+
+    unsigned long buttonStateSince =
+        0;
 
 
     void updateButton();
 };
-
 
 #endif

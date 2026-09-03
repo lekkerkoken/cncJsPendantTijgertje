@@ -1,34 +1,29 @@
 #ifndef PENDANT_CONTROLLER_H
 #define PENDANT_CONTROLLER_H
 
-
-#include "Event.h"
+#include "ButtonMatrix.h"
+#include "Encoder.h"
 #include "Display.h"
-#include "PendantState.h"
-#include "MachineState.h"
-#include "CNCjsInterface.h"
+#include "OLED.h"
 #include "InputManager.h"
-
+#include "CNCjsInterface.h"
 #include "JogPlanner.h"
-
+#include "PendantState.h"
 
 
 class PendantController
 {
-
 public:
 
-    void begin(    
+    void begin(
         ButtonMatrix& matrix,
-        Encoder& encoder
+        Encoder& encoder,
+        OLED& oled
     );
-
 
     void update();
 
-
     Axis axis() const;
-
 
     float jogStepDistance() const;
 
@@ -44,6 +39,7 @@ private:
     JogPlanner jogPlanner;
 
     PendantState pendantState;
+
 
     void handle(
         const Event& event
@@ -62,23 +58,17 @@ private:
     );
 
 
-    // ========================================================
-    // DISPLAY STATE
-    // ========================================================
-
     bool displayDirty =
         true;
+
 
     CNCjsInterface::CNCjsStatus lastCncStatus =
         CNCjsInterface::CNCjsStatus::Offline;
 
+
     MachineStatus lastMachineStatus =
         MACHINE_DISCONNECTED;
 
-
-    // ========================================================
-    // DISPLAY
-    // ========================================================
 
     void updateDisplay();
 
@@ -88,17 +78,8 @@ private:
 
     void updateCncStatus();
 
-
-    // ========================================================
-    // STATUS
-    // ========================================================
-
     void checkStatusChanges();
 
-
-    // ========================================================
-    // NAMES
-    // ========================================================
 
     const char* layerName() const;
 
@@ -107,8 +88,6 @@ private:
     const char* machineStatusName() const;
 
     const char* cncStatusName() const;
-
 };
-
 
 #endif
