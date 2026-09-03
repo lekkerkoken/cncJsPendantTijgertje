@@ -792,15 +792,7 @@ void PendantController::updateNormalDisplay()
     switch(pendantState.layer)
     {
         case LAYER_JOG:
-            display.clear();
-
-            display.setLine1(
-                axisName()
-            );
-
-
-
-            
+            display.clear();     
                 char buffer[20];
 
 
@@ -811,16 +803,12 @@ void PendantController::updateNormalDisplay()
                     jogStepDistance()
                 );
 
-
-                display.setLine2(
-                    buffer
-                );
-
-                display.setIcon(
+                display.iconLeftTextView(
                     iconForAxis(
                         pendantState.axis
                     ),
-                    ICON_RIGHT
+                    axisName(),
+                    buffer
                 );
             break;
 
@@ -829,14 +817,9 @@ void PendantController::updateNormalDisplay()
 
             display.clear();
 
-            display.setIcon(nullptr, ICON_RIGHT);
-
-
-            display.setLine1(
-                "WCS G54"
-            );
-
-            display.setLine2(
+            display.iconRightTextView(
+                nullptr,
+                "WCS G54",
                 "Offsets"
             );
 

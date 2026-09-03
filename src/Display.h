@@ -5,11 +5,21 @@
 #include "Icons.h"
 #include "PendantState.h"
 
+
 enum IconPosition
 {
     ICON_LEFT,
     ICON_RIGHT
 };
+
+
+enum DisplayView
+{
+    VIEW_SIMPLE_TEXT_ONLY,
+    VIEW_ICON_RIGHT_TEXT,
+    VIEW_ICON_LEFT_TEXT
+};
+
 
 class Display
 {
@@ -21,10 +31,30 @@ public:
 
     void clear();
 
+
+    void setView(
+        DisplayView view
+    );
+
+
     void setIcon(
         const uint8_t* selected_icon,
         IconPosition position
     );
+
+
+    void iconRightTextView(
+        const uint8_t* selected_icon,
+        const char* line1,
+        const char* line2
+    );
+
+    void iconLeftTextView(
+        const uint8_t* selected_icon,
+        const char* line1,
+        const char* line2
+    );
+
 
     void setTitle(
         const char* text
@@ -42,6 +72,7 @@ public:
         const char* text
     );
 
+
     void update();
 
 
@@ -55,16 +86,41 @@ private:
         true;
 
 
+    DisplayView view =
+        VIEW_SIMPLE_TEXT_ONLY;
+
+
+    void (Display::*viewHandler)() =
+        nullptr;
+
+
     char title[21] = "";
     char status[21] = "";
     char line1[21] = "";
     char line2[21] = "";
+
 
     const uint8_t* icon =
         nullptr;
 
     IconPosition iconPosition =
         ICON_RIGHT;
+
+
+    void iconTextView_(
+        const uint8_t* selected_icon,
+        IconPosition position,
+        DisplayView view,
+        const char* line1,
+        const char* line2
+    );
+
+
+    void updateSimpleTextOnly();
+
+    void updateIconRightText();
+
+    void updateIconLeftText();
 };
 
 #endif

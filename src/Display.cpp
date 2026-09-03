@@ -14,6 +14,12 @@ bool Display::begin(
     this->oled =
         &oled;
 
+
+    setView(
+        VIEW_SIMPLE_TEXT_ONLY
+    );
+
+
     dirty =
         true;
 
@@ -44,8 +50,55 @@ void Display::clear()
         false;
 }
 
+
 // ============================================================
-// SHOW JOG ICON
+// SET VIEW
+// ============================================================
+
+void Display::setView(
+    DisplayView view
+)
+{
+    this->view =
+        view;
+
+
+    switch(
+        view
+    )
+    {
+        case VIEW_SIMPLE_TEXT_ONLY:
+
+            viewHandler =
+                &Display::updateSimpleTextOnly;
+
+            break;
+
+
+        case VIEW_ICON_RIGHT_TEXT:
+
+            viewHandler =
+                &Display::updateIconRightText;
+
+            break;
+
+
+        case VIEW_ICON_LEFT_TEXT:
+
+            viewHandler =
+                &Display::updateIconLeftText;
+
+            break;
+    }
+
+
+    dirty =
+        true;
+}
+
+
+// ============================================================
+// SET ICON
 // ============================================================
 
 void Display::setIcon(
@@ -59,9 +112,84 @@ void Display::setIcon(
     iconPosition =
         position;
 
+
     dirty =
         true;
 }
+
+
+// ============================================================
+// ICON RIGHT + TEXT VIEW
+// ============================================================
+
+void Display::iconRightTextView(
+    const uint8_t* selected_icon,
+    const char* line1,
+    const char* line2
+)
+{
+    iconTextView_(
+        selected_icon,
+        ICON_RIGHT,
+        VIEW_ICON_RIGHT_TEXT,
+        line1,
+        line2
+    );
+}
+
+
+// ============================================================
+// ICON LEFT + TEXT VIEW
+// ============================================================
+
+void Display::iconLeftTextView(
+    const uint8_t* selected_icon,
+    const char* line1,
+    const char* line2
+)
+{
+    iconTextView_(
+        selected_icon,
+        ICON_LEFT,
+        VIEW_ICON_LEFT_TEXT,
+        line1,
+        line2
+    );
+}
+
+
+// ============================================================
+// ICON + TEXT VIEW
+// ============================================================
+
+void Display::iconTextView_(
+    const uint8_t* selected_icon,
+    IconPosition position,
+    DisplayView view,
+    const char* line1,
+    const char* line2
+)
+{
+    setView(
+        view
+    );
+
+
+    setIcon(
+        selected_icon,
+        position
+    );
+
+
+    setLine1(
+        line1
+    );
+
+    setLine2(
+        line2
+    );
+}
+
 
 // ============================================================
 // SET TITLE
@@ -155,7 +283,6 @@ void Display::setLine2(
 }
 
 
-
 // ============================================================
 // UPDATE
 // ============================================================
@@ -187,11 +314,28 @@ void Display::update()
     );
 
 
-    // --------------------------------------------------------
-    // 128 x 32 OLED
-    // Vier regels van 8 pixels
-    // --------------------------------------------------------
+    if(
+        viewHandler != nullptr
+    )
+    {
+        (this->*viewHandler)();
+    }
 
+
+    oled->display();
+
+
+    dirty =
+        false;
+}
+
+
+// ============================================================
+// VIEW: SIMPLE TEXT ONLY
+// ============================================================
+
+void Display::updateSimpleTextOnly()
+{
     oled->setCursor(
         0,
         0
@@ -230,37 +374,148 @@ void Display::update()
     oled->print(
         line2
     );
+}
 
-    int16_t iconX =
+
+// ============================================================
+// VIEW: ICON RIGHT + TEXT
+// ============================================================
+
+void Display::updateIconRightText()
+{
+    const int ICON_X =
+        100;
+
+    const int ICON_Y =
+        2;
+
+    const int TEXT_X =
         0;
 
-    if(
-        iconPosition == ICON_RIGHT
-    )
-    {
-        iconX =
-            128 - ICON_WIDTH;
-    }
+
+    oled->setCursor(
+        TEXT_X,
+        0
+    );
+
+    oled->print(
+        title
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        8
+    );
+
+    oled->print(
+        status
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        16
+    );
+
+    oled->print(
+        line1
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        24
+    );
+
+    oled->print(
+        line2
+    );
+
 
     if(
         icon != nullptr
     )
     {
         oled->drawXBitmap(
-            iconX,
-            (32 - ICON_HEIGHT) / 2,
+            ICON_X,
+            ICON_Y,
             icon,
-            ICON_WIDTH,
-            ICON_HEIGHT,
+            28,
+            28,
             true
         );
     }
-    
+}
 
 
-    oled->display();
+// ============================================================
+// VIEW: ICON LEFT + TEXT
+// ============================================================
+
+void Display::updateIconLeftText()
+{
+    const int ICON_X =
+        0;
+
+    const int ICON_Y =
+        2;
+
+    const int TEXT_X =
+        44;
 
 
-    dirty =
-        false;
+    oled->setCursor(
+        TEXT_X,
+        0
+    );
+
+    oled->print(
+        title
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        8
+    );
+
+    oled->print(
+        status
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        16
+    );
+
+    oled->print(
+        line1
+    );
+
+
+    oled->setCursor(
+        TEXT_X,
+        24
+    );
+
+    oled->print(
+        line2
+    );
+
+
+    if(
+        icon != nullptr
+    )
+    {
+        oled->drawXBitmap(
+            ICON_X,
+            ICON_Y,
+            icon,
+            28,
+            28,
+            true
+        );
+    }
 }
