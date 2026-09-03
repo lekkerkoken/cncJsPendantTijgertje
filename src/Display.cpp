@@ -48,46 +48,16 @@ void Display::clear()
 // SHOW JOG ICON
 // ============================================================
 
-void Display::showJogIcon(
-    Axis axis
+void Display::setIcon(
+    const uint8_t* selected_icon,
+    IconPosition position
 )
 {
-    switch(
-        axis
-    )
-    {
-        case AXIS_X:
+    icon =
+        selected_icon;
 
-            jogIcon =
-                JOG_ICON_X;
-
-            break;
-
-
-        case AXIS_Y:
-
-            jogIcon =
-                JOG_ICON_Y;
-
-            break;
-
-
-        case AXIS_Z:
-
-            jogIcon =
-                JOG_ICON_Z;
-
-            break;
-
-
-        default:
-
-            jogIcon =
-                nullptr;
-
-            break;
-    }
-
+    iconPosition =
+        position;
 
     dirty =
         true;
@@ -261,16 +231,27 @@ void Display::update()
         line2
     );
 
+    int16_t iconX =
+        0;
+
     if(
-        jogIcon != nullptr
+        iconPosition == ICON_RIGHT
+    )
+    {
+        iconX =
+            128 - ICON_WIDTH;
+    }
+
+    if(
+        icon != nullptr
     )
     {
         oled->drawXBitmap(
-            (128 - JOG_ICON_WIDTH),
-            (32 - JOG_ICON_HEIGHT) / 2,
-            jogIcon,
-            JOG_ICON_WIDTH,
-            JOG_ICON_HEIGHT,
+            iconX,
+            (32 - ICON_HEIGHT) / 2,
+            icon,
+            ICON_WIDTH,
+            ICON_HEIGHT,
             true
         );
     }

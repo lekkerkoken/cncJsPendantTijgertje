@@ -3,11 +3,11 @@
 #include <Arduino.h>
 
 // ============================================================
-// JOG ICON
+// ICON
 // ============================================================
 
-#define JOG_ICON_WIDTH  28
-#define JOG_ICON_HEIGHT 28
+#define ICON_WIDTH  28
+#define ICON_HEIGHT 28
 
 static const uint8_t JOG_ICON_X[] PROGMEM = {
    0x00, 0xa8, 0x02, 0x00, 0x00, 0xdd, 0x0d, 0x00, 0x80, 0xaa, 0x2a, 0x00,

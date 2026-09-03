@@ -816,14 +816,21 @@ void PendantController::updateNormalDisplay()
                     buffer
                 );
 
-                display.showJogIcon(
-                    pendantState.axis
+                display.setIcon(
+                    iconForAxis(
+                        pendantState.axis
+                    ),
+                    ICON_RIGHT
                 );
-
             break;
 
 
         case LAYER_INFO:
+
+            display.clear();
+
+            display.setIcon(nullptr, ICON_RIGHT);
+
 
             display.setLine1(
                 "WCS G54"
@@ -837,6 +844,10 @@ void PendantController::updateNormalDisplay()
 
 
         case LAYER_CONTROL:
+                    
+            display.clear();
+
+            display.setIcon(nullptr, ICON_RIGHT);
 
             display.setLine1(
                 "Machine"
@@ -851,6 +862,8 @@ void PendantController::updateNormalDisplay()
                     display.update();
 
 }
+
+
 
 
 
@@ -937,7 +950,34 @@ PendantController::machineStatusName() const
     }
 }
 
+const uint8_t* PendantController::iconForAxis(
+    Axis axis
+) const
+{
+    switch(
+        axis
+    )
+    {
+        case AXIS_X:
 
+            return JOG_ICON_X;
+
+
+        case AXIS_Y:
+
+            return JOG_ICON_Y;
+
+
+        case AXIS_Z:
+
+            return JOG_ICON_Z;
+
+
+        default:
+
+            return nullptr;
+    }
+}
 
 // ============================================================
 // CNC STATUS NAME

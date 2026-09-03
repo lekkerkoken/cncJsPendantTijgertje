@@ -88,6 +88,10 @@ private:
     const char* machineStatusName() const;
 
     const char* cncStatusName() const;
+
+    const uint8_t* iconForAxis(
+        Axis axis
+    ) const;
 };
 
 #endif

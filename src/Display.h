@@ -5,6 +5,12 @@
 #include "Icons.h"
 #include "PendantState.h"
 
+enum IconPosition
+{
+    ICON_LEFT,
+    ICON_RIGHT
+};
+
 class Display
 {
 public:
@@ -15,8 +21,9 @@ public:
 
     void clear();
 
-    void showJogIcon(
-        Axis axis
+    void setIcon(
+        const uint8_t* selected_icon,
+        IconPosition position
     );
 
     void setTitle(
@@ -53,8 +60,11 @@ private:
     char line1[21] = "";
     char line2[21] = "";
 
-    const uint8_t* jogIcon =
+    const uint8_t* icon =
         nullptr;
+
+    IconPosition iconPosition =
+        ICON_RIGHT;
 };
 
 #endif
