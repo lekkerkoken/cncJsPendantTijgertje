@@ -792,13 +792,15 @@ void PendantController::updateNormalDisplay()
     switch(pendantState.layer)
     {
         case LAYER_JOG:
+            display.clear();
 
             display.setLine1(
                 axisName()
             );
 
 
-            {
+
+            
                 char buffer[20];
 
 
@@ -813,7 +815,10 @@ void PendantController::updateNormalDisplay()
                 display.setLine2(
                     buffer
                 );
-            }
+
+                display.showJogIcon(
+                    pendantState.axis
+                );
 
             break;
 
@@ -843,6 +848,8 @@ void PendantController::updateNormalDisplay()
 
             break;
     }
+                    display.update();
+
 }
 
 

@@ -83,6 +83,30 @@ void OLED::clear()
     oledDriver.clearDisplay();
 }
 
+// ============================================================
+// DRAW XBITMAP
+// ============================================================
+
+void OLED::drawXBitmap(
+    int16_t x,
+    int16_t y,
+    const uint8_t* bitmap,
+    int16_t width,
+    int16_t height,
+    bool color
+)
+{
+    oledDriver.drawXBitmap(
+        x,
+        y,
+        bitmap,
+        width,
+        height,
+        color
+            ? SSD1306_WHITE
+            : SSD1306_BLACK
+    );
+}
 
 // ============================================================
 // SET CURSOR

@@ -44,6 +44,54 @@ void Display::clear()
         false;
 }
 
+// ============================================================
+// SHOW JOG ICON
+// ============================================================
+
+void Display::showJogIcon(
+    Axis axis
+)
+{
+    switch(
+        axis
+    )
+    {
+        case AXIS_X:
+
+            jogIcon =
+                JOG_ICON_X;
+
+            break;
+
+
+        case AXIS_Y:
+
+            jogIcon =
+                JOG_ICON_Y;
+
+            break;
+
+
+        case AXIS_Z:
+
+            jogIcon =
+                JOG_ICON_Z;
+
+            break;
+
+
+        default:
+
+            jogIcon =
+                nullptr;
+
+            break;
+    }
+
+
+    dirty =
+        true;
+}
 
 // ============================================================
 // SET TITLE
@@ -137,6 +185,7 @@ void Display::setLine2(
 }
 
 
+
 // ============================================================
 // UPDATE
 // ============================================================
@@ -153,6 +202,7 @@ void Display::update()
 
 
     oled->clear();
+
 
     oled->setTextSize(
         1
@@ -210,6 +260,21 @@ void Display::update()
     oled->print(
         line2
     );
+
+    if(
+        jogIcon != nullptr
+    )
+    {
+        oled->drawXBitmap(
+            (128 - JOG_ICON_WIDTH),
+            (32 - JOG_ICON_HEIGHT) / 2,
+            jogIcon,
+            JOG_ICON_WIDTH,
+            JOG_ICON_HEIGHT,
+            true
+        );
+    }
+    
 
 
     oled->display();

@@ -2,7 +2,8 @@
 #define DISPLAY_H
 
 #include "OLED.h"
-
+#include "Icons.h"
+#include "PendantState.h"
 
 class Display
 {
@@ -13,6 +14,10 @@ public:
     );
 
     void clear();
+
+    void showJogIcon(
+        Axis axis
+    );
 
     void setTitle(
         const char* text
@@ -47,6 +52,9 @@ private:
     char status[21] = "";
     char line1[21] = "";
     char line2[21] = "";
+
+    const uint8_t* jogIcon =
+        nullptr;
 };
 
 #endif
