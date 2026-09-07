@@ -57,6 +57,10 @@ void PendantController::handle(
     switch(event.type)
     {
 
+        case EVENT_KEY_1:
+
+            feedHoldResume();
+            break;
         // ----------------------------------------------------
         // AXIS X
         // ----------------------------------------------------
@@ -99,6 +103,11 @@ void PendantController::handle(
             break;
 
 
+        case EVENT_KEY_2:
+
+            homeAxis();
+
+            break;
         // ----------------------------------------------------
         // AXIS Z
         // ----------------------------------------------------
@@ -172,10 +181,17 @@ void PendantController::handle(
 
         case EVENT_ENCODER_PRESS:
 
+            break;
+
+        // ----------------------------------------------------
+        // ENCODER PRESS
+        // ----------------------------------------------------
+
+        case EVENT_ENCODER_LONG_PRESS:
+
             toggleLayer();
 
             break;
-
 
         // ----------------------------------------------------
         // ENCODER PULSE
@@ -265,25 +281,23 @@ void PendantController::setLayer(
 
 void PendantController::enterJogLayer()
 {
+    cnc.cacheControllerSettings();
+
     MachineSettings machineSettings =
         cnc.machineSettingsSnapshot();
-
 
     jogPlanner.begin(
         machineSettings
     );
 
-
     jogPlanner.setJogStepDistance(
         jogStepDistance()
     );
-
 
     jogPlanner.setAxis(
         axis()
     );
 }
-
 
 
 // ============================================================
@@ -308,6 +322,30 @@ float PendantController::jogStepDistance() const
     );
 }
 
+// ============================================================
+// Feedhold / Resume
+// ============================================================
+
+void PendantController::feedHoldResume()
+{
+    MachineState state = cnc.machineStateSnapshot();
+
+    if(state.machineStatus == MACHINE_HOLD)
+    {
+        cnc.resume();
+    }
+    else
+    {
+        cnc.feedHold();
+    }
+}
+
+void PendantController::homeAxis()
+{   
+    // cnc.home(
+    //     axis()
+    // );
+}
 
 
 // ============================================================
@@ -912,7 +950,8 @@ void PendantController::updateNormalDisplay()
 
 
         case LAYER_CONTROL:
-
+                MachineState machineState =
+                    cnc.machineStateSnapshot();
             display.clear();
 
             display.setIcon(
@@ -927,7 +966,7 @@ void PendantController::updateNormalDisplay()
 
 
             display.setLine2(
-                "Ready"
+                machineStatusName()
             );
 
             break;

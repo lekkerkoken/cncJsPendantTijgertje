@@ -125,10 +125,6 @@ public:
 
     bool controllerReady() const;
 
-    String controllerPort() const;
-
-    String controllerType() const;
-
     int controllerBaudrate() const;
 
 
@@ -184,12 +180,19 @@ public:
         uint8_t command
     );
 
+    void cacheControllerSettings();
+
+
 
 private:
 
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
     Machine machine_;
+
+    ControllerType cachedControllerType =
+        CONTROLLER_UNKNOWN;
+
 };
 
 

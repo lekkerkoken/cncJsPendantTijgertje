@@ -4,6 +4,7 @@
 #include "JogCommand.h"
 #include "MachineCommand.h"
 #include "MachineSettings.h"
+#include "ControllerType.h"
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -13,7 +14,8 @@ class MachineMapper
 public:
 
     MachineCommand map(
-        const JogCommand& jog
+        const JogCommand& jog,
+        ControllerType type
     );
 
     MachineSettings map(
@@ -25,11 +27,29 @@ public:
         bool& valid
     ) const;
 
+    // MachineCommand mapHome(
+    //     Axis axis,
+    //     ControllerType type
+    // );
+
 private:
 
     MachineCommand mapJogMove(
+        const JogCommand& jog,
+        ControllerType type
+
+    );
+
+    MachineCommand mapGrblJog(
         const JogCommand& jog
     );
+
+    ControllerType controllerTypeFromString(
+        const String& type
+    ) const;
+
+    MachineCommand unsupported() const;
+
 
 };
 

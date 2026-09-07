@@ -89,6 +89,7 @@ private:
         nieuwe richting de ring vullen.
     */
     static constexpr float REVERSAL_FACTOR = 0.5f;
+    
 
 
     // ========================================================

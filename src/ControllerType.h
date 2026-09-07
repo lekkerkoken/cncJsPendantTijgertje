@@ -1,0 +1,13 @@
+#ifndef CONTROLLER_TYPE_H
+#define CONTROLLER_TYPE_H
+
+enum ControllerType
+{
+    CONTROLLER_UNKNOWN,
+
+    CONTROLLER_GRBL,
+
+    CONTROLLER_TINYG
+};
+
+#endif

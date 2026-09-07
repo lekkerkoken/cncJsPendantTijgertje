@@ -57,6 +57,9 @@ private:
         const Event& event
     );
 
+    void feedHoldResume();
+
+    void homeAxis();
 
     bool displayDirty =
         true;
