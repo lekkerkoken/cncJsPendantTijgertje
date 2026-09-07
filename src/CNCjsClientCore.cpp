@@ -3165,7 +3165,7 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_FEED_HOLD:
 
                 result =
-                    feedHoldInternal();
+                    sendCommandInternal("feedhold");
 
                 break;
 
@@ -3173,7 +3173,7 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_RESUME:
 
                 result =
-                    resumeInternal();
+                    sendCommandInternal("cyclestart");
 
                 break;
 
@@ -3403,7 +3403,7 @@ bool CNCjsClientCore::feedHold()
 
 
     bool result =
-        feedHoldInternal();
+        sendCommandInternal("feedhold");
 
 
     unlock();
@@ -3412,17 +3412,6 @@ bool CNCjsClientCore::feedHold()
     return result;
 }
 
-
-// ============================================================
-// FEED HOLD INTERNAL
-// ============================================================
-
-bool CNCjsClientCore::feedHoldInternal()
-{
-    return sendRealtimeInternal(
-        '!'
-    );
-}
 
 
 // ============================================================
@@ -3438,25 +3427,13 @@ bool CNCjsClientCore::resume()
 
 
     bool result =
-        resumeInternal();
+        sendCommandInternal("cyclestart");
 
 
     unlock();
 
 
     return result;
-}
-
-
-// ============================================================
-// RESUME INTERNAL
-// ============================================================
-
-bool CNCjsClientCore::resumeInternal()
-{
-    return sendRealtimeInternal(
-        '~'
-    );
 }
 
 

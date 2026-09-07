@@ -61,28 +61,15 @@ void PendantController::handle(
 
             feedHoldResume();
             break;
-        // ----------------------------------------------------
-        // AXIS X
-        // ----------------------------------------------------
 
-        case EVENT_KEY_8:
+ 
+        case EVENT_KEY_2:
 
-            if(
-                pendantState.axis !=
-                AXIS_X
-            )
-            {
-                pendantState.axis =
-                    AXIS_X;
-
-                changed =
-                    true;
-            }
+            homeAxis();
 
             break;
 
-
-        // ----------------------------------------------------
+       // ----------------------------------------------------
         // AXIS Y
         // ----------------------------------------------------
 
@@ -102,12 +89,28 @@ void PendantController::handle(
 
             break;
 
+        // ----------------------------------------------------
+        // JOG STEP GROTER
+        // ----------------------------------------------------
 
-        case EVENT_KEY_2:
+        case EVENT_KEY_6:
 
-            homeAxis();
+            if(
+                pendantState.jogStep !=
+                STEP_10_MM
+            )
+            {
+                pendantState.jogStep =
+                    static_cast<JogStep>(
+                        pendantState.jogStep - 1
+                    );
+
+                changed =
+                    true;
+            }
 
             break;
+
         // ----------------------------------------------------
         // AXIS Z
         // ----------------------------------------------------
@@ -128,22 +131,19 @@ void PendantController::handle(
 
             break;
 
-
         // ----------------------------------------------------
-        // JOG STEP GROTER
+        // AXIS X
         // ----------------------------------------------------
 
-        case EVENT_KEY_6:
+        case EVENT_KEY_8:
 
             if(
-                pendantState.jogStep !=
-                STEP_10_MM
+                pendantState.axis !=
+                AXIS_X
             )
             {
-                pendantState.jogStep =
-                    static_cast<JogStep>(
-                        pendantState.jogStep - 1
-                    );
+                pendantState.axis =
+                    AXIS_X;
 
                 changed =
                     true;
@@ -342,9 +342,9 @@ void PendantController::feedHoldResume()
 
 void PendantController::homeAxis()
 {   
-    // cnc.home(
-    //     axis()
-    // );
+    cnc.homeAxis(
+        axis()
+    );
 }
 
 
@@ -838,8 +838,8 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "X%.2f Y%.2f",
-        machineState.workPosition.x,
-        machineState.workPosition.y
+        machineState.machinePosition.x,
+        machineState.machinePosition.y
     );
 
 
@@ -852,7 +852,7 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "Z%.2f",
-        machineState.workPosition.z
+        machineState.machinePosition.z
     );
 
 

@@ -9,6 +9,7 @@
 #include "MachineState.h"
 #include "MachineMapper.h"
 #include "Machine.h"
+#include "PendantState.h"
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -169,6 +170,10 @@ public:
 
 
     bool jogCancel();
+
+    bool homeAxis(
+        Axis axis
+    );
 
     bool feedHold();
 

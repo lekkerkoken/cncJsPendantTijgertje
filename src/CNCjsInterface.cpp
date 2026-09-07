@@ -215,17 +215,6 @@ bool CNCjsInterface::controllerReady() const
 }
 
 
-// String CNCjsInterface::controllerPort() const
-// {
-//     return core_.controllerPort();
-// }
-
-
-// String CNCjsInterface::controllerType() const
-// {
-//     return core_.controllerType();
-// }
-
 void CNCjsInterface::cacheControllerSettings()
 {
     MachineSettings settings =
@@ -274,6 +263,29 @@ bool CNCjsInterface::execute(
     const MachineCommand& command
 )
 {
+    return core_.execute(
+        command
+    );
+}
+
+bool CNCjsInterface::homeAxis(
+    Axis axis
+)
+{
+    MachineCommand command =
+        machineMapper_.mapHome(
+            axis,
+            cachedControllerType
+        );
+
+    if(
+        command.type ==
+        MACHINE_COMMAND_NONE
+    )
+    {
+        return false;
+    }
+
     return core_.execute(
         command
     );

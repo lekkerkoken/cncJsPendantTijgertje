@@ -27,10 +27,10 @@ public:
         bool& valid
     ) const;
 
-    // MachineCommand mapHome(
-    //     Axis axis,
-    //     ControllerType type
-    // );
+    MachineCommand mapHome(
+        Axis axis,
+        ControllerType type
+    );
 
 private:
 

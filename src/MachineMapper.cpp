@@ -173,6 +173,47 @@ ControllerType type =
             }
 
 
+            JsonObjectConst machinePosition =
+                status["mpos"].as<JsonObjectConst>();
+
+
+            JsonObjectConst workPosition =
+                status["wpos"].as<JsonObjectConst>();
+
+
+            if(
+                machinePosition.isNull() ||
+                workPosition.isNull()
+            )
+            {
+                return state;
+            }
+
+
+            state.machinePosition.x =
+                machinePosition["x"].as<float>();
+
+
+            state.machinePosition.y =
+                machinePosition["y"].as<float>();
+
+
+            state.machinePosition.z =
+                machinePosition["z"].as<float>();
+
+
+            state.workPosition.x =
+                workPosition["x"].as<float>();
+
+
+            state.workPosition.y =
+                workPosition["y"].as<float>();
+
+
+            state.workPosition.z =
+                workPosition["z"].as<float>();
+
+
             state.activeWcs =
                 snapshot.state["parserstate"]["modal"]["wcs"]
                     .as<String>();
@@ -344,4 +385,39 @@ MachineCommand MachineMapper::unsupported() const
 
 
     return command;
+}
+
+
+MachineCommand MachineMapper::mapHome(
+    Axis axis,
+    ControllerType type
+)
+{
+    switch(type)
+    {
+        case CONTROLLER_GRBL:
+
+            /*
+                Standaard GRBL ondersteunt geen individuele
+                axis-homing via bijvoorbeeld "$H X".
+
+                Daarom voorlopig unsupported.
+            */
+
+            return unsupported();
+
+
+        case CONTROLLER_TINYG:
+
+            // TinyG home mapping
+
+            return unsupported();
+
+
+        case CONTROLLER_UNKNOWN:
+
+        default:
+
+            return unsupported();
+    }
 }
