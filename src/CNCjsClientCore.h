@@ -11,6 +11,7 @@
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 #include "Config.h"
+#include "LatestStateTripleBuffer.h"
 
 
 class CNCjsClientCore
@@ -459,7 +460,8 @@ private:
     ControllerStateSnapshot controllerState_;
     ControllerSettingsSnapshot controllerSettings_;
 
-
+    LatestStateTripleBuffer<ControllerStateSnapshot>
+        controllerStateBuffer_;
     // ========================================================
     // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
     // ========================================================

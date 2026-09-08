@@ -414,7 +414,7 @@ void CNCjsClientCore::networkTask()
         }
 
 
-        debugReport();
+        //debugReport();
 
 
         vTaskDelay(
@@ -1864,7 +1864,6 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
-
             // ------------------------------------------------
             // CONTROLLER STATE
             // ------------------------------------------------
@@ -1876,11 +1875,11 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
-#ifdef IOC_DEBUG
+            #ifdef IOC_DEBUG
                 Serial.println(
                     "[CNCjs] Controller state received"
                 );
-#endif
+            #endif
 
                 controllerReadyState =
                     true;
@@ -1893,6 +1892,10 @@ void CNCjsClientCore::handleSocketEvent(
                 JsonObject state =
                     array[2];
 
+
+                // ------------------------------------------------
+                // Bestaande controller state
+                // ------------------------------------------------
 
                 if (
                     controllerType != nullptr
@@ -1912,20 +1915,49 @@ void CNCjsClientCore::handleSocketEvent(
                 }
 
 
+                // ------------------------------------------------
+                // Latest-state triple buffer
+                // ------------------------------------------------
+
+                ControllerStateSnapshot snapshot;
+
+
+                if (
+                    controllerType != nullptr
+                )
+                {
+                    snapshot.controllerType =
+                        controllerType;
+                }
+
+
+                if (
+                    !state.isNull()
+                )
+                {
+                    snapshot.state =
+                        state;
+                }
+
+
+                controllerStateBuffer_.publish(
+                    snapshot
+                );
+
+
                 enterConnectionState(
                     ConnectionState::Ready
                 );
 
-#ifdef IOC_DEBUG
+            #ifdef IOC_DEBUG
                 Serial.println();
                 Serial.println(
                     "[CNCjs] Controller READY"
                 );
-#endif
+            #endif
 
                 break;
             }
-
 
             // ------------------------------------------------
             // GRBL STATE
