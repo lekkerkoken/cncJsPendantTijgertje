@@ -4,9 +4,9 @@
 #include <atomic>
 #include <cstdint>
 
-//De Rust triple_buffer gebruikt precies het model dat hier goed past: 
-// één atomic byte met bufferindex + dirty-bit, waarbij producer en 
-// consumer elk hun eigen buffer hebben en alleen de gedeelde "back buffer" 
+// De Rust triple_buffer gebruikt precies het model dat hier goed past:
+// één atomic byte met bufferindex + dirty-bit, waarbij producer en
+// consumer elk hun eigen buffer hebben en alleen de gedeelde "back buffer"
 // atomair wordt omgewisseld.
 
 template<typename T>
@@ -42,17 +42,26 @@ public:
     //
     // Called by the single consumer.
     //
-    // If a new value is available, copies the latest value into
-    // 'value' and returns true.
+    // If a new value is available, switches to the newly
+    // published buffer and copies the latest value into 'value'.
     //
-    // If no new value is available, returns false and leaves
-    // 'value' unchanged.
+    // If no new value is available, the consumer remains on
+    // its current buffer, which is already the latest value
+    // known to the consumer, and copies that value into 'value'.
+    //
+    // Return value:
+    //
+    //     true  = buffer was switched to a newly published value
+    //     false = no new value was published
+    //
+    // In BOTH cases, 'value' contains the latest value available
+    // to the consumer.
     //
     // ========================================================
 
     bool acquire(
         T& value
-    );
+    ) const;
 
 
 private:
@@ -98,8 +107,12 @@ private:
     // This is the buffer from which the consumer is currently
     // reading.
     //
+    // mutable because acquire() is logically a const read
+    // operation, while advancing the consumer's private
+    // read position is an internal implementation detail.
+    //
 
-    uint8_t readIndex_;
+    mutable uint8_t readIndex_;
 
 
     // ========================================================
@@ -122,7 +135,7 @@ private:
     // of the shared buffer.
     //
 
-    std::atomic<uint8_t> backInfo_;
+    mutable std::atomic<uint8_t> backInfo_;
 };
 
 
@@ -205,7 +218,7 @@ void LatestStateTripleBuffer<T>::publish(
 template<typename T>
 bool LatestStateTripleBuffer<T>::acquire(
     T& value
-)
+) const
 {
     //
     // First check whether the producer has published something
@@ -221,66 +234,74 @@ bool LatestStateTripleBuffer<T>::acquire(
         );
 
 
-    if (
+    bool updated =
         (
-            backInfo &
-            BUFFER_DIRTY_BIT
-        ) == 0
-    )
+            (
+                backInfo &
+                BUFFER_DIRTY_BIT
+            ) != 0
+        );
+
+
+    if (updated)
     {
-        return false;
+        //
+        // A new value exists.
+        //
+        // Exchange our current read buffer with the shared back
+        // buffer.
+        //
+        // The buffer returned by the exchange is now exclusively
+        // ours as the consumer.
+        //
+        // Our previous read buffer becomes the producer's new
+        // private write buffer.
+        //
+        // AcqRel is required for both directions of ownership:
+        //
+        // Release:
+        //     our previous read buffer must no longer be accessed
+        //     before the producer is allowed to reuse it.
+        //
+        // Acquire:
+        //     the newly published buffer must be completely visible
+        //     before we read it.
+        //
+
+        uint8_t previousBackInfo =
+            backInfo_.exchange(
+                readIndex_,
+                std::memory_order_acq_rel
+            );
+
+
+        //
+        // The buffer that was previously published is now ours.
+        //
+
+        readIndex_ =
+            previousBackInfo &
+            BUFFER_INDEX_MASK;
     }
 
 
     //
-    // A new value exists.
+    // Whether or not a new value was published, readIndex_ always
+    // points to the latest buffer currently owned by the consumer.
     //
-    // Exchange our current read buffer with the shared back
-    // buffer.
-    //
-    // The buffer returned by the exchange is now exclusively
-    // ours as the consumer.
-    //
-    // Our previous read buffer becomes the producer's new
-    // private write buffer.
-    //
-    // AcqRel is required for both directions of ownership:
-    //
-    // Release:
-    //     our previous read buffer must no longer be accessed
-    //     before the producer is allowed to reuse it.
-    //
-    // Acquire:
-    //     the newly published buffer must be completely visible
-    //     before we read it.
-    //
-
-    uint8_t previousBackInfo =
-        backInfo_.exchange(
-            readIndex_,
-            std::memory_order_acq_rel
-        );
-
-
-    //
-    // The buffer that was previously published is now ours.
-    //
-
-    readIndex_ =
-        previousBackInfo &
-        BUFFER_INDEX_MASK;
-
-
-    //
-    // Copy the complete state while we exclusively own the
-    // buffer.
+    // Therefore the caller always receives the latest value.
     //
 
     value =
         buffers_[readIndex_];
 
 
-    return true;
+    //
+    // Tell the caller whether the consumer actually switched
+    // to a newly published buffer.
+    //
+
+    return updated;
 }
 
 

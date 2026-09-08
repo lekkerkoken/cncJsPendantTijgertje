@@ -239,19 +239,12 @@ ControllerStateSnapshot CNCjsClientCore::controllerStateSnapshot() const
 {
     ControllerStateSnapshot snapshot;
 
-    if (!lock())
-    {
-        return snapshot;
-    }
-
-    snapshot =
-        controllerState_;
-
-    unlock();
+    controllerStateBuffer_.acquire(
+        snapshot
+    );
 
     return snapshot;
 }
-
 
 ControllerSettingsSnapshot CNCjsClientCore::controllerSettingsSnapshot() const
 {
