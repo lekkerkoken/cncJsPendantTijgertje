@@ -286,6 +286,39 @@ private:
 
     void networkTask();
 
+    // ========================================================
+    // DEBUG / EVENT STREAM INSTRUMENTATION
+    // ========================================================
+
+    struct EventDebugCounters
+    {
+        uint32_t networkTaskCalls = 0;
+        uint32_t socketLoopCalls = 0;
+
+        uint32_t controllerStateEvents = 0;
+        uint32_t grblStateEvents = 0;
+        uint32_t serialportReadEvents = 0;
+        uint32_t serialportWriteEvents = 0;
+        uint32_t otherEvents = 0;
+
+        uint32_t socketLoopTotalUs = 0;
+        uint32_t socketLoopMaxUs = 0;
+
+        uint32_t eventTotal = 0;
+    };
+
+
+    EventDebugCounters eventDebug_;
+
+    unsigned long eventDebugWindowStartedAt = 0;
+
+
+    void debugEvent(
+        const char* eventName,
+        size_t length
+    );
+
+    void debugReport();
 
     // ========================================================
     // CNCjs SERVER

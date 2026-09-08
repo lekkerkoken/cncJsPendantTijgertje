@@ -91,7 +91,11 @@ void CNCjsClientCore::begin()
     lastCommandSendTime_ =
         0;
 
+    eventDebug_ =
+        EventDebugCounters();
 
+    eventDebugWindowStartedAt =
+        millis();
 
     networkManager_.begin();
 
@@ -349,11 +353,39 @@ void CNCjsClientCore::networkTask()
 {
     while (true)
     {
+        eventDebug_.networkTaskCalls++;
+
         if (
             lock()
         )
         {
+            unsigned long socketLoopStartedAt =
+                micros();
+
+
             socketIO.loop();
+
+
+            unsigned long socketLoopDuration =
+                micros() -
+                socketLoopStartedAt;
+
+
+            eventDebug_.socketLoopCalls++;
+
+            eventDebug_.socketLoopTotalUs +=
+                socketLoopDuration;
+
+
+            if (
+                socketLoopDuration >
+                eventDebug_.socketLoopMaxUs
+            )
+            {
+                eventDebug_.socketLoopMaxUs =
+                    socketLoopDuration;
+            }
+
 
             updateConnection();
 
@@ -382,6 +414,9 @@ void CNCjsClientCore::networkTask()
         }
 
 
+        debugReport();
+
+
         vTaskDelay(
             pdMS_TO_TICKS(
                 NETWORK_TASK_DELAY_MS
@@ -389,7 +424,6 @@ void CNCjsClientCore::networkTask()
         );
     }
 }
-
 
 // ============================================================
 // STATUS
@@ -1464,6 +1498,11 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
+            // debugEvent(
+            //     eventName,
+            //     length
+            // );
+
 
             /*
                 Any valid CNCjs event is communication activity.
@@ -1788,10 +1827,11 @@ void CNCjsClientCore::handleSocketEvent(
 #ifdef IOC_DEBUG
 
                 delay(2000);
-#endif
                 Serial.println(
                     "[CNCjs] Controller settings received"
                 );
+#endif
+
 
 
                 const char* controllerType =
@@ -1836,10 +1876,11 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
+#ifdef IOC_DEBUG
                 Serial.println(
                     "[CNCjs] Controller state received"
                 );
-
+#endif
 
                 controllerReadyState =
                     true;
@@ -1875,12 +1916,12 @@ void CNCjsClientCore::handleSocketEvent(
                     ConnectionState::Ready
                 );
 
-
+#ifdef IOC_DEBUG
                 Serial.println();
                 Serial.println(
                     "[CNCjs] Controller READY"
                 );
-
+#endif
 
                 break;
             }
@@ -1945,7 +1986,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 
         case sIOtype_ACK:
-
+#ifdef IOC_DEBUG
             Serial.print(
                 "[IOc] ACK: "
             );
@@ -1956,7 +1997,7 @@ void CNCjsClientCore::handleSocketEvent(
             );
 
             Serial.println();
-
+#endif
             break;
 
 
@@ -1982,6 +2023,259 @@ void CNCjsClientCore::handleSocketEvent(
     }
 }
 
+void CNCjsClientCore::debugEvent(
+    const char* eventName,
+    size_t length
+)
+{
+    eventDebug_.eventTotal++;
+
+
+    if (
+        strcmp(
+            eventName,
+            "controller:state"
+        ) == 0
+    )
+    {
+        eventDebug_.controllerStateEvents++;
+    }
+    else if (
+        strcmp(
+            eventName,
+            "Grbl:state"
+        ) == 0
+    )
+    {
+        eventDebug_.grblStateEvents++;
+    }
+    else if (
+        strcmp(
+            eventName,
+            "serialport:read"
+        ) == 0
+    )
+    {
+        eventDebug_.serialportReadEvents++;
+    }
+    else if (
+        strcmp(
+            eventName,
+            "serialport:write"
+        ) == 0
+    )
+    {
+        eventDebug_.serialportWriteEvents++;
+    }
+    else
+    {
+        eventDebug_.otherEvents++;
+    }
+
+
+#ifdef CNCJS_EVENT_DEBUG
+
+    Serial.print(
+        "[CNCjs EVT] "
+    );
+
+    Serial.print(
+        millis()
+    );
+
+    Serial.print(
+        " ms | "
+    );
+
+    Serial.print(
+        eventName
+    );
+
+    Serial.print(
+        " | len="
+    );
+
+    Serial.println(
+        length
+    );
+
+#endif
+}
+
+void CNCjsClientCore::debugReport()
+{
+    unsigned long now =
+        millis();
+
+
+    unsigned long elapsed =
+        now -
+        eventDebugWindowStartedAt;
+
+
+    if (
+        elapsed < 1000
+    )
+    {
+        return;
+    }
+
+
+    uint32_t networkTaskCalls =
+        eventDebug_.networkTaskCalls;
+
+    uint32_t socketLoopCalls =
+        eventDebug_.socketLoopCalls;
+
+    uint32_t totalLoopUs =
+        eventDebug_.socketLoopTotalUs;
+
+    uint32_t maxLoopUs =
+        eventDebug_.socketLoopMaxUs;
+
+
+    Serial.println();
+    Serial.println(
+        "========== CNCjs DEBUG =========="
+    );
+
+
+    Serial.print(
+        "Window: "
+    );
+
+    Serial.print(
+        elapsed
+    );
+
+    Serial.println(
+        " ms"
+    );
+
+
+    Serial.print(
+        "networkTask: "
+    );
+
+    Serial.print(
+        networkTaskCalls
+    );
+
+    Serial.println(
+        " calls"
+    );
+
+
+    Serial.print(
+        "socketIO.loop: "
+    );
+
+    Serial.print(
+        socketLoopCalls
+    );
+
+    Serial.println(
+        " calls"
+    );
+
+
+    if (
+        socketLoopCalls > 0
+    )
+    {
+        Serial.print(
+            "socketIO.loop avg: "
+        );
+
+        Serial.print(
+            totalLoopUs /
+            socketLoopCalls
+        );
+
+        Serial.println(
+            " us"
+        );
+    }
+
+
+    Serial.print(
+        "socketIO.loop max: "
+    );
+
+    Serial.print(
+        maxLoopUs
+    );
+
+    Serial.println(
+        " us"
+    );
+
+
+    Serial.print(
+        "EVENT total: "
+    );
+
+    Serial.println(
+        eventDebug_.eventTotal
+    );
+
+
+    Serial.print(
+        "  controller:state: "
+    );
+
+    Serial.println(
+        eventDebug_.controllerStateEvents
+    );
+
+
+    Serial.print(
+        "  Grbl:state:       "
+    );
+
+    Serial.println(
+        eventDebug_.grblStateEvents
+    );
+
+
+    Serial.print(
+        "  serialport:read:  "
+    );
+
+    Serial.println(
+        eventDebug_.serialportReadEvents
+    );
+
+
+    Serial.print(
+        "  serialport:write: "
+    );
+
+    Serial.println(
+        eventDebug_.serialportWriteEvents
+    );
+
+
+    Serial.print(
+        "  other:            "
+    );
+
+    Serial.println(
+        eventDebug_.otherEvents
+    );
+
+
+    Serial.println(
+        "=================================="
+    );
+
+
+    eventDebug_ =
+        EventDebugCounters();
+
+    eventDebugWindowStartedAt =
+        now;
+}
 // ============================================================
 // REQUEST PORT LIST
 // ============================================================

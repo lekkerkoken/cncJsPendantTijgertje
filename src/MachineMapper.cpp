@@ -123,10 +123,10 @@ MachineState MachineMapper::map(
     }
 
 
-ControllerType type =
-    controllerTypeFromString(
-        snapshot.controllerType
-    );
+    ControllerType type =
+        controllerTypeFromString(
+            snapshot.controllerType
+        );
 
 
     switch(type)

@@ -838,8 +838,8 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "X%.2f Y%.2f",
-        machineState.machinePosition.x,
-        machineState.machinePosition.y
+        machineState.workPosition.x,
+        machineState.workPosition.y
     );
 
 
@@ -852,7 +852,7 @@ void PendantController::updateMachineStatus()
         buffer,
         sizeof(buffer),
         "Z%.2f",
-        machineState.machinePosition.z
+        machineState.workPosition.z
     );
 
 
