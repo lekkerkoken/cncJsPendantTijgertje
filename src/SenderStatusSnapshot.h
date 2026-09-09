@@ -1,11 +1,11 @@
-#ifndef FEED_STATUS_SNAPSHOT_H
-#define FEED_STATUS_SNAPSHOT_H
+#ifndef SENDER_STATUS_SNAPSHOT_H
+#define SENDER_STATUS_SNAPSHOT_H
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
 
-struct FeedStatusSnapshot
+struct SenderStatusSnapshot
 {
     bool valid = false;
 

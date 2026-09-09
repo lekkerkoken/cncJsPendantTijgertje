@@ -102,12 +102,14 @@ void CNCjsClientCore::begin()
 
     /*
         Bij het starten is er nog geen geldige controller
-        en dus ook geen geldige controller settings state.
+        en dus ook geen geldige latest state.
     */
 
     invalidateControllerState();
 
     invalidateControllerSettings();
+
+    invalidateSenderStatus();
 
 
     networkManager_.begin();
@@ -244,7 +246,7 @@ CNCjsClientCore::snapshot() const
 
 
 // ============================================================
-// MACHINE STATE SNAPSHOT
+// CONTROLLER STATE SNAPSHOT
 // ============================================================
 
 ControllerStateSnapshot
@@ -312,6 +314,43 @@ void CNCjsClientCore::invalidateControllerSettings()
 
 
     controllerSettingsBuffer_.publish(
+        snapshot
+    );
+}
+
+
+// ============================================================
+// SENDER STATUS SNAPSHOT
+// ============================================================
+
+SenderStatusSnapshot
+CNCjsClientCore::senderStatusSnapshot() const
+{
+    SenderStatusSnapshot snapshot;
+
+
+    SenderStatusBuffer_.acquire(
+        snapshot
+    );
+
+
+    return snapshot;
+}
+
+
+// ============================================================
+// INVALIDATE FEED STATUS
+// ============================================================
+
+void CNCjsClientCore::invalidateSenderStatus()
+{
+    SenderStatusSnapshot snapshot;
+
+
+    snapshot.invalidate();
+
+
+    SenderStatusBuffer_.publish(
         snapshot
     );
 }
@@ -864,6 +903,8 @@ void CNCjsClientCore::connectionFailed(
     invalidateControllerState();
 
     invalidateControllerSettings();
+
+    invalidateSenderStatus();
 
 
     enterConnectionState(
@@ -1429,6 +1470,8 @@ void CNCjsClientCore::handleSocketEvent(
 
             invalidateControllerSettings();
 
+            invalidateSenderStatus();
+
 
             Serial.println(
                 "[Socket.IO] Disconnected"
@@ -1831,12 +1874,16 @@ void CNCjsClientCore::handleSocketEvent(
 
                     invalidateControllerState();
 
+
                     /*
-                        The previous controller settings no longer
-                        describe the controller that is being opened.
+                        The previous controller settings and feed
+                        status no longer describe the controller
+                        that is being opened.
                     */
 
                     invalidateControllerSettings();
+
+                    invalidateSenderStatus();
 
 
                     Serial.println();
@@ -1972,10 +2019,6 @@ void CNCjsClientCore::handleSocketEvent(
                     array[2];
 
 
-                // ------------------------------------------------
-                // Latest-state triple buffer
-                // ------------------------------------------------
-
                 ControllerStateSnapshot snapshot;
 
 
@@ -2019,6 +2062,46 @@ void CNCjsClientCore::handleSocketEvent(
                 );
 
 #endif
+
+                break;
+            }
+
+
+            // ------------------------------------------------
+            // FEED STATUS
+            // ------------------------------------------------
+
+            if (
+                strcmp(
+                    eventName,
+                    "sender:status"
+                ) == 0
+            )
+            {
+                SenderStatusSnapshot snapshot;
+
+
+                JsonVariant status =
+                    array[1];
+
+
+                if (
+                    !status.isNull()
+                )
+                {
+                    snapshot.status =
+                        status;
+                }
+
+
+                snapshot.valid =
+                    true;
+
+
+                SenderStatusBuffer_.publish(
+                    snapshot
+                );
+
 
                 break;
             }
@@ -3981,14 +4064,16 @@ bool CNCjsClientCore::openControllerInternal(
 
 
     /*
-        The previous controller settings belong to the
-        previous controller state. They must not remain
-        visible while the new controller is opening.
+        The previous controller state, settings and feed
+        status belong to the previous controller. They must
+        not remain visible while the new controller is opening.
     */
 
     invalidateControllerState();
 
     invalidateControllerSettings();
+
+    invalidateSenderStatus();
 
 
     JsonDocument doc;

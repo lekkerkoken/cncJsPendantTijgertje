@@ -13,6 +13,7 @@
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
+#include "SenderStatusSnapshot.h"
 
 
 

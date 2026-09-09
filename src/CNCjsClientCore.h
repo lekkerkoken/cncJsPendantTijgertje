@@ -10,6 +10,7 @@
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
+#include "SenderStatusSnapshot.h"
 #include "Config.h"
 #include "LatestStateTripleBuffer.h"
 
@@ -119,6 +120,9 @@ public:
 
     ControllerSettingsSnapshot
     controllerSettingsSnapshot() const;
+
+    SenderStatusSnapshot
+    senderStatusSnapshot() const;
 
 
     // ========================================================
@@ -474,7 +478,7 @@ private:
 
 
     // ========================================================
-    // CONTROLLER STATE
+    // LATEST STATE
     // ========================================================
 
     LatestStateTripleBuffer<ControllerStateSnapshot>
@@ -483,9 +487,15 @@ private:
     LatestStateTripleBuffer<ControllerSettingsSnapshot>
         controllerSettingsBuffer_;
 
+    LatestStateTripleBuffer<SenderStatusSnapshot>
+        SenderStatusBuffer_;
+
+
     void invalidateControllerState();
 
     void invalidateControllerSettings();
+
+    void invalidateSenderStatus();
 
 
     // ========================================================
