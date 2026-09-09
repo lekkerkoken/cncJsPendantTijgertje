@@ -2,6 +2,7 @@
 
 #include <Preferences.h>
 
+
 CNCjsClientCore* CNCjsClientCore::instance =
     nullptr;
 
@@ -91,11 +92,23 @@ void CNCjsClientCore::begin()
     lastCommandSendTime_ =
         0;
 
+
     eventDebug_ =
         EventDebugCounters();
 
     eventDebugWindowStartedAt =
         millis();
+
+
+    /*
+        Bij het starten is er nog geen geldige controller
+        en dus ook geen geldige controller settings state.
+    */
+
+    invalidateControllerState();
+
+    invalidateControllerSettings();
+
 
     networkManager_.begin();
 
@@ -248,6 +261,7 @@ CNCjsClientCore::controllerStateSnapshot() const
     return snapshot;
 }
 
+
 // ============================================================
 // INVALIDATE CONTROLLER STATE
 // ============================================================
@@ -256,7 +270,9 @@ void CNCjsClientCore::invalidateControllerState()
 {
     ControllerStateSnapshot snapshot;
 
+
     snapshot.invalidate();
+
 
     controllerStateBuffer_.publish(
         snapshot
@@ -264,28 +280,40 @@ void CNCjsClientCore::invalidateControllerState()
 }
 
 
+// ============================================================
+// CONTROLLER SETTINGS SNAPSHOT
+// ============================================================
+
 ControllerSettingsSnapshot
 CNCjsClientCore::controllerSettingsSnapshot() const
 {
     ControllerSettingsSnapshot snapshot;
 
 
-    if (
-        !lock()
-    )
-    {
-        return snapshot;
-    }
-
-
-    snapshot =
-        controllerSettings_;
-
-
-    unlock();
+    controllerSettingsBuffer_.acquire(
+        snapshot
+    );
 
 
     return snapshot;
+}
+
+
+// ============================================================
+// INVALIDATE CONTROLLER SETTINGS
+// ============================================================
+
+void CNCjsClientCore::invalidateControllerSettings()
+{
+    ControllerSettingsSnapshot snapshot;
+
+
+    snapshot.invalidate();
+
+
+    controllerSettingsBuffer_.publish(
+        snapshot
+    );
 }
 
 
@@ -835,6 +863,8 @@ void CNCjsClientCore::connectionFailed(
 
     invalidateControllerState();
 
+    invalidateControllerSettings();
+
 
     enterConnectionState(
         ConnectionState::Backoff
@@ -1299,7 +1329,9 @@ bool CNCjsClientCore::heartbeatPing()
         output
     );
 
+
 #ifdef SOCKETIO_DEBUG
+
     Serial.print(
         "[CNCjs] HEARTBEAT PING: "
     );
@@ -1307,7 +1339,9 @@ bool CNCjsClientCore::heartbeatPing()
     Serial.println(
         output
     );
+
 #endif
+
 
     bool sent =
         socketIO.sendEVENT(
@@ -1393,6 +1427,8 @@ void CNCjsClientCore::handleSocketEvent(
 
             invalidateControllerState();
 
+            invalidateControllerSettings();
+
 
             Serial.println(
                 "[Socket.IO] Disconnected"
@@ -1455,6 +1491,7 @@ void CNCjsClientCore::handleSocketEvent(
         case sIOtype_EVENT:
         {
 #ifdef SOCKETIO_DEBUG
+
             Serial.print(
                 "[IOc] EVENT: "
             );
@@ -1467,6 +1504,7 @@ void CNCjsClientCore::handleSocketEvent(
             Serial.println();
 
 #endif
+
             JsonDocument doc;
 
 
@@ -1793,6 +1831,14 @@ void CNCjsClientCore::handleSocketEvent(
 
                     invalidateControllerState();
 
+                    /*
+                        The previous controller settings no longer
+                        describe the controller that is being opened.
+                    */
+
+                    invalidateControllerSettings();
+
+
                     Serial.println();
 
                     Serial.println(
@@ -1861,11 +1907,14 @@ void CNCjsClientCore::handleSocketEvent(
                     array[2]["settings"];
 
 
+                ControllerSettingsSnapshot snapshot;
+
+
                 if (
                     controllerType != nullptr
                 )
                 {
-                    controllerSettings_.controllerType =
+                    snapshot.controllerType =
                         controllerType;
                 }
 
@@ -1874,9 +1923,18 @@ void CNCjsClientCore::handleSocketEvent(
                     !settings.isNull()
                 )
                 {
-                    controllerSettings_.settings =
+                    snapshot.settings =
                         settings;
                 }
+
+
+                snapshot.valid =
+                    true;
+
+
+                controllerSettingsBuffer_.publish(
+                    snapshot
+                );
 
 
                 break;
@@ -1946,6 +2004,7 @@ void CNCjsClientCore::handleSocketEvent(
                 controllerStateBuffer_.publish(
                     snapshot
                 );
+
 
                 enterConnectionState(
                     ConnectionState::Ready
@@ -3521,7 +3580,9 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_FEED_HOLD:
 
                 result =
-                    sendCommandInternal("feedhold");
+                    sendCommandInternal(
+                        "feedhold"
+                    );
 
                 break;
 
@@ -3529,7 +3590,9 @@ bool CNCjsClientCore::execute(
             case MACHINE_COMMAND_RESUME:
 
                 result =
-                    sendCommandInternal("cyclestart");
+                    sendCommandInternal(
+                        "cyclestart"
+                    );
 
                 break;
 
@@ -3636,6 +3699,7 @@ bool CNCjsClientCore::sendPendingCommand()
         output
     );
 
+
 #ifdef IOC_DEBUG
 
     Serial.print(
@@ -3647,6 +3711,7 @@ bool CNCjsClientCore::sendPendingCommand()
     );
 
 #endif
+
 
     bool sent =
         socketIO.sendEVENT(
@@ -3915,7 +3980,15 @@ bool CNCjsClientCore::openControllerInternal(
     );
 
 
+    /*
+        The previous controller settings belong to the
+        previous controller state. They must not remain
+        visible while the new controller is opening.
+    */
+
     invalidateControllerState();
+
+    invalidateControllerSettings();
 
 
     JsonDocument doc;

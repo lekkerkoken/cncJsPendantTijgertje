@@ -26,16 +26,13 @@ CNCjsInterface::machineSettingsSnapshot() const
         core_.controllerSettingsSnapshot();
 
     if(
-        snapshot.settings.isNull()
+        !snapshot.valid
     )
     {
-        // Geen geldige controller settings beschikbaar.
         return settings;
     }
 
-    return machineMapper_.map(
-        snapshot
-    );
+    return machineMapper_.map(snapshot);
 }
 
 

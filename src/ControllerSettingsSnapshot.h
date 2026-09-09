@@ -7,12 +7,18 @@
 
 struct ControllerSettingsSnapshot
 {
+    bool valid = false;
+
     String controllerType;
 
     JsonDocument settings;
 
-    void clear()
+
+    void invalidate()
     {
+        valid =
+            false;
+
         controllerType =
             "";
 

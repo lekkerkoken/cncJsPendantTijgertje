@@ -107,6 +107,7 @@ public:
 
     void begin();
 
+
     // ========================================================
     // SNAPSHOTS
     // ========================================================
@@ -476,12 +477,15 @@ private:
     // CONTROLLER STATE
     // ========================================================
 
-    ControllerSettingsSnapshot controllerSettings_;
-
     LatestStateTripleBuffer<ControllerStateSnapshot>
         controllerStateBuffer_;
 
+    LatestStateTripleBuffer<ControllerSettingsSnapshot>
+        controllerSettingsBuffer_;
+
     void invalidateControllerState();
+
+    void invalidateControllerSettings();
 
 
     // ========================================================
