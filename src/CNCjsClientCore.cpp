@@ -3599,7 +3599,7 @@ bool CNCjsClientCore::sendPendingCommand()
         output
     );
 
-
+#ifdef IOC_DEBUG
     Serial.print(
         "[CNCjs] TX @20Hz: "
     );
@@ -3607,7 +3607,7 @@ bool CNCjsClientCore::sendPendingCommand()
     Serial.println(
         output
     );
-
+#endif
 
     bool sent =
         socketIO.sendEVENT(

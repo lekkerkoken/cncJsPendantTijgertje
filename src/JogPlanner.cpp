@@ -89,11 +89,10 @@ void JogPlanner::setAxis(
     positionKnown =
         false;
 
-
+#ifdef JOGPLANNER_DEBUG
     Serial.print(
         "[JogPlanner] Axis changed: "
     );
-
 
     switch(selectedAxis)
     {
@@ -113,6 +112,8 @@ void JogPlanner::setAxis(
             Serial.println("NONE");
             break;
     }
+#endif
+
 }
 
 
@@ -228,7 +229,7 @@ void JogPlanner::encoder(
             );
         }
     }
-
+#ifdef JOGPLANNER_DEBUG
 
     Serial.print(
         "[JogPlanner] Encoder intent: "
@@ -259,6 +260,7 @@ void JogPlanner::encoder(
         jogStepDistance,
         3
     );
+#endif
 }
 
 
@@ -398,7 +400,7 @@ machineState.machineStatus == MACHINE_RUN)
 
     command.delta = calculatedDelta;
 
-
+#ifdef JOGPLANNER_DEBUG
     Serial.println(
         "[JogPlanner] JOG_MOVE"
     );
@@ -439,7 +441,7 @@ machineState.machineStatus == MACHINE_RUN)
         command.feedrate
     );
 
-
+#endif
     return command;
 }
 
@@ -605,10 +607,11 @@ void JogPlanner::reverseIntent(
             direction
         );
 
-
+#ifdef JOGPLANNER_DEBUG
         Serial.println(
             "[JogPlanner] Direction reversed"
         );
+#endif
     }
 }
 
@@ -745,9 +748,11 @@ int JogPlanner::calculateFeedrate(
     {
         feedrate =
             (int)maximum;
+#ifdef JOGPLANNER_DEBUG
             Serial.println(
             "[JogPlanner] Max feedrate used"
         );
+#endif
 
     }
 

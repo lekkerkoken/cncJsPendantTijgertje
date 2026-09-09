@@ -5,6 +5,7 @@
 #include "JogCommand.h"
 #include "MachineState.h"
 #include "MachineSettings.h"
+#include "Config.h"
 
 class JogPlanner
 {
