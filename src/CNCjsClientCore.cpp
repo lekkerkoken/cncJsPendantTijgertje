@@ -234,31 +234,56 @@ CNCjsClientCore::snapshot() const
 // MACHINE STATE SNAPSHOT
 // ============================================================
 
-
-ControllerStateSnapshot CNCjsClientCore::controllerStateSnapshot() const
+ControllerStateSnapshot
+CNCjsClientCore::controllerStateSnapshot() const
 {
     ControllerStateSnapshot snapshot;
+
 
     controllerStateBuffer_.acquire(
         snapshot
     );
 
+
     return snapshot;
 }
 
-ControllerSettingsSnapshot CNCjsClientCore::controllerSettingsSnapshot() const
+// ============================================================
+// INVALIDATE CONTROLLER STATE
+// ============================================================
+
+void CNCjsClientCore::invalidateControllerState()
+{
+    ControllerStateSnapshot snapshot;
+
+    snapshot.invalidate();
+
+    controllerStateBuffer_.publish(
+        snapshot
+    );
+}
+
+
+ControllerSettingsSnapshot
+CNCjsClientCore::controllerSettingsSnapshot() const
 {
     ControllerSettingsSnapshot snapshot;
 
-    if (!lock())
+
+    if (
+        !lock()
+    )
     {
         return snapshot;
     }
 
+
     snapshot =
         controllerSettings_;
 
+
     unlock();
+
 
     return snapshot;
 }
@@ -348,6 +373,7 @@ void CNCjsClientCore::networkTask()
     {
         eventDebug_.networkTaskCalls++;
 
+
         if (
             lock()
         )
@@ -417,6 +443,7 @@ void CNCjsClientCore::networkTask()
         );
     }
 }
+
 
 // ============================================================
 // STATUS
@@ -714,7 +741,7 @@ void CNCjsClientCore::updateConnection()
                 );
 
 
-                controllerState_.clear();
+                invalidateControllerState();
 
 
                 lastMachineStateTime =
@@ -806,7 +833,7 @@ void CNCjsClientCore::connectionFailed(
         0;
 
 
-    controllerState_.clear();
+    invalidateControllerState();
 
 
     enterConnectionState(
@@ -1216,8 +1243,7 @@ void CNCjsClientCore::updateHeartbeat()
         HEARTBEAT_TIMEOUT
     )
     {
-
-        controllerState_.clear();
+        invalidateControllerState();
     }
 }
 
@@ -1365,7 +1391,7 @@ void CNCjsClientCore::handleSocketEvent(
                 CNCjsStatus::Offline;
 
 
-            controllerState_.clear();
+            invalidateControllerState();
 
 
             Serial.println(
@@ -1490,6 +1516,7 @@ void CNCjsClientCore::handleSocketEvent(
             {
                 break;
             }
+
 
             // debugEvent(
             //     eventName,
@@ -1764,8 +1791,7 @@ void CNCjsClientCore::handleSocketEvent(
                     );
 
 
-                    controllerState_.clear();
-
+                    invalidateControllerState();
 
                     Serial.println();
 
@@ -1816,16 +1842,16 @@ void CNCjsClientCore::handleSocketEvent(
                     "controller:settings"
                 ) == 0
             )
-            {   
+            {
 #ifdef IOC_DEBUG
 
                 delay(2000);
+
                 Serial.println(
                     "[CNCjs] Controller settings received"
                 );
+
 #endif
-
-
 
                 const char* controllerType =
                     array[1];
@@ -1850,12 +1876,12 @@ void CNCjsClientCore::handleSocketEvent(
                 {
                     controllerSettings_.settings =
                         settings;
-
                 }
 
 
                 break;
             }
+
 
             // ------------------------------------------------
             // CONTROLLER STATE
@@ -1868,11 +1894,13 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
-            #ifdef IOC_DEBUG
+#ifdef IOC_DEBUG
+
                 Serial.println(
                     "[CNCjs] Controller state received"
                 );
-            #endif
+
+#endif
 
                 controllerReadyState =
                     true;
@@ -1887,32 +1915,14 @@ void CNCjsClientCore::handleSocketEvent(
 
 
                 // ------------------------------------------------
-                // Bestaande controller state
-                // ------------------------------------------------
-
-                if (
-                    controllerType != nullptr
-                )
-                {
-                    controllerState_.controllerType =
-                        controllerType;
-                }
-
-
-                if (
-                    !state.isNull()
-                )
-                {
-                    controllerState_.state =
-                        state;
-                }
-
-
-                // ------------------------------------------------
                 // Latest-state triple buffer
                 // ------------------------------------------------
 
                 ControllerStateSnapshot snapshot;
+
+
+                snapshot.valid =
+                    true;
 
 
                 if (
@@ -1937,20 +1947,23 @@ void CNCjsClientCore::handleSocketEvent(
                     snapshot
                 );
 
-
                 enterConnectionState(
                     ConnectionState::Ready
                 );
 
-            #ifdef IOC_DEBUG
+
+#ifdef IOC_DEBUG
+
                 Serial.println();
                 Serial.println(
                     "[CNCjs] Controller READY"
                 );
-            #endif
+
+#endif
 
                 break;
             }
+
 
             // ------------------------------------------------
             // GRBL STATE
@@ -2011,7 +2024,9 @@ void CNCjsClientCore::handleSocketEvent(
 
 
         case sIOtype_ACK:
+
 #ifdef IOC_DEBUG
+
             Serial.print(
                 "[IOc] ACK: "
             );
@@ -2022,7 +2037,9 @@ void CNCjsClientCore::handleSocketEvent(
             );
 
             Serial.println();
+
 #endif
+
             break;
 
 
@@ -2047,6 +2064,11 @@ void CNCjsClientCore::handleSocketEvent(
             break;
     }
 }
+
+
+// ============================================================
+// DEBUG EVENT
+// ============================================================
 
 void CNCjsClientCore::debugEvent(
     const char* eventName,
@@ -2126,6 +2148,11 @@ void CNCjsClientCore::debugEvent(
 
 #endif
 }
+
+
+// ============================================================
+// DEBUG REPORT
+// ============================================================
 
 void CNCjsClientCore::debugReport()
 {
@@ -2301,6 +2328,8 @@ void CNCjsClientCore::debugReport()
     eventDebugWindowStartedAt =
         now;
 }
+
+
 // ============================================================
 // REQUEST PORT LIST
 // ============================================================
@@ -3040,7 +3069,9 @@ void CNCjsClientCore::loadControllerList()
 
 void CNCjsClientCore::chooseController()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return;
     }
@@ -3104,7 +3135,9 @@ bool CNCjsClientCore::selectController(
     int controllerIndex
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3382,7 +3415,9 @@ int CNCjsClientCore::controllerBaudrate() const
 
 bool CNCjsClientCore::openSelectedController()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3436,7 +3471,9 @@ bool CNCjsClientCore::execute(
     const MachineCommand& command
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3600,6 +3637,7 @@ bool CNCjsClientCore::sendPendingCommand()
     );
 
 #ifdef IOC_DEBUG
+
     Serial.print(
         "[CNCjs] TX @20Hz: "
     );
@@ -3607,6 +3645,7 @@ bool CNCjsClientCore::sendPendingCommand()
     Serial.println(
         output
     );
+
 #endif
 
     bool sent =
@@ -3637,7 +3676,9 @@ bool CNCjsClientCore::sendPendingCommand()
 
 bool CNCjsClientCore::jogCancel()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3715,14 +3756,18 @@ bool CNCjsClientCore::jogCancelInternal()
 
 bool CNCjsClientCore::feedHold()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
 
 
     bool result =
-        sendCommandInternal("feedhold");
+        sendCommandInternal(
+            "feedhold"
+        );
 
 
     unlock();
@@ -3732,21 +3777,24 @@ bool CNCjsClientCore::feedHold()
 }
 
 
-
 // ============================================================
 // RESUME
 // ============================================================
 
 bool CNCjsClientCore::resume()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
 
 
     bool result =
-        sendCommandInternal("cyclestart");
+        sendCommandInternal(
+            "cyclestart"
+        );
 
 
     unlock();
@@ -3762,7 +3810,9 @@ bool CNCjsClientCore::resume()
 
 bool CNCjsClientCore::reset()
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3806,7 +3856,9 @@ bool CNCjsClientCore::openController(
     int baudrate
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3862,7 +3914,8 @@ bool CNCjsClientCore::openControllerInternal(
         ConnectionState::OpeningController
     );
 
-    controllerState_.clear();
+
+    invalidateControllerState();
 
 
     JsonDocument doc;
@@ -3938,7 +3991,9 @@ bool CNCjsClientCore::sendGcode(
     const char* gcode
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -3976,7 +4031,9 @@ bool CNCjsClientCore::sendGcode(
     const char* gcode
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -4079,7 +4136,9 @@ bool CNCjsClientCore::sendCommand(
     const String& command
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }
@@ -4175,7 +4234,9 @@ bool CNCjsClientCore::sendRealtime(
     uint8_t command
 )
 {
-    if (!lock())
+    if (
+        !lock()
+    )
     {
         return false;
     }

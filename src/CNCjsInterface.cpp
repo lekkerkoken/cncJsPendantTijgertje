@@ -74,11 +74,23 @@ void CNCjsInterface::update()
     }
 
 
+    ControllerStateSnapshot snapshot =
+        core_.controllerStateSnapshot();
+
+
+    if(
+        !snapshot.valid
+    )
+    {
+        return;
+    }
+
+
     bool valid = false;
 
     MachineState state =
         machineMapper_.map(
-            core_.controllerStateSnapshot(),
+            snapshot,
             valid
         );
 

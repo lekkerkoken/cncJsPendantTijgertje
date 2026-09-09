@@ -7,19 +7,23 @@
 
 struct ControllerStateSnapshot
 {
+    bool valid = false;
+
     String controllerType;
 
     JsonDocument state;
 
 
-    void clear()
+    void invalidate()
     {
+        valid =
+            false;
+
         controllerType =
             "";
 
         state.clear();
     }
 };
-
 
 #endif

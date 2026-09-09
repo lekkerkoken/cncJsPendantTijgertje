@@ -287,56 +287,58 @@ private:
 
     void networkTask();
 
-// ========================================================
-// DEBUG / EVENT STREAM INSTRUMENTATION
-// ========================================================
 
-struct EventDebugCounters
-{
-    uint32_t networkTaskCalls = 0;
-    uint32_t socketLoopCalls = 0;
+    // ========================================================
+    // DEBUG / EVENT STREAM INSTRUMENTATION
+    // ========================================================
 
-    uint32_t controllerStateEvents = 0;
-    uint32_t grblStateEvents = 0;
-    uint32_t serialportReadEvents = 0;
-    uint32_t serialportWriteEvents = 0;
-    uint32_t otherEvents = 0;
+    struct EventDebugCounters
+    {
+        uint32_t networkTaskCalls = 0;
+        uint32_t socketLoopCalls = 0;
 
-    uint32_t socketLoopTotalUs = 0;
-    uint32_t socketLoopMaxUs = 0;
+        uint32_t controllerStateEvents = 0;
+        uint32_t grblStateEvents = 0;
+        uint32_t serialportReadEvents = 0;
+        uint32_t serialportWriteEvents = 0;
+        uint32_t otherEvents = 0;
 
-    uint32_t eventTotal = 0;
-};
+        uint32_t socketLoopTotalUs = 0;
+        uint32_t socketLoopMaxUs = 0;
 
-
-EventDebugCounters eventDebug_;
-
-unsigned long eventDebugWindowStartedAt = 0;
+        uint32_t eventTotal = 0;
+    };
 
 
-void debugEvent(
-    const char* eventName,
-    size_t length
-);
+    EventDebugCounters eventDebug_;
+
+    unsigned long eventDebugWindowStartedAt = 0;
 
 
-void debugStateEvent(
-    const char* eventName,
-    JsonArray array
-);
+    void debugEvent(
+        const char* eventName,
+        size_t length
+    );
 
 
-void debugSerialportWrite(
-    JsonArray array
-);
+    void debugStateEvent(
+        const char* eventName,
+        JsonArray array
+    );
 
 
-void debugSerialportRead(
-    JsonArray array
-);
+    void debugSerialportWrite(
+        JsonArray array
+    );
 
 
-void debugReport();
+    void debugSerialportRead(
+        JsonArray array
+    );
+
+
+    void debugReport();
+
 
     // ========================================================
     // CNCjs SERVER
@@ -474,11 +476,14 @@ void debugReport();
     // CONTROLLER STATE
     // ========================================================
 
-    ControllerStateSnapshot controllerState_;
     ControllerSettingsSnapshot controllerSettings_;
 
     LatestStateTripleBuffer<ControllerStateSnapshot>
         controllerStateBuffer_;
+
+    void invalidateControllerState();
+
+
     // ========================================================
     // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
     // ========================================================
@@ -499,10 +504,9 @@ void debugReport();
 
     static constexpr unsigned long HEARTBEAT_INTERVAL =
         3000;
-        
+
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
         5000;
-
 
 
     unsigned long lastCncjsActivity =
