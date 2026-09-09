@@ -36,6 +36,17 @@ void PendantController::begin(
     lastMachineStatus =
         machineState.machineStatus;
 
+
+    lastWorkPositionX =
+        machineState.workPosition.x;
+
+    lastWorkPositionY =
+        machineState.workPosition.y;
+
+    lastWorkPositionZ =
+        machineState.workPosition.z;
+
+
     enterJogLayer();
 
     updateDisplay();
@@ -570,6 +581,30 @@ void PendantController::checkStatusChanges()
                 "(none)"
             );
         }
+    }
+    if(
+        machineState.workPosition.x !=
+            lastWorkPositionX ||
+
+        machineState.workPosition.y !=
+            lastWorkPositionY ||
+
+        machineState.workPosition.z !=
+            lastWorkPositionZ
+    )
+    {
+        lastWorkPositionX =
+            machineState.workPosition.x;
+
+        lastWorkPositionY =
+            machineState.workPosition.y;
+
+        lastWorkPositionZ =
+            machineState.workPosition.z;
+
+
+        displayDirty =
+            true;
     }
 }
 

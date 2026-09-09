@@ -73,6 +73,10 @@ private:
         MACHINE_DISCONNECTED;
 
 
+    float lastWorkPositionX = 0.0f;
+    float lastWorkPositionY = 0.0f;
+    float lastWorkPositionZ = 0.0f;
+
     void updateDisplay();
 
     void updateNormalDisplay();
