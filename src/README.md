@@ -1415,3 +1415,82 @@ PendantController bepaalt wie wat wanneer doet.
 Dat is volgens mij precies de architectuur die we de afgelopen refactors eigenlijk langzaam aan het bereiken waren.
 
 En hiermee hebben we ook een solide basis om nu terug te gaan naar jouw oorspronkelijke doel: de hoofdstructuur van de Pendant en de UI van de PendantLayers.
+
+## Latest state
+
+Niet ieder CNCjs-event hoeft als state te worden opgeslagen. Voor de pendant is vooral informatie relevant die een **actuele toestand** van de CNC-machine of sender beschrijft en die op een later moment door een andere component kan worden opgevraagd.
+
+Voor dit soort informatie gebruiken we een expliciet **latest-state object**, opgeslagen in een `LatestStateTripleBuffer`.
+
+Het principe is:
+
+```text
+CNCjs event
+    │
+    ▼
+Snapshot
+    │
+    ▼
+LatestStateTripleBuffer
+    │
+    ▼
+consumer kan actuele toestand opvragen
+```
+
+Een snapshot vertegenwoordigt dus niet een gebeurtenis die moet worden verwerkt, maar de **laatst bekende toestand**.
+
+Op dit moment wordt dit mechanisme gebruikt voor onder andere:
+
+* `controller:state` → `ControllerStateSnapshot`
+* `controller:settings` → `ControllerSettingsSnapshot`
+* `sender:status` → `SenderStatusSnapshot`
+
+Deze informatie kan door de `CNCjsClientCore` worden ontvangen en onafhankelijk van het moment waarop het event binnenkwam door andere onderdelen van de pendant worden opgevraagd.
+
+### Wat hier niet automatisch onder valt
+
+`CNCjsClientCore` bevat daarnaast een aantal interne variabelen die de **verbinding en de lifecycle van Core zelf** beschrijven, bijvoorbeeld:
+
+* `socketConnectedState`
+* `authenticatedState`
+* `controllerReadyState`
+* informatie over de geselecteerde controller en poort
+* de voortgang van het initialisatieproces
+
+Deze waarden worden momenteel rechtstreeks door `CNCjsClientCore` bijgehouden en via `CNCjsSnapshot` als een momentopname van de Core-status beschikbaar gesteld.
+
+Dat deze waarden state zijn, betekent dus niet automatisch dat ze ook een `LatestStateTripleBuffer` nodig hebben.
+
+Er is daarom bewust een onderscheid tussen:
+
+```text
+CNCjsClientCore
+│
+├── connection / lifecycle state
+│      └── interne state + CNCjsSnapshot
+│
+└── actuele CNCjs-informatie
+       ├── controller:state
+       │      └── ControllerStateSnapshot
+       │             └── LatestStateTripleBuffer
+       │
+       ├── controller:settings
+       │      └── ControllerSettingsSnapshot
+       │             └── LatestStateTripleBuffer
+       │
+       └── sender:status
+              └── SenderStatusSnapshot
+                     └── LatestStateTripleBuffer
+```
+
+### Huidige grens
+
+De huidige refactor richt zich dus op **informatie die als actuele CNCjs-toestand door de pendant gebruikt wordt**. De interne connection/lifecycle state van `CNCjsClientCore` wordt daarbij niet automatisch meegenomen.
+
+Dat kan in een latere refactor opnieuw worden bekeken. Dan moet eerst worden vastgesteld welke van deze variabelen werkelijk een extern relevante latest state vertegenwoordigen, welke uitsluitend interne lifecycle-state zijn en welke mogelijk afgeleid kunnen worden van andere state.
+
+Voor nu is het daarmee een bewuste architectuurkeuze:
+
+> **Niet alle state wordt een latest state. Alleen state die als actuele, door consumers opvraagbare toestand betekenisvol is, krijgt een expliciet latest-state object en een `LatestStateTripleBuffer`.**
+
+Dit houdt de huidige refactor gericht en voorkomt dat de triple-bufferarchitectuur zonder duidelijke noodzaak wordt toegepast op de interne besturing van `CNCjsClientCore`.
