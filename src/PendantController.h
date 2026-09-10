@@ -16,6 +16,15 @@ struct PendantHandlers
 {
     void (PendantController::*key1)() = nullptr;
     void (PendantController::*key2)() = nullptr;
+    void (PendantController::*key3)() = nullptr;
+    void (PendantController::*key4)() = nullptr;
+    void (PendantController::*key5)() = nullptr;
+    void (PendantController::*key6)() = nullptr;
+    void (PendantController::*key7)() = nullptr;
+    void (PendantController::*key8)() = nullptr;
+    void (PendantController::*key9)() = nullptr;
+    void (PendantController::*encoderPress)() = nullptr;
+
 };
 
 class PendantController
@@ -69,6 +78,13 @@ private:
     void feedHoldCycleStart();
 
     void homeAxis();
+
+    void selectXAxis();
+    void selectYAxis();
+    void selectZAxis();
+
+    void decreaseJogStep();
+    void increaseJogStep();
 
     bool displayDirty =
         true;

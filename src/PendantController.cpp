@@ -61,10 +61,7 @@ void PendantController::handle(
     const Event& event
 )
 {
-    bool changed =
-        false;
-
-
+    
     switch(event.type)
     {
 
@@ -83,111 +80,58 @@ void PendantController::handle(
 
             break;
 
-       // ----------------------------------------------------
-        // AXIS Y
-        // ----------------------------------------------------
+
+        case EVENT_KEY_3:
+
+            if(handlers.key3 != nullptr)
+                (this->*handlers.key3)();
+
+            break;
 
         case EVENT_KEY_4:
 
-            if(
-                pendantState.axis !=
-                AXIS_Y
-            )
-            {
-                pendantState.axis =
-                    AXIS_Y;
-
-                changed =
-                    true;
-            }
+            if(handlers.key4 != nullptr)
+                (this->*handlers.key4)();
 
             break;
 
-        // ----------------------------------------------------
-        // JOG STEP GROTER
-        // ----------------------------------------------------
+        case EVENT_KEY_5:
+
+            if(handlers.key5 != nullptr)
+                (this->*handlers.key5)();
+
+            break;
 
         case EVENT_KEY_6:
 
-            if(
-                pendantState.jogStep !=
-                STEP_10_MM
-            )
-            {
-                pendantState.jogStep =
-                    static_cast<JogStep>(
-                        pendantState.jogStep - 1
-                    );
-
-                changed =
-                    true;
-            }
+            if(handlers.key6 != nullptr)
+                (this->*handlers.key6)();
 
             break;
 
-        // ----------------------------------------------------
-        // AXIS Z
-        // ----------------------------------------------------
 
         case EVENT_KEY_7:
 
-            if(
-                pendantState.axis !=
-                AXIS_Z
-            )
-            {
-                pendantState.axis =
-                    AXIS_Z;
-
-                changed =
-                    true;
-            }
+            if(handlers.key7 != nullptr)
+                (this->*handlers.key7)();
 
             break;
 
-        // ----------------------------------------------------
-        // AXIS X
-        // ----------------------------------------------------
 
         case EVENT_KEY_8:
 
-            if(
-                pendantState.axis !=
-                AXIS_X
-            )
-            {
-                pendantState.axis =
-                    AXIS_X;
-
-                changed =
-                    true;
-            }
+            if(handlers.key8 != nullptr)
+                (this->*handlers.key8)();
 
             break;
 
-
-        // ----------------------------------------------------
-        // JOG STEP KLEINER
-        // ----------------------------------------------------
 
         case EVENT_KEY_9:
 
-            if(
-                pendantState.jogStep !=
-                STEP_0_01_MM
-            )
-            {
-                pendantState.jogStep =
-                    static_cast<JogStep>(
-                        pendantState.jogStep + 1
-                    );
-
-                changed =
-                    true;
-            }
+            if(handlers.key9 != nullptr)
+                (this->*handlers.key9)();
 
             break;
-
 
         // ----------------------------------------------------
         // ENCODER PRESS
@@ -195,10 +139,13 @@ void PendantController::handle(
 
         case EVENT_ENCODER_PRESS:
 
+            if(handlers.encoderPress != nullptr)
+                (this->*handlers.encoderPress)();
+
             break;
 
         // ----------------------------------------------------
-        // ENCODER PRESS
+        // ENCODER LONG PRESS
         // ----------------------------------------------------
 
         case EVENT_ENCODER_LONG_PRESS:
@@ -229,12 +176,6 @@ void PendantController::handle(
             break;
     }
 
-
-    if(changed)
-    {
-        displayDirty =
-            true;
-    }
 }
 
 
@@ -300,7 +241,23 @@ void PendantController::enterJogLayer()
 
     handlers.key2 =
         &PendantController::homeAxis;
-        
+
+    handlers.key4 =
+        &PendantController::selectYAxis;
+
+    handlers.key6 =
+        &PendantController::increaseJogStep;
+
+    handlers.key7 =
+        &PendantController::selectZAxis;
+
+    handlers.key8 =
+        &PendantController::selectXAxis;
+
+    handlers.key9 =
+        &PendantController::decreaseJogStep;
+
+
     cnc.cacheControllerSettings();
 
     MachineSettings machineSettings =
@@ -357,6 +314,85 @@ void PendantController::feedHoldCycleStart()
     else
     {
         cnc.feedHold();
+    }
+}
+
+void PendantController::selectXAxis()
+{
+    if(
+        pendantState.axis !=
+        AXIS_X
+    )
+    {
+        pendantState.axis =
+            AXIS_X;
+
+        displayDirty =
+            true;
+    }
+}
+
+void PendantController::selectYAxis()
+{
+    if(
+        pendantState.axis !=
+        AXIS_Y
+    )
+    {
+        pendantState.axis =
+            AXIS_Y;
+
+        displayDirty =
+            true;
+    }
+}
+
+void PendantController::selectZAxis()
+{
+    if(
+        pendantState.axis !=
+        AXIS_Z
+    )
+    {
+        pendantState.axis =
+            AXIS_Z;
+
+        displayDirty =
+            true;
+    }
+}
+
+void PendantController::decreaseJogStep()
+{
+    if(
+        pendantState.jogStep !=
+        STEP_0_01_MM
+    )
+    {
+        pendantState.jogStep =
+            static_cast<JogStep>(
+                pendantState.jogStep + 1
+            );
+
+        displayDirty =
+            true;
+    }
+}
+
+void PendantController::increaseJogStep()
+{
+    if(
+        pendantState.jogStep !=
+        STEP_10_MM
+    )
+    {
+        pendantState.jogStep =
+            static_cast<JogStep>(
+                pendantState.jogStep - 1
+            );
+
+        displayDirty =
+            true;
     }
 }
 
