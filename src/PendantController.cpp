@@ -70,13 +70,16 @@ void PendantController::handle(
 
         case EVENT_KEY_1:
 
-            feedHoldCycleStart();
+            if(handlers.key1 != nullptr)
+                (this->*handlers.key1)();
+
             break;
 
  
         case EVENT_KEY_2:
 
-            homeAxis();
+            if(handlers.key2 != nullptr)
+                (this->*handlers.key2)();
 
             break;
 
@@ -292,6 +295,12 @@ void PendantController::setLayer(
 
 void PendantController::enterJogLayer()
 {
+    handlers.key1 =
+        &PendantController::feedHoldCycleStart;
+
+    handlers.key2 =
+        &PendantController::homeAxis;
+        
     cnc.cacheControllerSettings();
 
     MachineSettings machineSettings =

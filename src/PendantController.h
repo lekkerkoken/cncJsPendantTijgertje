@@ -10,6 +10,13 @@
 #include "JogPlanner.h"
 #include "PendantState.h"
 
+class PendantController;
+
+struct PendantHandlers
+{
+    void (PendantController::*key1)() = nullptr;
+    void (PendantController::*key2)() = nullptr;
+};
 
 class PendantController
 {
@@ -35,6 +42,8 @@ private:
     InputManager input;
 
     CNCjsInterface cnc;
+
+    PendantHandlers handlers;
 
     JogPlanner jogPlanner;
 
