@@ -3,7 +3,8 @@
 
 
 enum PendantLayer
-{
+{   
+    LAYER_NONE,
     LAYER_JOG,
     LAYER_INFO,
     LAYER_CONTROL
@@ -43,7 +44,7 @@ float jogStepDistance(
 struct PendantState
 {
     PendantLayer layer =
-        LAYER_JOG;
+        LAYER_NONE;
 
 
     Axis axis =

@@ -24,6 +24,8 @@ struct PendantHandlers
     void (PendantController::*key8)() = nullptr;
     void (PendantController::*key9)() = nullptr;
     void (PendantController::*encoderPress)() = nullptr;
+    void (PendantController::*encoderLongPress)() = nullptr;
+    void (PendantController::*changedToReady)() = nullptr;
 
 };
 
@@ -70,6 +72,8 @@ private:
     );
 
     void enterJogLayer();
+
+    void initialiseJogPlanner();
 
     void handleJogEncoder(
         const Event& event

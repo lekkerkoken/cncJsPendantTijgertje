@@ -23,9 +23,8 @@ void PendantController::begin(
         matrix,
         encoder
     );
-
-    displayDirty =
-        true;
+    handlers.encoderLongPress =
+    &PendantController::toggleLayer;
 
     lastCncStatus =
         cnc.status();
@@ -47,7 +46,7 @@ void PendantController::begin(
         machineState.workPosition.z;
 
 
-    enterJogLayer();
+    setLayer(LAYER_JOG);
 
     updateDisplay();
 }
@@ -61,7 +60,7 @@ void PendantController::handle(
     const Event& event
 )
 {
-    
+
     switch(event.type)
     {
 
@@ -165,7 +164,12 @@ void PendantController::handle(
             );
 
             break;
+        case EVENT_CHANGED_TO_READY:
 
+            if(handlers.changedToReady != nullptr)
+                (this->*handlers.changedToReady)();
+
+            break;
 
         // ----------------------------------------------------
         // DEFAULT
@@ -235,7 +239,10 @@ void PendantController::setLayer(
 
 
 void PendantController::enterJogLayer()
-{
+{   
+    handlers.changedToReady =
+        &PendantController::initialiseJogPlanner;
+
     handlers.key1 =
         &PendantController::feedHoldCycleStart;
 
@@ -257,7 +264,14 @@ void PendantController::enterJogLayer()
     handlers.key9 =
         &PendantController::decreaseJogStep;
 
+    if(cnc.status() == CNCjsInterface::CNCjsStatus::Ready)
+    {
+        initialiseJogPlanner();
+    }
+}
 
+void PendantController::initialiseJogPlanner()
+{
     cnc.cacheControllerSettings();
 
     MachineSettings machineSettings =
@@ -275,7 +289,6 @@ void PendantController::enterJogLayer()
         axis()
     );
 }
-
 
 // ============================================================
 // AXIS
@@ -536,6 +549,19 @@ void PendantController::checkStatusChanges()
         lastCncStatus
     )
     {
+        switch (currentCncStatus)
+        {
+        case CNCjsClientCore::CNCjsStatus::Ready:
+            {
+                Event event;
+                event.type = EVENT_CHANGED_TO_READY;
+                handle(event);
+                break;
+            }
+        
+        default:
+            break;
+        }
         lastCncStatus =
             currentCncStatus;
 

@@ -1494,3 +1494,7 @@ Voor nu is het daarmee een bewuste architectuurkeuze:
 > **Niet alle state wordt een latest state. Alleen state die als actuele, door consumers opvraagbare toestand betekenisvol is, krijgt een expliciet latest-state object en een `LatestStateTripleBuffer`.**
 
 Dit houdt de huidige refactor gericht en voorkomt dat de triple-bufferarchitectuur zonder duidelijke noodzaak wordt toegepast op de interne besturing van `CNCjsClientCore`.
+
+
+
+PendantController detecteert gebeurtenissen en bewaakt de algemene toestand/prioriteit. PendantHandlers beschrijven alleen welk klein stukje laag-specifiek gedrag op een relevante gebeurtenis moet volgen.

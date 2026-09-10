@@ -24,7 +24,12 @@ enum EventType
 
     EVENT_ENCODER_PULSE,
     EVENT_ENCODER_PRESS,
-    EVENT_ENCODER_LONG_PRESS
+    EVENT_ENCODER_LONG_PRESS,
+
+
+    // CNCjs state events
+
+    EVENT_CHANGED_TO_READY
 };
 
 
