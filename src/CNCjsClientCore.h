@@ -491,20 +491,21 @@ private:
     // ========================================================
     //
     // lastCncjsActivity:
-    //   Laatste ontvangen CNCjs EVENT.
+    //   Laatste ontvangen controller:state.
+    //
+    // TOLERABLE_SILENCE_DURATION:
+    //   Hoe lang we geen controller:state willen missen
+    //   voordat we actief om een statusreport vragen.
     //
     // lastHeartbeatPing:
-    //   Laatste verstuurde heartbeat-ping.
+    //   Laatste heartbeat-ping.
     //
-    // De watchdog en de heartbeat-rate zijn bewust
-    // onafhankelijk van elkaar.
+    // HEARTBEAT_TIMEOUT:
+    //   Onafhankelijke watchdog voor machine-state.
     //
     // ========================================================
 
-    static constexpr unsigned long CNCJS_ACTIVITY_TIMEOUT =
-        3000;
-
-    static constexpr unsigned long HEARTBEAT_INTERVAL =
+    static constexpr unsigned long TOLERABLE_SILENCE_DURATION =
         3000;
 
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
@@ -667,9 +668,6 @@ private:
         const String& command
     );
 
-    bool sendRealtimeInternal(
-        uint8_t command
-    );
 };
 
 

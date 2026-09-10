@@ -1262,25 +1262,49 @@ void CNCjsClientCore::updateHeartbeat()
 
 
     /*
-        Heartbeat ping is rate limited independently from
-        CNCjs activity.
+        Controller heartbeat
+        --------------------
 
-        Exactly one ping can be sent per HEARTBEAT_INTERVAL.
-        Incoming CNCjs activity does not affect this interval.
+        controller:state is het echte teken van leven.
+
+        Zolang we regelmatig controller:state ontvangen,
+        hoeven we niets te doen.
+
+        Pas wanneer de controller gedurende
+        TOLERABLE_SILENCE_DURATION stil is geweest,
+        vragen we actief om een statusreport.
+
+        lastHeartbeatPing voorkomt dat we bij iedere
+        network-task-iteratie opnieuw proberen te pingen.
+
+        Als de controller daarna weer een controller:state
+        stuurt, wordt lastCncjsActivity opnieuw gezet en
+        begint de stilteperiode opnieuw.
     */
 
     if (
-        now - lastHeartbeatPing >=
-        HEARTBEAT_INTERVAL
+        now - lastCncjsActivity >=
+        TOLERABLE_SILENCE_DURATION
     )
     {
-        heartbeatPing();
+        if (
+            now - lastHeartbeatPing >=
+            TOLERABLE_SILENCE_DURATION
+        )
+        {
+            heartbeatPing();
+        }
     }
 
 
     /*
-        Machine-state timeout remains independent from the
-        CNCjs communication heartbeat.
+        Machine-state watchdog
+        ----------------------
+
+        Dit is bewust een volledig onafhankelijk mechanisme.
+
+        Deze watchdog kijkt niet naar CNCjs-activiteit,
+        maar naar echte machine-state activiteit.
     */
 
     if (
@@ -1291,7 +1315,6 @@ void CNCjsClientCore::updateHeartbeat()
         invalidateControllerState();
     }
 }
-
 
 // ============================================================
 // HEARTBEAT PING
@@ -3852,7 +3875,7 @@ bool CNCjsClientCore::sendGcodeInternal(
         output
     );
 
-
+#ifdef CNCJS_EVENT_DEBUG
     Serial.print(
         "[CNCjs] GCODE: "
     );
@@ -3860,7 +3883,7 @@ bool CNCjsClientCore::sendGcodeInternal(
     Serial.println(
         output
     );
-
+#endif
 
     return socketIO.sendEVENT(
         output
@@ -3953,149 +3976,6 @@ bool CNCjsClientCore::sendCommandInternal(
 
     Serial.print(
         "[CNCjs] COMMAND: "
-    );
-
-    Serial.println(
-        output
-    );
-
-
-    return socketIO.sendEVENT(
-        output
-    );
-}
-
-
-// ============================================================
-// SEND REALTIME
-// ============================================================
-
-bool CNCjsClientCore::sendRealtime(
-    uint8_t command
-)
-{
-    if (
-        !lock()
-    )
-    {
-        return false;
-    }
-
-
-    bool result =
-        sendRealtimeInternal(
-            command
-        );
-
-
-    unlock();
-
-
-    return result;
-}
-
-
-// ============================================================
-// SEND REALTIME INTERNAL
-// ============================================================
-
-bool CNCjsClientCore::sendRealtimeInternal(
-    uint8_t command
-)
-{
-    if (
-        !socketConnectedState
-    )
-    {
-        return false;
-    }
-
-
-    if (
-        !controllerReadyState
-    )
-    {
-        return false;
-    }
-
-
-    if (
-        activeControllerPortState.length() == 0
-    )
-    {
-        return false;
-    }
-
-
-    JsonDocument doc;
-
-
-    JsonArray array =
-        doc.to<JsonArray>();
-
-
-    array.add(
-        "command"
-    );
-
-    array.add(
-        activeControllerPortState
-    );
-
-
-    if (
-        command == '!' ||
-        command == '~'
-    )
-    {
-        char realtimeCommand[2];
-
-
-        realtimeCommand[0] =
-            static_cast<char>(
-                command
-            );
-
-
-        realtimeCommand[1] =
-            '\0';
-
-
-        array.add(
-            realtimeCommand
-        );
-    }
-    else
-    {
-        /*
-            The current CNCjs interface only supports the
-            realtime commands used by feed hold and resume.
-        */
-
-        Serial.print(
-            "[CNCjs] Unsupported realtime byte: 0x"
-        );
-
-        Serial.println(
-            command,
-            HEX
-        );
-
-        return false;
-    }
-
-
-    String output;
-
-
-    serializeJson(
-        doc,
-        output
-    );
-
-
-    Serial.print(
-        "[CNCjs] REALTIME: "
     );
 
     Serial.println(
