@@ -70,7 +70,7 @@ void PendantController::handle(
 
         case EVENT_KEY_1:
 
-            feedHoldResume();
+            feedHoldCycleStart();
             break;
 
  
@@ -337,7 +337,7 @@ float PendantController::jogStepDistance() const
 // Feedhold / Resume
 // ============================================================
 
-void PendantController::feedHoldResume()
+void PendantController::feedHoldCycleStart()
 {
     MachineState state = cnc.machineStateSnapshot();
 

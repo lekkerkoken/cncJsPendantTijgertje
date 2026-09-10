@@ -57,7 +57,7 @@ private:
         const Event& event
     );
 
-    void feedHoldResume();
+    void feedHoldCycleStart();
 
     void homeAxis();
 
