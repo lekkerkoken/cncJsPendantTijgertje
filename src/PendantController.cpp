@@ -159,11 +159,11 @@ void PendantController::handle(
 
         case EVENT_ENCODER_PULSE:
 
-            handleJogEncoder(
-                event
-            );
+            if(handlers.encoderPulse != nullptr)
+                (this->*handlers.encoderPulse)(event);
 
             break;
+
         case EVENT_CHANGED_TO_READY:
 
             if(handlers.changedToReady != nullptr)
@@ -263,6 +263,9 @@ void PendantController::enterJogLayer()
 
     handlers.key9 =
         &PendantController::decreaseJogStep;
+
+    handlers.encoderPulse =
+        &PendantController::handleJogEncoder;
 
     if(cnc.status() == CNCjsInterface::CNCjsStatus::Ready)
     {

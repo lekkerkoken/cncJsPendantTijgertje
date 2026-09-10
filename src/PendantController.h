@@ -25,6 +25,7 @@ struct PendantHandlers
     void (PendantController::*key9)() = nullptr;
     void (PendantController::*encoderPress)() = nullptr;
     void (PendantController::*encoderLongPress)() = nullptr;
+    void (PendantController::*encoderPulse)(const Event&) = nullptr;
     void (PendantController::*changedToReady)() = nullptr;
 
 };
