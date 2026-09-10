@@ -83,6 +83,11 @@ private:
     void feedHoldCycleStart();
 
     void homeAxis();
+    void zeroAxis();
+    void unlock();
+    void reset();
+
+
 
     void selectXAxis();
     void selectYAxis();

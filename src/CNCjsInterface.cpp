@@ -17,6 +17,7 @@ MachineState CNCjsInterface::machineStateSnapshot() const
     return machine_.state;
 }
 
+
 MachineSettings
 CNCjsInterface::machineSettingsSnapshot() const
 {
@@ -51,8 +52,7 @@ CNCjsInterface::status() const
 // LIFECYCLE
 // ============================================================
 
-void CNCjsInterface::begin(
-)
+void CNCjsInterface::begin()
 {
     core_.begin();
 }
@@ -70,10 +70,8 @@ void CNCjsInterface::update()
         return;
     }
 
-
     ControllerStateSnapshot snapshot =
         core_.controllerStateSnapshot();
-
 
     if(
         !snapshot.valid
@@ -82,7 +80,6 @@ void CNCjsInterface::update()
         return;
     }
 
-
     bool valid = false;
 
     MachineState state =
@@ -90,7 +87,6 @@ void CNCjsInterface::update()
             snapshot,
             valid
         );
-
 
     if(valid)
     {
@@ -264,84 +260,80 @@ bool CNCjsInterface::openController(
 }
 
 
-// ============================================================
-// COMMANDS
-// ============================================================
-
-bool CNCjsInterface::execute(
-    const MachineCommand& command
-)
-{
-    return core_.execute(
-        command
-    );
-}
-
 bool CNCjsInterface::homeAxis(
     Axis axis
 )
 {
-    MachineCommand command =
+    String gcode =
         machineMapper_.mapHome(
             axis,
             cachedControllerType
         );
 
-    if(
-        command.type ==
-        MACHINE_COMMAND_NONE
-    )
-    {
-        return false;
-    }
-
-    return core_.execute(
-        command
+    return sendGcode(
+        gcode.c_str()
     );
 }
+
+bool CNCjsInterface::unlock()
+{
+    return sendCommand(
+         "unlock"
+    );
+}
+
+bool CNCjsInterface::reset()
+{
+    return sendCommand(
+         "reset"
+    );
+}
+
+
+bool CNCjsInterface::zeroAxis(
+    Axis axis
+)
+{
+    String gcode =
+        machineMapper_.mapZeroAxis(
+            axis,
+            cachedControllerType
+        );
+
+    return sendGcode(
+        gcode.c_str()
+    );
+}
+
 
 bool CNCjsInterface::execute(
     const JogCommand& jog
 )
 {
-    MachineCommand command =
+    String gcode =
         machineMapper_.map(
             jog,
             cachedControllerType
         );
 
+    return sendGcode(
+        gcode.c_str()
+    );
+}
+
+bool CNCjsInterface::sendGcode(
+    const String& gcode
+)
+{
     if(
-        command.type ==
-        MACHINE_COMMAND_NONE
+        gcode.length() == 0
     )
     {
         return false;
     }
 
-    return core_.execute(
-        command
-    );
-}
-
-
-bool CNCjsInterface::sendGcode(
-    const char* gcode
-)
-{
     return core_.sendGcode(
-        gcode
-    );
-}
-
-
-bool CNCjsInterface::sendGcode(
-    const char* port,
-    const char* gcode
-)
-{
-    return core_.sendGcode(
-        port,
-        gcode
+        gcode.c_str()
     );
 }
 
@@ -358,27 +350,54 @@ bool CNCjsInterface::sendCommand(
 
 bool CNCjsInterface::jogCancel()
 {
-    return core_.jogCancel();
-}
+    return sendCommand(
+        "jogCancel"
+    );}
 
 
 bool CNCjsInterface::feedHold()
 {
-    return core_.feedHold();
+    return sendCommand(
+        "feedhold"
+    );
+}
+
+bool CNCjsInterface::cyclestart()
+{
+    return sendCommand(
+        "cyclestart"
+    );
+}
+
+bool CNCjsInterface::start()
+{
+    return sendCommand(
+        "gcode:start"
+    );
+}
+
+
+bool CNCjsInterface::pause()
+{
+    return sendCommand(
+        "gcode:pause"
+    );
 }
 
 
 bool CNCjsInterface::resume()
 {
-    return core_.resume();
+    return sendCommand(
+        "gcode:resume"
+    );
 }
 
-
-bool CNCjsInterface::reset()
+bool CNCjsInterface::stop()
 {
-    return core_.reset();
+    return sendCommand(
+        "gcode:stop"
+    );
 }
-
 
 bool CNCjsInterface::sendRealtime(
     uint8_t command

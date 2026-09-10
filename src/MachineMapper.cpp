@@ -2,6 +2,11 @@
 
 #include <cstdio>
 
+
+// ============================================================
+// CONTROLLER TYPE
+// ============================================================
+
 ControllerType MachineMapper::controllerTypeFromString(
     const String& type
 ) const
@@ -18,19 +23,17 @@ ControllerType MachineMapper::controllerTypeFromString(
 
     return CONTROLLER_UNKNOWN;
 }
+
+
 // ============================================================
-// MAP
+// MAP JOG COMMAND
 // ============================================================
 
-MachineCommand MachineMapper::map(
+String MachineMapper::map(
     const JogCommand& jog,
     ControllerType type
-
 )
 {
-    MachineCommand command;
-
-
     switch(jog.type)
     {
         case JOG_MOVE:
@@ -45,16 +48,14 @@ MachineCommand MachineMapper::map(
 
         default:
 
-            command.type =
-                MACHINE_COMMAND_NONE;
-
-            command.command =
-                "";
-
-            return command;
+            return unsupported();
     }
 }
 
+
+// ============================================================
+// MAP CONTROLLER SETTINGS
+// ============================================================
 
 MachineSettings MachineMapper::map(
     const ControllerSettingsSnapshot& snapshot
@@ -102,10 +103,13 @@ MachineSettings MachineMapper::map(
             break;
     }
 
-
     return settings;
 }
 
+
+// ============================================================
+// MAP CONTROLLER STATE
+// ============================================================
 
 MachineState MachineMapper::map(
     const ControllerStateSnapshot& snapshot,
@@ -116,18 +120,15 @@ MachineState MachineMapper::map(
 
     MachineState state;
 
-
     if(snapshot.state.isNull())
     {
         return state;
     }
 
-
     ControllerType type =
         controllerTypeFromString(
             snapshot.controllerType
         );
-
 
     switch(type)
     {
@@ -136,16 +137,13 @@ MachineState MachineMapper::map(
             JsonObjectConst status =
                 snapshot.state["status"].as<JsonObjectConst>();
 
-
             if(status.isNull())
             {
                 return state;
             }
 
-
             String activeState =
                 status["activeState"].as<String>();
-
 
             if(activeState == "Idle")
             {
@@ -172,14 +170,11 @@ MachineState MachineMapper::map(
                 return state;
             }
 
-
             JsonObjectConst machinePosition =
                 status["mpos"].as<JsonObjectConst>();
 
-
             JsonObjectConst workPosition =
                 status["wpos"].as<JsonObjectConst>();
-
 
             if(
                 machinePosition.isNull() ||
@@ -189,35 +184,27 @@ MachineState MachineMapper::map(
                 return state;
             }
 
-
             state.machinePosition.x =
                 machinePosition["x"].as<float>();
-
 
             state.machinePosition.y =
                 machinePosition["y"].as<float>();
 
-
             state.machinePosition.z =
                 machinePosition["z"].as<float>();
-
 
             state.workPosition.x =
                 workPosition["x"].as<float>();
 
-
             state.workPosition.y =
                 workPosition["y"].as<float>();
-
 
             state.workPosition.z =
                 workPosition["z"].as<float>();
 
-
             state.activeWcs =
                 snapshot.state["parserstate"]["modal"]["wcs"]
                     .as<String>();
-
 
             valid = true;
 
@@ -239,7 +226,6 @@ MachineState MachineMapper::map(
             break;
     }
 
-
     return state;
 }
 
@@ -248,7 +234,7 @@ MachineState MachineMapper::map(
 // MAP JOG MOVE
 // ============================================================
 
-MachineCommand MachineMapper::mapJogMove(
+String MachineMapper::mapJogMove(
     const JogCommand& jog,
     ControllerType type
 )
@@ -277,21 +263,15 @@ MachineCommand MachineMapper::mapJogMove(
     }
 }
 
+
 // ============================================================
 // MAP GRBL JOG
 // ============================================================
 
-MachineCommand MachineMapper::mapGrblJog(
+String MachineMapper::mapGrblJog(
     const JogCommand& jog
 )
 {
-    MachineCommand command;
-
-
-    command.type =
-        MACHINE_COMMAND_GCODE;
-
-
     if(
         jog.axis ==
         AXIS_NONE
@@ -300,10 +280,8 @@ MachineCommand MachineMapper::mapGrblJog(
         return unsupported();
     }
 
-
     char axisChar =
         'X';
-
 
     switch(jog.axis)
     {
@@ -338,9 +316,7 @@ MachineCommand MachineMapper::mapGrblJog(
             return unsupported();
     }
 
-
     char buffer[64];
-
 
     /*
         De JogPlanner heeft de beweging al gepland.
@@ -350,9 +326,6 @@ MachineCommand MachineMapper::mapGrblJog(
 
         feedrate:
             door de JogPlanner bepaalde snelheid.
-
-        Deze functie vertaalt de generieke JogCommand
-        naar GRBL-specifieke jog-syntax.
     */
 
     snprintf(
@@ -364,31 +337,15 @@ MachineCommand MachineMapper::mapGrblJog(
         jog.feedrate
     );
 
-
-    command.command =
-        buffer;
-
-
-    return command;
-}
-
-MachineCommand MachineMapper::unsupported() const
-{
-    MachineCommand command;
-
-
-    command.type =
-        MACHINE_COMMAND_NONE;
-
-    command.command =
-        "";
-
-
-    return command;
+    return String(buffer);
 }
 
 
-MachineCommand MachineMapper::mapHome(
+// ============================================================
+// MAP HOME
+// ============================================================
+
+String MachineMapper::mapHome(
     Axis axis,
     ControllerType type
 )
@@ -420,4 +377,102 @@ MachineCommand MachineMapper::mapHome(
 
             return unsupported();
     }
+}
+
+
+// ============================================================
+// MAP ZERO WCS AXIS
+// ============================================================
+
+String MachineMapper::mapZeroAxis(
+    Axis axis,
+    ControllerType type
+)
+{
+    switch(type)
+    {
+        case CONTROLLER_GRBL:
+        {
+            /*
+                Stel de huidige positie van de geselecteerde
+                as in als WCS-coördinaat 0.
+
+                G10 L20 gebruikt de huidige positie als
+                uitgangspunt en schrijft daarmee de
+                werkcoördinaat-offset.
+
+                P0 = actieve work coordinate system.
+            */
+
+            char axisChar;
+
+            switch(axis)
+            {
+                case AXIS_X:
+
+                    axisChar =
+                        'X';
+
+                    break;
+
+
+                case AXIS_Y:
+
+                    axisChar =
+                        'Y';
+
+                    break;
+
+
+                case AXIS_Z:
+
+                    axisChar =
+                        'Z';
+
+                    break;
+
+
+                case AXIS_NONE:
+
+                default:
+
+                    return unsupported();
+            }
+
+            char buffer[32];
+
+            snprintf(
+                buffer,
+                sizeof(buffer),
+                "G10 L20 P0 %c0",
+                axisChar
+            );
+
+            return String(buffer);
+        }
+
+
+        case CONTROLLER_TINYG:
+
+            // TinyG zero-axis mapping
+
+            return unsupported();
+
+
+        case CONTROLLER_UNKNOWN:
+
+        default:
+
+            return unsupported();
+    }
+}
+
+
+// ============================================================
+// UNSUPPORTED
+// ============================================================
+
+String MachineMapper::unsupported() const
+{
+    return "";
 }

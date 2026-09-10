@@ -2,55 +2,86 @@
 #define MACHINE_MAPPER_H
 
 #include "JogCommand.h"
-#include "MachineCommand.h"
 #include "MachineSettings.h"
+#include "MachineState.h"
 #include "ControllerType.h"
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 
+
 class MachineMapper
 {
 public:
 
-    MachineCommand map(
+    // ========================================================
+    // JOG
+    // ========================================================
+
+    String map(
         const JogCommand& jog,
         ControllerType type
     );
 
+
+    // ========================================================
+    // SETTINGS
+    // ========================================================
+
     MachineSettings map(
         const ControllerSettingsSnapshot& snapshot
     ) const;
+
+
+    // ========================================================
+    // STATE
+    // ========================================================
 
     MachineState map(
         const ControllerStateSnapshot& snapshot,
         bool& valid
     ) const;
 
-    MachineCommand mapHome(
+
+    // ========================================================
+    // HOME
+    // ========================================================
+
+    String mapHome(
         Axis axis,
         ControllerType type
     );
 
+
+    // ========================================================
+    // ZERO WCS AXIS
+    // ========================================================
+
+    String mapZeroAxis(
+        Axis axis,
+        ControllerType type
+    );
+
+
 private:
 
-    MachineCommand mapJogMove(
+    String mapJogMove(
         const JogCommand& jog,
         ControllerType type
-
     );
 
-    MachineCommand mapGrblJog(
+
+    String mapGrblJog(
         const JogCommand& jog
     );
+
 
     ControllerType controllerTypeFromString(
         const String& type
     ) const;
 
-    MachineCommand unsupported() const;
 
-
+    String unsupported() const;
 };
 
 #endif

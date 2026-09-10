@@ -5,7 +5,6 @@
 
 #include "JogCommand.h"
 #include "CNCjsClientCore.h"
-#include "MachineCommand.h"
 #include "MachineState.h"
 #include "MachineMapper.h"
 #include "Machine.h"
@@ -14,7 +13,6 @@
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 #include "SenderStatusSnapshot.h"
-
 
 
 class CNCjsInterface
@@ -42,16 +40,11 @@ public:
 
     MachineSettings machineSettingsSnapshot() const;
 
+
     // ========================================================
     // STATUS
     // ========================================================
 
-    /*
-        Kept as a lightweight compatibility accessor.
-
-        PendantController currently uses cnc.status().
-        Internally this simply reads the Core snapshot.
-    */
     CNCjsStatus status() const;
 
 
@@ -59,8 +52,7 @@ public:
     // LIFECYCLE
     // ========================================================
 
-    void begin(
-    );
+    void begin();
 
     void update();
 
@@ -112,7 +104,6 @@ public:
 
     String selectedPortName() const;
 
-
     bool selectController(
         int portIndex,
         int controllerIndex
@@ -148,27 +139,21 @@ public:
     // ========================================================
 
     bool execute(
-        const MachineCommand& command
-    );
-
-    bool execute(
-    const JogCommand& jog
-);
-
-    bool sendGcode(
-        const char* gcode
+        const JogCommand& jog
     );
 
     bool sendGcode(
-        const char* port,
-        const char* gcode
+        const String& gcode
     );
 
+    // bool sendGcode(
+    //     const char* port,
+    //     const char* gcode
+    // );
 
     bool sendCommand(
         const String& command
     );
-
 
     bool jogCancel();
 
@@ -176,18 +161,31 @@ public:
         Axis axis
     );
 
+    bool unlock();
+
+    bool reset();
+
+    bool zeroAxis(
+        Axis axis
+    );
+
     bool feedHold();
+
+    bool cyclestart();
+
+    bool start();
+
+    bool pause();
 
     bool resume();
 
-    bool reset();
+    bool stop();
 
     bool sendRealtime(
         uint8_t command
     );
 
     void cacheControllerSettings();
-
 
 
 private:
@@ -198,7 +196,6 @@ private:
 
     ControllerType cachedControllerType =
         CONTROLLER_UNKNOWN;
-
 };
 
 

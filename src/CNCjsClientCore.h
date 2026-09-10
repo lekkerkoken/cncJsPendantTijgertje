@@ -6,7 +6,6 @@
 #include <SocketIOclient.h>
 #include <ArduinoJson.h>
 
-#include "MachineCommand.h"
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -213,10 +212,6 @@ public:
         int baudrate
     );
 
-    bool execute(
-        const MachineCommand& command
-    );
-
 
     // ========================================================
     // G-CODE
@@ -240,13 +235,6 @@ public:
         const String& command
     );
 
-    bool jogCancel();
-
-    bool feedHold();
-
-    bool resume();
-
-    bool reset();
 
     bool sendRealtime(
         uint8_t command
@@ -542,25 +530,6 @@ private:
     void machineHeartbeatReceived();
 
 
-    // ========================================================
-    // PENDING MACHINE COMMAND
-    // ========================================================
-
-    MachineCommand pendingCommand_;
-
-    bool commandDirty_ =
-        false;
-
-    unsigned long lastCommandSendTime_ =
-        0;
-
-
-    static constexpr unsigned long COMMAND_SEND_INTERVAL =
-        50;
-
-
-    bool sendPendingCommand();
-
 
     // ========================================================
     // SERIAL PORTS
@@ -701,14 +670,6 @@ private:
     bool sendRealtimeInternal(
         uint8_t command
     );
-
-    bool jogCancelInternal();
-
-    bool feedHoldInternal();
-
-    bool resumeInternal();
-
-    bool resetInternal();
 };
 
 

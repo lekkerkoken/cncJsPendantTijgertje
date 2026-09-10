@@ -23,8 +23,9 @@ void PendantController::begin(
         matrix,
         encoder
     );
+
     handlers.encoderLongPress =
-    &PendantController::toggleLayer;
+        &PendantController::toggleLayer;
 
     lastCncStatus =
         cnc.status();
@@ -60,10 +61,8 @@ void PendantController::handle(
     const Event& event
 )
 {
-
     switch(event.type)
     {
-
         case EVENT_KEY_1:
 
             if(handlers.key1 != nullptr)
@@ -71,7 +70,7 @@ void PendantController::handle(
 
             break;
 
- 
+
         case EVENT_KEY_2:
 
             if(handlers.key2 != nullptr)
@@ -84,8 +83,8 @@ void PendantController::handle(
 
             if(handlers.key3 != nullptr)
                 (this->*handlers.key3)();
-
             break;
+
 
         case EVENT_KEY_4:
 
@@ -94,12 +93,14 @@ void PendantController::handle(
 
             break;
 
+
         case EVENT_KEY_5:
 
             if(handlers.key5 != nullptr)
                 (this->*handlers.key5)();
 
             break;
+
 
         case EVENT_KEY_6:
 
@@ -132,6 +133,7 @@ void PendantController::handle(
 
             break;
 
+
         // ----------------------------------------------------
         // ENCODER PRESS
         // ----------------------------------------------------
@@ -143,13 +145,15 @@ void PendantController::handle(
 
             break;
 
+
         // ----------------------------------------------------
         // ENCODER LONG PRESS
         // ----------------------------------------------------
 
         case EVENT_ENCODER_LONG_PRESS:
 
-            toggleLayer();
+           if(handlers.encoderLongPress != nullptr)
+                (this->*handlers.encoderLongPress)();
 
             break;
 
@@ -164,12 +168,14 @@ void PendantController::handle(
 
             break;
 
+
         case EVENT_CHANGED_TO_READY:
 
             if(handlers.changedToReady != nullptr)
                 (this->*handlers.changedToReady)();
 
             break;
+
 
         // ----------------------------------------------------
         // DEFAULT
@@ -179,9 +185,7 @@ void PendantController::handle(
 
             break;
     }
-
 }
-
 
 
 // ============================================================
@@ -239,7 +243,7 @@ void PendantController::setLayer(
 
 
 void PendantController::enterJogLayer()
-{   
+{
     handlers.changedToReady =
         &PendantController::initialiseJogPlanner;
 
@@ -249,8 +253,14 @@ void PendantController::enterJogLayer()
     handlers.key2 =
         &PendantController::homeAxis;
 
+    handlers.key3 =
+        &PendantController::reset;
+
     handlers.key4 =
         &PendantController::selectYAxis;
+
+    handlers.key5 =
+        &PendantController::zeroAxis;
 
     handlers.key6 =
         &PendantController::increaseJogStep;
@@ -273,6 +283,7 @@ void PendantController::enterJogLayer()
     }
 }
 
+
 void PendantController::initialiseJogPlanner()
 {
     cnc.cacheControllerSettings();
@@ -293,6 +304,7 @@ void PendantController::initialiseJogPlanner()
     );
 }
 
+
 // ============================================================
 // AXIS
 // ============================================================
@@ -301,7 +313,6 @@ Axis PendantController::axis() const
 {
     return pendantState.axis;
 }
-
 
 
 // ============================================================
@@ -315,23 +326,26 @@ float PendantController::jogStepDistance() const
     );
 }
 
+
 // ============================================================
 // Feedhold / Resume
 // ============================================================
 
 void PendantController::feedHoldCycleStart()
 {
-    MachineState state = cnc.machineStateSnapshot();
+    MachineState state =
+        cnc.machineStateSnapshot();
 
     if(state.machineStatus == MACHINE_HOLD)
     {
-        cnc.resume();
+        cnc.cyclestart();
     }
     else
     {
         cnc.feedHold();
     }
 }
+
 
 void PendantController::selectXAxis()
 {
@@ -348,6 +362,7 @@ void PendantController::selectXAxis()
     }
 }
 
+
 void PendantController::selectYAxis()
 {
     if(
@@ -363,6 +378,7 @@ void PendantController::selectYAxis()
     }
 }
 
+
 void PendantController::selectZAxis()
 {
     if(
@@ -377,6 +393,7 @@ void PendantController::selectZAxis()
             true;
     }
 }
+
 
 void PendantController::decreaseJogStep()
 {
@@ -395,6 +412,7 @@ void PendantController::decreaseJogStep()
     }
 }
 
+
 void PendantController::increaseJogStep()
 {
     if(
@@ -412,9 +430,28 @@ void PendantController::increaseJogStep()
     }
 }
 
+
 void PendantController::homeAxis()
-{   
+{
     cnc.homeAxis(
+        axis()
+    );
+}
+
+
+void PendantController::unlock()
+{
+    cnc.unlock();
+}
+
+void PendantController::reset()
+{
+    cnc.reset();
+}
+
+void PendantController::zeroAxis()
+{
+    cnc.zeroAxis(
         axis()
     );
 }
@@ -438,7 +475,6 @@ void PendantController::handleJogEncoder(
         axis()
     );
 }
-
 
 
 // ============================================================
@@ -532,7 +568,6 @@ void PendantController::update()
 }
 
 
-
 // ============================================================
 // CHECK STATUS CHANGES
 // ============================================================
@@ -552,19 +587,29 @@ void PendantController::checkStatusChanges()
         lastCncStatus
     )
     {
-        switch (currentCncStatus)
+        switch(currentCncStatus)
         {
-        case CNCjsClientCore::CNCjsStatus::Ready:
+            case CNCjsClientCore::CNCjsStatus::Ready:
             {
                 Event event;
-                event.type = EVENT_CHANGED_TO_READY;
-                handle(event);
+
+                event.type =
+                    EVENT_CHANGED_TO_READY;
+
+                handle(
+                    event
+                );
+
                 break;
             }
-        
-        default:
-            break;
+
+
+            default:
+
+                break;
         }
+
+
         lastCncStatus =
             currentCncStatus;
 
@@ -656,6 +701,8 @@ void PendantController::checkStatusChanges()
             );
         }
     }
+
+
     if(
         machineState.workPosition.x !=
             lastWorkPositionX ||
@@ -681,7 +728,6 @@ void PendantController::checkStatusChanges()
             true;
     }
 }
-
 
 
 // ============================================================
@@ -785,7 +831,6 @@ void PendantController::updateDisplay()
 
     display.update();
 }
-
 
 
 // ============================================================
@@ -924,7 +969,6 @@ void PendantController::updateCncStatus()
 }
 
 
-
 // ============================================================
 // MACHINE STATUS DISPLAY
 // ============================================================
@@ -969,7 +1013,6 @@ void PendantController::updateMachineStatus()
         buffer
     );
 }
-
 
 
 // ============================================================
@@ -1059,8 +1102,10 @@ void PendantController::updateNormalDisplay()
 
 
         case LAYER_CONTROL:
-                MachineState machineState =
-                    cnc.machineStateSnapshot();
+        {
+            MachineState machineState =
+                cnc.machineStateSnapshot();
+
             display.clear();
 
             display.setIcon(
@@ -1079,14 +1124,12 @@ void PendantController::updateNormalDisplay()
             );
 
             break;
+        }
     }
 
 
     display.update();
 }
-
-
-
 
 
 // ============================================================
@@ -1113,7 +1156,6 @@ PendantController::layerName() const
 }
 
 
-
 // ============================================================
 // AXIS NAME
 // ============================================================
@@ -1132,11 +1174,10 @@ PendantController::axisName() const
         case AXIS_Z:
             return "Axis Z";
 
-            default:
+        default:
             return "";
     }
 }
-
 
 
 // ============================================================
@@ -1178,9 +1219,7 @@ PendantController::iconForAxis(
     Axis axis
 ) const
 {
-    switch(
-        axis
-    )
+    switch(axis)
     {
         case AXIS_X:
 
@@ -1202,7 +1241,6 @@ PendantController::iconForAxis(
             return nullptr;
     }
 }
-
 
 
 // ============================================================
