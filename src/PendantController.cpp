@@ -240,12 +240,12 @@ void PendantController::setLayer(
 
 
     /*
-        Een eventuele openstaande Control-confirmatie
+        Een eventuele openstaande Command-confirmatie
         vervalt wanneer we van layer wisselen.
     */
 
     pendingCommandAction =
-        CONTROL_ACTION_NONE;
+        COMMAND_ACTION_NONE;
 
     commandActionStartedAt =
         0;
@@ -403,7 +403,7 @@ void PendantController::enterInfoLayer()
 
 
 // ============================================================
-// CONTROL LAYER
+// COMMAND LAYER
 // ============================================================
 
 void PendantController::enterCommandLayer()
@@ -415,7 +415,11 @@ void PendantController::enterCommandLayer()
     handlers.key1 =
         &PendantController::feedHoldCycleStart;
 
+    handlers.key2 =
+        &PendantController::gcodeStartPause;
 
+    handlers.key3 =
+        &PendantController::requestGcodeStop;
     /*
         Homing vraagt eerst om bevestiging.
     */
@@ -516,6 +520,33 @@ void PendantController::feedHoldCycleStart()
         cnc.feedHold();
     }
 }
+
+void PendantController::gcodeStartPause()
+{
+    MachineState state =
+        cnc.machineStateSnapshot();
+
+
+    if(
+        state.machineStatus ==
+        MACHINE_IDLE
+    )
+    {
+        cnc.gcodeStart();
+    }else if(
+        state.machineStatus ==
+        MACHINE_HOLD     
+    ){
+        cnc.gcodeResume();
+    }   
+    
+    else if (        state.machineStatus ==
+        MACHINE_RUN  )
+    {
+        cnc.gcodePause();
+    }
+}
+
 
 
 // ============================================================
@@ -663,7 +694,7 @@ void PendantController::handleJogEncoder(
 
 
 // ============================================================
-// CONTROL ACTION REQUESTS
+// COMMAND ACTION REQUESTS
 // ============================================================
 
 void PendantController::requestHomeX()
@@ -717,9 +748,25 @@ void PendantController::requestHomeAll()
         true;
 }
 
+// ============================================================
+// COMMAND ACTION REQUESTS
+// ============================================================
+
+void PendantController::requestGcodeStop()
+{
+    pendingCommandAction =
+        COMMAND_ACTION_GCODE_STOP;
+
+    commandActionStartedAt =
+        millis();
+
+    displayDirty =
+        true;
+}
+
 
 // ============================================================
-// CONTROL ACTION CONFIRMATION
+// COMMAND ACTION CONFIRMATION
 // ============================================================
 
 void PendantController::confirmCommandAction()
@@ -760,7 +807,14 @@ void PendantController::confirmCommandAction()
             break;
 
 
-        case CONTROL_ACTION_NONE:
+        case COMMAND_ACTION_GCODE_STOP:
+
+            cnc.gcodeStop();
+
+            break;
+
+
+        case COMMAND_ACTION_NONE:
 
             return;
     }
@@ -772,7 +826,7 @@ void PendantController::confirmCommandAction()
     */
 
     pendingCommandAction =
-        CONTROL_ACTION_NONE;
+        COMMAND_ACTION_NONE;
 
     commandActionStartedAt =
         0;
@@ -783,14 +837,14 @@ void PendantController::confirmCommandAction()
 
 
 // ============================================================
-// CONTROL ACTION TIMEOUT
+// COMMAND ACTION TIMEOUT
 // ============================================================
 
 void PendantController::checkCommandActionTimeout()
 {
     if(
         pendingCommandAction ==
-        CONTROL_ACTION_NONE
+        COMMAND_ACTION_NONE
     )
     {
         return;
@@ -811,7 +865,7 @@ void PendantController::checkCommandActionTimeout()
     )
     {
         pendingCommandAction =
-            CONTROL_ACTION_NONE;
+            COMMAND_ACTION_NONE;
 
         commandActionStartedAt =
             0;
@@ -840,7 +894,7 @@ void PendantController::update()
 
     /*
         --------------------------------------------------------
-        CONTROL CONFIRMATION TIMEOUT
+        COMMAND CONFIRMATION TIMEOUT
         --------------------------------------------------------
     */
 
@@ -890,7 +944,7 @@ void PendantController::update()
     /*
         De JogPlanner draait uitsluitend in de Jog-layer.
 
-        In Control en Info mag de planner dus geen jog
+        In Command en Info mag de planner dus geen jog
         commands produceren.
     */
 
@@ -1031,7 +1085,7 @@ void PendantController::checkStatusChanges()
         --------------------------------------------------------
 
         Een wijziging van G54 -> G55 (of andersom) maakt
-        het display dirty, zodat de INFO-laag onmiddellijk
+        het display dirty, zodat de COMMAND-laag onmiddellijk
         wordt bijgewerkt.
         --------------------------------------------------------
     */
@@ -1060,6 +1114,61 @@ void PendantController::checkStatusChanges()
         {
             Serial.println(
                 lastActiveWcs
+            );
+        }
+        else
+        {
+            Serial.println(
+                "(none)"
+            );
+        }
+    }
+
+
+    /*
+        --------------------------------------------------------
+        JOB NAME
+        --------------------------------------------------------
+
+        gcode:load / gcode:unload wordt via JobSnapshot
+        zichtbaar voor de PendantController.
+        --------------------------------------------------------
+    */
+
+    JobSnapshot jobSnapshot =
+        cnc.jobSnapshot();
+
+
+    String currentJobName =
+        jobSnapshot.valid
+            ? jobSnapshot.name
+            : "";
+
+
+    if(
+        currentJobName !=
+        lastJobName
+    )
+    {
+        lastJobName =
+            currentJobName;
+
+
+        displayDirty =
+            true;
+
+
+        Serial.print(
+            "[Pendant] Job changed: "
+        );
+
+
+        if(
+            lastJobName.length() > 0
+        )
+        {
+            Serial.println(
+                lastJobName
             );
         }
         else
@@ -1108,8 +1217,14 @@ void PendantController::updateDisplay()
         cnc.machineStateSnapshot();
 
 
+    /*
+        De normale display-layout bepaalt zelf welke tekst
+        bovenaan staat. Daarom is "Pendant" hier niet meer
+        nodig als vaste titel.
+    */
+
     display.setTitle(
-        "Pendant"
+        ""
     );
 
 
@@ -1389,16 +1504,6 @@ void PendantController::updateMachineStatus()
 
 void PendantController::updateNormalDisplay()
 {
-    display.setTitle(
-        layerName()
-    );
-
-
-    display.setStatus(
-        ""
-    );
-
-
     switch(pendantState.layer)
     {
         // ----------------------------------------------------
@@ -1407,8 +1512,13 @@ void PendantController::updateNormalDisplay()
 
         case LAYER_JOG:
         {
-            display.clear();
+            display.setTitle(
+                layerName()
+            );
 
+            display.setStatus(
+                ""
+            );
 
             char buffer[20];
 
@@ -1440,9 +1550,6 @@ void PendantController::updateNormalDisplay()
 
         case LAYER_INFO:
         {
-            display.clear();
-
-
             MachineState machineState =
                 cnc.machineStateSnapshot();
 
@@ -1471,6 +1578,15 @@ void PendantController::updateNormalDisplay()
             }
 
 
+            display.setTitle(
+                layerName()
+            );
+
+            display.setStatus(
+                ""
+            );
+
+
             display.iconRightTextView(
                 INFO_ICON,
                 wcsBuffer,
@@ -1483,50 +1599,145 @@ void PendantController::updateNormalDisplay()
 
 
         // ----------------------------------------------------
-        // CONTROL
+        // COMMAND
         // ----------------------------------------------------
 
         case LAYER_COMMAND:
         {
-            display.clear();
-
-
-            display.setIcon(
-                nullptr,
-                ICON_RIGHT
-            );
+            MachineState machineState =
+                cnc.machineStateSnapshot();
 
 
             /*
                 Een openstaande CommandAction heeft prioriteit
-                boven de normale Machine-status.
+                boven de normale Command-weergave.
             */
 
             if(
                 pendingCommandAction !=
-                CONTROL_ACTION_NONE
+                COMMAND_ACTION_NONE
             )
             {
-                display.setLine1(
+                display.setTitle(
                     commandActionName()
                 );
 
+                display.setStatus(
+                    ""
+                );
 
-                display.setLine2(
-                    "Press encoder"
+
+                display.iconLeftTextView(
+                    COMMAND_ICON,
+                    "Press encoder",
+                    ""
+                );
+
+                break;
+            }
+
+
+            /*
+                ------------------------------------------------
+                COMMAND NORMAL
+                ------------------------------------------------
+
+                Regel 1:
+                    HOME | RUN | STOP
+
+                Regel 2:
+                    file: 'feedertest'
+
+                Regel 3:
+                    controller: Idle, G54
+                ------------------------------------------------
+            */
+
+            display.setTitle(
+                "HOME|RUN|STOP"
+            );
+
+
+            char fileBuffer[21];
+
+
+            if(
+                lastJobName.length() > 0
+            )
+            {
+                snprintf(
+                    fileBuffer,
+                    sizeof(fileBuffer),
+                    "f: %s",
+                    lastJobName.c_str()
                 );
             }
             else
             {
-                display.setLine1(
-                    "Machine"
+                snprintf(
+                    fileBuffer,
+                    sizeof(fileBuffer),
+                    "f: -"
                 );
+            }
 
 
-                display.setLine2(
+            display.setStatus(
+                fileBuffer
+            );
+
+
+            char controllerBuffer[21];
+
+
+            if(
+                machineState.activeWcs.length() > 0
+            )
+            {
+                snprintf(
+                    controllerBuffer,
+                    sizeof(controllerBuffer),
+                    "c: %s, %s",
+                    machineStatusName(),
+                    machineState.activeWcs.c_str()
+                );
+            }
+            else
+            {
+                snprintf(
+                    controllerBuffer,
+                    sizeof(controllerBuffer),
+                    "c: %s",
                     machineStatusName()
                 );
             }
+
+
+            display.iconLeftTextView(
+                COMMAND_ICON,
+                controllerBuffer,
+                ""
+            );
+
+
+            /*
+                iconLeftTextView() schrijft line1 en line2.
+                Daarom zetten we de bestandsnaam daarna opnieuw
+                op de statusregel en gebruiken we de titel voor
+                HOME | RUN | STOP.
+            */
+
+            display.setStatus(
+                ""
+            );
+
+            display.setLine1(
+                fileBuffer
+            );
+
+            display.setLine2(
+                controllerBuffer
+            );
 
 
             break;
@@ -1641,7 +1852,7 @@ PendantController::machineStatusName() const
 
 
 // ============================================================
-// CONTROL ACTION NAME
+// COMMAND ACTION NAME
 // ============================================================
 
 const char*
@@ -1668,8 +1879,12 @@ PendantController::commandActionName() const
 
             return "Home All?";
 
+        case COMMAND_ACTION_GCODE_STOP:
 
-        case CONTROL_ACTION_NONE:
+            return "Stop job?";
+
+
+        case COMMAND_ACTION_NONE:
 
             return "";
     }

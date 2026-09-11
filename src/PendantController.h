@@ -36,11 +36,12 @@ struct PendantHandlers
 
 enum CommandAction
 {
-    CONTROL_ACTION_NONE,
+    COMMAND_ACTION_NONE,
     COMMAND_ACTION_HOME_X,
     COMMAND_ACTION_HOME_Y,
     COMMAND_ACTION_HOME_Z,
-    COMMAND_ACTION_HOME_ALL
+    COMMAND_ACTION_HOME_ALL,
+    COMMAND_ACTION_GCODE_STOP
 };
 
 
@@ -85,7 +86,7 @@ private:
     // ============================================================
 
     CommandAction pendingCommandAction =
-        CONTROL_ACTION_NONE;
+        COMMAND_ACTION_NONE;
 
     static constexpr unsigned long CONTROL_CONFIRM_TIMEOUT_MS =
         5000;
@@ -134,6 +135,10 @@ private:
 
     void feedHoldCycleStart();
 
+    void gcodeStartPause();
+
+    void gcodeStop();
+
     void homeAxis();
 
     void zeroAxis();
@@ -164,6 +169,9 @@ private:
     void requestHomeZ();
 
     void requestHomeAll();
+
+    void requestGcodeStop();
+
 
     void confirmCommandAction();
 
@@ -196,6 +204,13 @@ private:
         0.0f;
 
 
+    String lastActiveWcs =
+        "";
+
+    String lastJobName =
+        "";
+
+
     // ============================================================
     // DISPLAY
     // ============================================================
@@ -220,10 +235,6 @@ private:
     const char* cncStatusName() const;
 
     const char* commandActionName() const;
-
-
-    String lastActiveWcs =
-        "";
 
 
     const uint8_t* iconForAxis(

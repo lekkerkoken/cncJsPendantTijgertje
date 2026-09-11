@@ -37,6 +37,13 @@ CNCjsInterface::machineSettingsSnapshot() const
 }
 
 
+JobSnapshot
+CNCjsInterface::jobSnapshot() const
+{
+    return core_.jobSnapshot();
+}
+
+
 // ============================================================
 // STATUS
 // ============================================================
@@ -275,17 +282,19 @@ bool CNCjsInterface::homeAxis(
     );
 }
 
+
 bool CNCjsInterface::unlock()
 {
     return sendCommand(
-         "unlock"
+        "unlock"
     );
 }
+
 
 bool CNCjsInterface::reset()
 {
     return sendCommand(
-         "reset"
+        "reset"
     );
 }
 
@@ -321,6 +330,7 @@ bool CNCjsInterface::execute(
     );
 }
 
+
 bool CNCjsInterface::sendGcode(
     const String& gcode
 )
@@ -352,7 +362,8 @@ bool CNCjsInterface::jogCancel()
 {
     return sendCommand(
         "jogCancel"
-    );}
+    );
+}
 
 
 bool CNCjsInterface::feedHold()
@@ -362,12 +373,14 @@ bool CNCjsInterface::feedHold()
     );
 }
 
+
 bool CNCjsInterface::homeAll()
 {
     return sendCommand(
         "homing"
     );
 }
+
 
 bool CNCjsInterface::cyclestart()
 {
@@ -376,7 +389,8 @@ bool CNCjsInterface::cyclestart()
     );
 }
 
-bool CNCjsInterface::start()
+
+bool CNCjsInterface::gcodeStart()
 {
     return sendCommand(
         "gcode:start"
@@ -384,7 +398,7 @@ bool CNCjsInterface::start()
 }
 
 
-bool CNCjsInterface::pause()
+bool CNCjsInterface::gcodePause()
 {
     return sendCommand(
         "gcode:pause"
@@ -392,19 +406,21 @@ bool CNCjsInterface::pause()
 }
 
 
-bool CNCjsInterface::resume()
+bool CNCjsInterface::gcodeResume()
 {
     return sendCommand(
         "gcode:resume"
     );
 }
 
-bool CNCjsInterface::stop()
+
+bool CNCjsInterface::gcodeStop()
 {
     return sendCommand(
         "gcode:stop"
     );
 }
+
 
 bool CNCjsInterface::sendRealtime(
     uint8_t command

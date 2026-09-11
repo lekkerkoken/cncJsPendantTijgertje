@@ -13,6 +13,7 @@
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 #include "SenderStatusSnapshot.h"
+#include "JobSnapshot.h"
 
 
 class CNCjsInterface
@@ -177,11 +178,13 @@ public:
 
     bool cyclestart();
 
-    bool start();
+    bool gcodeStart();
 
-    bool pause();
+    bool gcodeStop();
 
-    bool resume();
+    bool gcodeResume();
+
+    bool gcodePause();
 
     bool stop();
 
