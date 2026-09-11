@@ -349,11 +349,13 @@ bool CNCjsInterface::sendGcode(
 
 
 bool CNCjsInterface::sendCommand(
-    const String& command
+    const String& command,
+    const JsonObjectConst& options
 )
 {
     return core_.sendCommand(
-        command
+        command,
+        options
     );
 }
 
@@ -416,8 +418,13 @@ bool CNCjsInterface::gcodeResume()
 
 bool CNCjsInterface::gcodeStop()
 {
+    JsonDocument options;
+
+    options["force"] = true;
+
     return sendCommand(
-        "gcode:stop"
+        "gcode:stop",
+        options.as<JsonObjectConst>()
     );
 }
 

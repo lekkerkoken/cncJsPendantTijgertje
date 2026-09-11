@@ -155,7 +155,8 @@ public:
     // );
 
     bool sendCommand(
-        const String& command
+        const String& command,
+        const JsonObjectConst& options = JsonObjectConst()
     );
 
     bool jogCancel();

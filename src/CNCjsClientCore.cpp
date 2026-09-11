@@ -3981,10 +3981,11 @@ bool CNCjsClientCore::sendGcodeInternal(
 // ============================================================
 
 bool CNCjsClientCore::sendCommand(
-    const String& command
+    const String& command,
+    const JsonObjectConst& options
 )
 {
-    if (
+    if(
         !lock()
     )
     {
@@ -3994,7 +3995,8 @@ bool CNCjsClientCore::sendCommand(
 
     bool result =
         sendCommandInternal(
-            command
+            command,
+            options
         );
 
 
@@ -4010,10 +4012,11 @@ bool CNCjsClientCore::sendCommand(
 // ============================================================
 
 bool CNCjsClientCore::sendCommandInternal(
-    const String& command
+    const String& command,
+    const JsonObjectConst& options
 )
 {
-    if (
+    if(
         !socketConnectedState ||
         !controllerReadyState
     )
@@ -4022,7 +4025,7 @@ bool CNCjsClientCore::sendCommandInternal(
     }
 
 
-    if (
+    if(
         activeControllerPortState.length() == 0
     )
     {
@@ -4048,6 +4051,19 @@ bool CNCjsClientCore::sendCommandInternal(
     array.add(
         command
     );
+
+
+    if(
+        !options.isNull()
+    )
+    {
+        JsonObject optionsCopy =
+            array.add<JsonObject>();
+
+        optionsCopy.set(
+            options
+        );
+    }
 
 
     String output;

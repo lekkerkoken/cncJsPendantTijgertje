@@ -237,7 +237,8 @@ public:
     // ========================================================
 
     bool sendCommand(
-        const String& command
+        const String& command,
+        const JsonObjectConst& options = JsonObjectConst()
     );
 
 
@@ -493,7 +494,7 @@ private:
     void invalidateSenderStatus();
 
     void invalidateJob();
-    
+
     // ========================================================
     // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
     // ========================================================
@@ -673,8 +674,9 @@ private:
     );
 
     bool sendCommandInternal(
-        const String& command
-    );
+    const String& command,
+    const JsonObjectConst& options
+)   ;
 
 };
 

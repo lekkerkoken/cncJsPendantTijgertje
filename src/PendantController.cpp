@@ -754,6 +754,14 @@ void PendantController::requestHomeAll()
 
 void PendantController::requestGcodeStop()
 {
+     MachineState state =
+    cnc.machineStateSnapshot();
+
+
+    if(
+        state.machineStatus !=
+        MACHINE_HOLD
+    ){exit;}
     pendingCommandAction =
         COMMAND_ACTION_GCODE_STOP;
 
@@ -1251,7 +1259,9 @@ void PendantController::updateDisplay()
 
     if(
         machineState.machineStatus ==
-        MACHINE_HOLD
+        MACHINE_HOLD &&
+        pendantState.layer ==
+        LAYER_JOG
     )
     {
         updateMachineStatus();
