@@ -10,8 +10,10 @@
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 #include "SenderStatusSnapshot.h"
-#include "Config.h"
+#include "JobSnapshot.h"
 #include "LatestStateTripleBuffer.h"
+
+#include "Config.h"
 
 
 class CNCjsClientCore
@@ -122,6 +124,9 @@ public:
 
     SenderStatusSnapshot
     senderStatusSnapshot() const;
+
+    JobSnapshot
+    jobSnapshot() const;
 
 
     // ========================================================
@@ -478,6 +483,8 @@ private:
     LatestStateTripleBuffer<SenderStatusSnapshot>
         SenderStatusBuffer_;
 
+    LatestStateTripleBuffer<JobSnapshot>
+        jobBuffer_;
 
     void invalidateControllerState();
 
@@ -485,7 +492,8 @@ private:
 
     void invalidateSenderStatus();
 
-
+    void invalidateJob();
+    
     // ========================================================
     // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
     // ========================================================

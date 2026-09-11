@@ -154,3 +154,155 @@ Deze architectuur is nadrukkelijk niet bedoeld om:
 * de `PendantController` volledig uit te hollen.
 
 De `PendantController` blijft de centrale orchestrator. De layers bepalen vooral **welke functies aan de input-eventhandlers gekoppeld zijn wanneer die layer actief is**.
+
+Issue 1 — Onderzoek controller:state
+
+Doel: vaststellen welke informatie we daadwerkelijk uit controller:state kunnen halen, met name of daar iets in zit waarmee we homing/readiness kunnen bepalen.
+
+Stappen:
+
+Log tijdelijk iedere ontvangen controller:state.
+Laat daarbij de volledige JSON zien, niet alleen de velden die MachineMapper nu gebruikt.
+Voer verschillende situaties uit:
+CNCjs verbonden, machine niet gehomed
+machine gehomed
+machine Idle
+machine Run
+machine Alarm
+eventueel na opnieuw verbinden/opstarten
+Vergelijk de JSON's.
+Zoek specifiek naar:
+homing/home-status
+alarm/status
+machine position
+work position
+WCS
+eventuele controller-specifieke flags
+Besluiten welke informatie daadwerkelijk betrouwbaar genoeg is om in MachineState op te nemen.
+
+Resultaat: geen aannames over homed, maar een concreet overzicht van wat controller:state ons geeft.
+
+Issue 2 — Command-display maken
+
+Hier zou ik nu nog niet meteen de inhoud van het display vastleggen. Wel kunnen we de implementatiestappen al heel concreet maken.
+
+Stap 1 — Command-layer als display-context
+
+PendantController zorgt dat bij:
+
+setLayer(LAYER_COMMAND)
+        ↓
+enterCommandLayer()
+
+de Command-layer actief wordt en de display-context wordt ingesteld.
+
+Het logo staat, net als bij Jog, links:
+
+┌──────────────────────────────┐
+│ [COMMAND_ICON]   ...         │
+│                              │
+│                              │
+└──────────────────────────────┘
+
+Dus dezelfde visuele grammatica als Jog.
+
+Stap 2 — Display krijgt een specifieke Command-render
+
+Niet alles in één algemene updateNormalDisplay() proppen.
+
+Bijvoorbeeld conceptueel:
+
+updateDisplay()
+    │
+    ├── JOG
+    │     └── updateJogDisplay()
+    │
+    ├── INFO
+    │     └── updateInfoDisplay()
+    │
+    └── COMMAND
+          └── updateCommandDisplay()
+
+De Display zelf blijft verantwoordelijk voor tekenen; PendantController bepaalt wat er getoond moet worden.
+
+Stap 3 — Eerst de beschikbare machine-informatie gebruiken
+
+De eerste versie van updateCommandDisplay() gebruikt alleen informatie die we al betrouwbaar hebben:
+
+machineStatus
+machinePosition
+workPosition
+activeWcs
+feedrate
+spindleSpeed
+
+En eventueel later:
+
+homed
+job
+progress
+...
+
+maar pas nadat Issue 1 heeft vastgesteld waar die informatie vandaan komt.
+
+Stap 4 — Displayinhoud vanuit de workflow ontwerpen
+
+De Command-layer moet niet voelen als:
+
+"hier staan nog wat CNC-commando's"
+
+maar als:
+
+de machine staat klaar om werk te starten of gecontroleerd te beëindigen.
+
+Daarom eerst de toestanden bepalen:
+
+COMMAND
+  │
+  ├── klaar / READY
+  │
+  ├── bezig / RUN
+  │
+  ├── gepauzeerd / HOLD
+  │
+  ├── gestopt / IDLE
+  │
+  └── probleem / ALARM
+
+Daarna bepalen we per toestand wat rechts van het logo relevant is.
+
+Stap 5 — Knoppen koppelen aan die workflow
+
+Voorlopig:
+
+1  Feed Hold / Resume
+2  Start / Pause
+3  Stop + bevestiging
+4  Home Y + bevestiging
+5  Home All + bevestiging
+6  ongebruikt
+7  Home Z + bevestiging
+8  Home X + bevestiging
+9  ongebruikt
+
+Daarbij blijven 6 en 9 bewust leeg. We hoeven die niet kunstmatig te vullen.
+
+Stap 6 — Pas daarna eventueel MachineState uitbreiden
+
+Als Issue 1 bijvoorbeeld aantoont dat controller:state een betrouwbare homing-indicatie bevat, kunnen we gericht toevoegen:
+
+bool homed = false;
+
+aan MachineState, en vervolgens:
+
+controller:state
+      ↓
+MachineMapper
+      ↓
+MachineState.homed
+      ↓
+Command display
+
+Dat lijkt me een veel betere volgorde dan nu alvast een homed-veld toevoegen.
+
+Kortom: eerst Issue 1 uitvoeren. Daarna hebben we de echte gegevens waarop we het Command-display kunnen ontwerpen.

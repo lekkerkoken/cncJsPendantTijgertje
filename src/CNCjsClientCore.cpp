@@ -105,6 +105,8 @@ void CNCjsClientCore::begin()
 
     invalidateSenderStatus();
 
+    invalidateJob();
+
 
     networkManager_.begin();
 
@@ -331,6 +333,19 @@ CNCjsClientCore::senderStatusSnapshot() const
     return snapshot;
 }
 
+JobSnapshot
+CNCjsClientCore::jobSnapshot() const
+{
+    JobSnapshot snapshot;
+
+
+    jobBuffer_.acquire(
+        snapshot
+    );
+
+
+    return snapshot;
+}
 
 // ============================================================
 // INVALIDATE FEED STATUS
@@ -345,6 +360,19 @@ void CNCjsClientCore::invalidateSenderStatus()
 
 
     SenderStatusBuffer_.publish(
+        snapshot
+    );
+}
+
+void CNCjsClientCore::invalidateJob()
+{
+    JobSnapshot snapshot;
+
+
+    snapshot.invalidate();
+
+
+    jobBuffer_.publish(
         snapshot
     );
 }
@@ -880,6 +908,7 @@ void CNCjsClientCore::connectionFailed(
 
     invalidateSenderStatus();
 
+    invalidateJob();
 
     enterConnectionState(
         ConnectionState::Backoff
@@ -1466,6 +1495,7 @@ void CNCjsClientCore::handleSocketEvent(
 
             invalidateSenderStatus();
 
+            invalidateJob();
 
             Serial.println(
                 "[Socket.IO] Disconnected"
@@ -1879,6 +1909,7 @@ void CNCjsClientCore::handleSocketEvent(
 
                     invalidateSenderStatus();
 
+                    invalidateJob();
 
                     Serial.println();
 
@@ -2001,6 +2032,7 @@ void CNCjsClientCore::handleSocketEvent(
 
 #endif
 
+
                 controllerReadyState =
                     true;
 
@@ -2099,8 +2131,60 @@ void CNCjsClientCore::handleSocketEvent(
 
                 break;
             }
+            // ------------------------------------------------
+            // G-CODE UNLOAD
+            // ------------------------------------------------
+
+            if (
+                strcmp(
+                    eventName,
+                    "gcode:unload"
+                ) == 0
+            )
+            {
+                invalidateJob();
+
+                break;
+            }
+
+            // ------------------------------------------------
+            // G-CODE LOAD
+            // ------------------------------------------------
+
+            if (
+                strcmp(
+                    eventName,
+                    "gcode:load"
+                ) == 0
+            )
+            {
+                const char* name =
+                    array[1];
 
 
+                if (
+                    name != nullptr
+                )
+                {
+                    JobSnapshot snapshot;
+
+
+                    snapshot.valid =
+                        true;
+
+
+                    snapshot.name =
+                        name;
+
+
+                    jobBuffer_.publish(
+                        snapshot
+                    );
+                }
+
+
+                break;
+            }
             // ------------------------------------------------
             // GRBL STATE
             // ------------------------------------------------
@@ -3680,6 +3764,7 @@ bool CNCjsClientCore::openControllerInternal(
 
     invalidateSenderStatus();
 
+    invalidateJob();
 
     JsonDocument doc;
 

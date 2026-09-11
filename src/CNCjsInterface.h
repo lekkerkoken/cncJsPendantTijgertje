@@ -40,6 +40,8 @@ public:
 
     MachineSettings machineSettingsSnapshot() const;
 
+    JobSnapshot jobSnapshot() const;
+
 
     // ========================================================
     // STATUS
