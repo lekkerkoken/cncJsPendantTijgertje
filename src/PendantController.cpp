@@ -211,7 +211,7 @@ void PendantController::toggleLayer()
     else if(pendantState.layer == LAYER_INFO)
     {
         setLayer(
-            LAYER_CONTROL
+            LAYER_COMMAND
         );
     }
     else
@@ -244,10 +244,10 @@ void PendantController::setLayer(
         vervalt wanneer we van layer wisselen.
     */
 
-    pendingControlAction =
+    pendingCommandAction =
         CONTROL_ACTION_NONE;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         0;
 
 
@@ -271,9 +271,9 @@ void PendantController::setLayer(
             break;
 
 
-        case LAYER_CONTROL:
+        case LAYER_COMMAND:
 
-            enterControlLayer();
+            enterCommandLayer();
 
             break;
     }
@@ -406,7 +406,7 @@ void PendantController::enterInfoLayer()
 // CONTROL LAYER
 // ============================================================
 
-void PendantController::enterControlLayer()
+void PendantController::enterCommandLayer()
 {
     /*
         KEY 1 is direct Feedhold / Cycle Start.
@@ -435,11 +435,11 @@ void PendantController::enterControlLayer()
 
     /*
         Encoder press bevestigt de geselecteerde
-        ControlAction.
+        CommandAction.
     */
 
     handlers.encoderPress =
-        &PendantController::confirmControlAction;
+        &PendantController::confirmCommandAction;
 }
 
 
@@ -668,10 +668,10 @@ void PendantController::handleJogEncoder(
 
 void PendantController::requestHomeX()
 {
-    pendingControlAction =
-        CONTROL_ACTION_HOME_X;
+    pendingCommandAction =
+        COMMAND_ACTION_HOME_X;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         millis();
 
     displayDirty =
@@ -681,10 +681,10 @@ void PendantController::requestHomeX()
 
 void PendantController::requestHomeY()
 {
-    pendingControlAction =
-        CONTROL_ACTION_HOME_Y;
+    pendingCommandAction =
+        COMMAND_ACTION_HOME_Y;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         millis();
 
     displayDirty =
@@ -694,10 +694,10 @@ void PendantController::requestHomeY()
 
 void PendantController::requestHomeZ()
 {
-    pendingControlAction =
-        CONTROL_ACTION_HOME_Z;
+    pendingCommandAction =
+        COMMAND_ACTION_HOME_Z;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         millis();
 
     displayDirty =
@@ -707,10 +707,10 @@ void PendantController::requestHomeZ()
 
 void PendantController::requestHomeAll()
 {
-    pendingControlAction =
-        CONTROL_ACTION_HOME_ALL;
+    pendingCommandAction =
+        COMMAND_ACTION_HOME_ALL;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         millis();
 
     displayDirty =
@@ -722,11 +722,11 @@ void PendantController::requestHomeAll()
 // CONTROL ACTION CONFIRMATION
 // ============================================================
 
-void PendantController::confirmControlAction()
+void PendantController::confirmCommandAction()
 {
-    switch(pendingControlAction)
+    switch(pendingCommandAction)
     {
-        case CONTROL_ACTION_HOME_X:
+        case COMMAND_ACTION_HOME_X:
 
             cnc.homeAxis(
                 AXIS_X
@@ -735,7 +735,7 @@ void PendantController::confirmControlAction()
             break;
 
 
-        case CONTROL_ACTION_HOME_Y:
+        case COMMAND_ACTION_HOME_Y:
 
             cnc.homeAxis(
                 AXIS_Y
@@ -744,7 +744,7 @@ void PendantController::confirmControlAction()
             break;
 
 
-        case CONTROL_ACTION_HOME_Z:
+        case COMMAND_ACTION_HOME_Z:
 
             cnc.homeAxis(
                 AXIS_Z
@@ -753,7 +753,7 @@ void PendantController::confirmControlAction()
             break;
 
 
-        case CONTROL_ACTION_HOME_ALL:
+        case COMMAND_ACTION_HOME_ALL:
 
             cnc.homeAll();
 
@@ -771,10 +771,10 @@ void PendantController::confirmControlAction()
         De bevestigingsvraag verdwijnt onmiddellijk.
     */
 
-    pendingControlAction =
+    pendingCommandAction =
         CONTROL_ACTION_NONE;
 
-    controlActionStartedAt =
+    commandActionStartedAt =
         0;
 
     displayDirty =
@@ -786,10 +786,10 @@ void PendantController::confirmControlAction()
 // CONTROL ACTION TIMEOUT
 // ============================================================
 
-void PendantController::checkControlActionTimeout()
+void PendantController::checkCommandActionTimeout()
 {
     if(
-        pendingControlAction ==
+        pendingCommandAction ==
         CONTROL_ACTION_NONE
     )
     {
@@ -806,14 +806,14 @@ void PendantController::checkControlActionTimeout()
     */
 
     if(
-        millis() - controlActionStartedAt >=
+        millis() - commandActionStartedAt >=
         CONTROL_CONFIRM_TIMEOUT_MS
     )
     {
-        pendingControlAction =
+        pendingCommandAction =
             CONTROL_ACTION_NONE;
 
-        controlActionStartedAt =
+        commandActionStartedAt =
             0;
 
         displayDirty =
@@ -844,7 +844,7 @@ void PendantController::update()
         --------------------------------------------------------
     */
 
-    checkControlActionTimeout();
+    checkCommandActionTimeout();
 
 
     /*
@@ -1486,7 +1486,7 @@ void PendantController::updateNormalDisplay()
         // CONTROL
         // ----------------------------------------------------
 
-        case LAYER_CONTROL:
+        case LAYER_COMMAND:
         {
             display.clear();
 
@@ -1498,17 +1498,17 @@ void PendantController::updateNormalDisplay()
 
 
             /*
-                Een openstaande ControlAction heeft prioriteit
+                Een openstaande CommandAction heeft prioriteit
                 boven de normale Machine-status.
             */
 
             if(
-                pendingControlAction !=
+                pendingCommandAction !=
                 CONTROL_ACTION_NONE
             )
             {
                 display.setLine1(
-                    controlActionName()
+                    commandActionName()
                 );
 
 
@@ -1554,9 +1554,9 @@ PendantController::layerName() const
             return "INFO";
 
 
-        case LAYER_CONTROL:
+        case LAYER_COMMAND:
 
-            return "CONTROL";
+            return "COMMAND";
     }
 
 
@@ -1645,26 +1645,26 @@ PendantController::machineStatusName() const
 // ============================================================
 
 const char*
-PendantController::controlActionName() const
+PendantController::commandActionName() const
 {
-    switch(pendingControlAction)
+    switch(pendingCommandAction)
     {
-        case CONTROL_ACTION_HOME_X:
+        case COMMAND_ACTION_HOME_X:
 
             return "Home X?";
 
 
-        case CONTROL_ACTION_HOME_Y:
+        case COMMAND_ACTION_HOME_Y:
 
             return "Home Y?";
 
 
-        case CONTROL_ACTION_HOME_Z:
+        case COMMAND_ACTION_HOME_Z:
 
             return "Home Z?";
 
 
-        case CONTROL_ACTION_HOME_ALL:
+        case COMMAND_ACTION_HOME_ALL:
 
             return "Home All?";
 

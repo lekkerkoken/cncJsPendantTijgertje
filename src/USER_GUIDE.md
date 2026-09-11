@@ -127,7 +127,7 @@ De pendant kent momenteel drie lagen:
 ```cpp
 LAYER_JOG
 LAYER_INFO
-LAYER_CONTROL
+LAYER_COMMAND
 ```
 
 Deze lagen beschrijven de **normale bediening** van de pendant.

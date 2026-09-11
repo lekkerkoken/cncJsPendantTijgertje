@@ -7,7 +7,7 @@ enum PendantLayer
     LAYER_NONE,
     LAYER_JOG,
     LAYER_INFO,
-    LAYER_CONTROL
+    LAYER_COMMAND
 };
 
 

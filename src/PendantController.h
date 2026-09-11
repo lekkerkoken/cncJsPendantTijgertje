@@ -34,13 +34,13 @@ struct PendantHandlers
 };
 
 
-enum ControlAction
+enum CommandAction
 {
     CONTROL_ACTION_NONE,
-    CONTROL_ACTION_HOME_X,
-    CONTROL_ACTION_HOME_Y,
-    CONTROL_ACTION_HOME_Z,
-    CONTROL_ACTION_HOME_ALL
+    COMMAND_ACTION_HOME_X,
+    COMMAND_ACTION_HOME_Y,
+    COMMAND_ACTION_HOME_Z,
+    COMMAND_ACTION_HOME_ALL
 };
 
 
@@ -84,13 +84,13 @@ private:
     // CONTROL ACTION
     // ============================================================
 
-    ControlAction pendingControlAction =
+    CommandAction pendingCommandAction =
         CONTROL_ACTION_NONE;
 
     static constexpr unsigned long CONTROL_CONFIRM_TIMEOUT_MS =
         5000;
 
-    unsigned long controlActionStartedAt =
+    unsigned long commandActionStartedAt =
         0;
 
 
@@ -119,7 +119,7 @@ private:
 
     void enterInfoLayer();
 
-    void enterControlLayer();
+    void enterCommandLayer();
 
 
     // ============================================================
@@ -165,9 +165,9 @@ private:
 
     void requestHomeAll();
 
-    void confirmControlAction();
+    void confirmCommandAction();
 
-    void checkControlActionTimeout();
+    void checkCommandActionTimeout();
 
 
     // ============================================================
@@ -219,7 +219,7 @@ private:
 
     const char* cncStatusName() const;
 
-    const char* controlActionName() const;
+    const char* commandActionName() const;
 
 
     String lastActiveWcs =
