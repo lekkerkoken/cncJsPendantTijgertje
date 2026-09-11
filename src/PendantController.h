@@ -10,7 +10,9 @@
 #include "JogPlanner.h"
 #include "PendantState.h"
 
+
 class PendantController;
+
 
 struct PendantHandlers
 {
@@ -23,12 +25,24 @@ struct PendantHandlers
     void (PendantController::*key7)() = nullptr;
     void (PendantController::*key8)() = nullptr;
     void (PendantController::*key9)() = nullptr;
+
     void (PendantController::*encoderPress)() = nullptr;
     void (PendantController::*encoderLongPress)() = nullptr;
     void (PendantController::*encoderPulse)(const Event&) = nullptr;
-    void (PendantController::*changedToReady)() = nullptr;
 
+    void (PendantController::*changedToReady)() = nullptr;
 };
+
+
+enum ControlAction
+{
+    CONTROL_ACTION_NONE,
+    CONTROL_ACTION_HOME_X,
+    CONTROL_ACTION_HOME_Y,
+    CONTROL_ACTION_HOME_Z,
+    CONTROL_ACTION_HOME_ALL
+};
+
 
 class PendantController
 {
@@ -49,6 +63,10 @@ public:
 
 private:
 
+    // ============================================================
+    // COMPONENTS
+    // ============================================================
+
     Display display;
 
     InputManager input;
@@ -62,6 +80,24 @@ private:
     PendantState pendantState;
 
 
+    // ============================================================
+    // CONTROL ACTION
+    // ============================================================
+
+    ControlAction pendingControlAction =
+        CONTROL_ACTION_NONE;
+
+    static constexpr unsigned long CONTROL_CONFIRM_TIMEOUT_MS =
+        5000;
+
+    unsigned long controlActionStartedAt =
+        0;
+
+
+    // ============================================================
+    // EVENT HANDLING
+    // ============================================================
+
     void handle(
         const Event& event
     );
@@ -72,7 +108,23 @@ private:
         PendantLayer layer
     );
 
+    void clearHandlers();
+
+
+    // ============================================================
+    // LAYERS
+    // ============================================================
+
     void enterJogLayer();
+
+    void enterInfoLayer();
+
+    void enterControlLayer();
+
+
+    // ============================================================
+    // JOG
+    // ============================================================
 
     void initialiseJogPlanner();
 
@@ -83,18 +135,44 @@ private:
     void feedHoldCycleStart();
 
     void homeAxis();
+
     void zeroAxis();
+
     void unlock();
+
     void reset();
 
-
-
     void selectXAxis();
+
     void selectYAxis();
+
     void selectZAxis();
 
     void decreaseJogStep();
+
     void increaseJogStep();
+
+
+    // ============================================================
+    // CONTROL
+    // ============================================================
+
+    void requestHomeX();
+
+    void requestHomeY();
+
+    void requestHomeZ();
+
+    void requestHomeAll();
+
+    void confirmControlAction();
+
+    void checkControlActionTimeout();
+
+
+    // ============================================================
+    // DISPLAY STATE
+    // ============================================================
 
     bool displayDirty =
         true;
@@ -108,9 +186,19 @@ private:
         MACHINE_DISCONNECTED;
 
 
-    float lastWorkPositionX = 0.0f;
-    float lastWorkPositionY = 0.0f;
-    float lastWorkPositionZ = 0.0f;
+    float lastWorkPositionX =
+        0.0f;
+
+    float lastWorkPositionY =
+        0.0f;
+
+    float lastWorkPositionZ =
+        0.0f;
+
+
+    // ============================================================
+    // DISPLAY
+    // ============================================================
 
     void updateDisplay();
 
@@ -131,11 +219,17 @@ private:
 
     const char* cncStatusName() const;
 
-    String lastActiveWcs = "";
+    const char* controlActionName() const;
+
+
+    String lastActiveWcs =
+        "";
+
 
     const uint8_t* iconForAxis(
         Axis axis
     ) const;
 };
+
 
 #endif

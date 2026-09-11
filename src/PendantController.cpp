@@ -24,14 +24,18 @@ void PendantController::begin(
         encoder
     );
 
+
     handlers.encoderLongPress =
         &PendantController::toggleLayer;
+
 
     lastCncStatus =
         cnc.status();
 
+
     MachineState machineState =
         cnc.machineStateSnapshot();
+
 
     lastMachineStatus =
         machineState.machineStatus;
@@ -47,7 +51,9 @@ void PendantController::begin(
         machineState.workPosition.z;
 
 
-    setLayer(LAYER_JOG);
+    setLayer(
+        LAYER_JOG
+    );
 
     updateDisplay();
 }
@@ -83,6 +89,7 @@ void PendantController::handle(
 
             if(handlers.key3 != nullptr)
                 (this->*handlers.key3)();
+
             break;
 
 
@@ -134,9 +141,9 @@ void PendantController::handle(
             break;
 
 
-        // ----------------------------------------------------
+        // --------------------------------------------------------
         // ENCODER PRESS
-        // ----------------------------------------------------
+        // --------------------------------------------------------
 
         case EVENT_ENCODER_PRESS:
 
@@ -146,20 +153,21 @@ void PendantController::handle(
             break;
 
 
-        // ----------------------------------------------------
+        // --------------------------------------------------------
         // ENCODER LONG PRESS
-        // ----------------------------------------------------
+        // --------------------------------------------------------
 
         case EVENT_ENCODER_LONG_PRESS:
 
-           if(handlers.encoderLongPress != nullptr)
+            if(handlers.encoderLongPress != nullptr)
                 (this->*handlers.encoderLongPress)();
 
             break;
 
-        // ----------------------------------------------------
+
+        // --------------------------------------------------------
         // ENCODER PULSE
-        // ----------------------------------------------------
+        // --------------------------------------------------------
 
         case EVENT_ENCODER_PULSE:
 
@@ -169,6 +177,10 @@ void PendantController::handle(
             break;
 
 
+        // --------------------------------------------------------
+        // CHANGED TO READY
+        // --------------------------------------------------------
+
         case EVENT_CHANGED_TO_READY:
 
             if(handlers.changedToReady != nullptr)
@@ -176,10 +188,6 @@ void PendantController::handle(
 
             break;
 
-
-        // ----------------------------------------------------
-        // DEFAULT
-        // ----------------------------------------------------
 
         default:
 
@@ -195,13 +203,23 @@ void PendantController::handle(
 void PendantController::toggleLayer()
 {
     if(pendantState.layer == LAYER_JOG)
-        setLayer(LAYER_INFO);
-
+    {
+        setLayer(
+            LAYER_INFO
+        );
+    }
     else if(pendantState.layer == LAYER_INFO)
-        setLayer(LAYER_CONTROL);
-
+    {
+        setLayer(
+            LAYER_CONTROL
+        );
+    }
     else
-        setLayer(LAYER_JOG);
+    {
+        setLayer(
+            LAYER_JOG
+        );
+    }
 }
 
 
@@ -211,6 +229,26 @@ void PendantController::setLayer(
 {
     if(pendantState.layer == layer)
         return;
+
+
+    /*
+        Bij het wisselen van layer mogen geen handlers
+        van de vorige layer blijven staan.
+    */
+
+    clearHandlers();
+
+
+    /*
+        Een eventuele openstaande Control-confirmatie
+        vervalt wanneer we van layer wisselen.
+    */
+
+    pendingControlAction =
+        CONTROL_ACTION_NONE;
+
+    controlActionStartedAt =
+        0;
 
 
     pendantState.layer =
@@ -228,13 +266,26 @@ void PendantController::setLayer(
 
         case LAYER_INFO:
 
+            enterInfoLayer();
+
             break;
 
 
         case LAYER_CONTROL:
 
+            enterControlLayer();
+
             break;
     }
+
+
+    /*
+        Long press van de encoder is globaal:
+        daarmee wisselen we altijd van layer.
+    */
+
+    handlers.encoderLongPress =
+        &PendantController::toggleLayer;
 
 
     displayDirty =
@@ -242,10 +293,62 @@ void PendantController::setLayer(
 }
 
 
+// ============================================================
+// CLEAR HANDLERS
+// ============================================================
+
+void PendantController::clearHandlers()
+{
+    handlers.key1 =
+        nullptr;
+
+    handlers.key2 =
+        nullptr;
+
+    handlers.key3 =
+        nullptr;
+
+    handlers.key4 =
+        nullptr;
+
+    handlers.key5 =
+        nullptr;
+
+    handlers.key6 =
+        nullptr;
+
+    handlers.key7 =
+        nullptr;
+
+    handlers.key8 =
+        nullptr;
+
+    handlers.key9 =
+        nullptr;
+
+    handlers.encoderPress =
+        nullptr;
+
+    handlers.encoderLongPress =
+        nullptr;
+
+    handlers.encoderPulse =
+        nullptr;
+
+    handlers.changedToReady =
+        nullptr;
+}
+
+
+// ============================================================
+// JOG LAYER
+// ============================================================
+
 void PendantController::enterJogLayer()
 {
     handlers.changedToReady =
         &PendantController::initialiseJogPlanner;
+
 
     handlers.key1 =
         &PendantController::feedHoldCycleStart;
@@ -274,30 +377,94 @@ void PendantController::enterJogLayer()
     handlers.key9 =
         &PendantController::decreaseJogStep;
 
+
     handlers.encoderPulse =
         &PendantController::handleJogEncoder;
 
-    if(cnc.status() == CNCjsInterface::CNCjsStatus::Ready)
+
+    if(
+        cnc.status() ==
+        CNCjsInterface::CNCjsStatus::Ready
+    )
     {
         initialiseJogPlanner();
     }
 }
 
 
+// ============================================================
+// INFO LAYER
+// ============================================================
+
+void PendantController::enterInfoLayer()
+{
+    // Nog geen specifieke input handlers.
+}
+
+
+// ============================================================
+// CONTROL LAYER
+// ============================================================
+
+void PendantController::enterControlLayer()
+{
+    /*
+        KEY 1 is direct Feedhold / Cycle Start.
+    */
+
+    handlers.key1 =
+        &PendantController::feedHoldCycleStart;
+
+
+    /*
+        Homing vraagt eerst om bevestiging.
+    */
+
+    handlers.key4 =
+        &PendantController::requestHomeY;
+
+    handlers.key5 =
+        &PendantController::requestHomeAll;
+
+    handlers.key7 =
+        &PendantController::requestHomeZ;
+
+    handlers.key8 =
+        &PendantController::requestHomeX;
+
+
+    /*
+        Encoder press bevestigt de geselecteerde
+        ControlAction.
+    */
+
+    handlers.encoderPress =
+        &PendantController::confirmControlAction;
+}
+
+
+// ============================================================
+// INITIALISE JOG PLANNER
+// ============================================================
+
 void PendantController::initialiseJogPlanner()
 {
     cnc.cacheControllerSettings();
 
+
     MachineSettings machineSettings =
         cnc.machineSettingsSnapshot();
+
 
     jogPlanner.begin(
         machineSettings
     );
 
+
     jogPlanner.setJogStepDistance(
         jogStepDistance()
     );
+
 
     jogPlanner.setAxis(
         axis()
@@ -328,7 +495,7 @@ float PendantController::jogStepDistance() const
 
 
 // ============================================================
-// Feedhold / Resume
+// FEEDHOLD / RESUME
 // ============================================================
 
 void PendantController::feedHoldCycleStart()
@@ -336,7 +503,11 @@ void PendantController::feedHoldCycleStart()
     MachineState state =
         cnc.machineStateSnapshot();
 
-    if(state.machineStatus == MACHINE_HOLD)
+
+    if(
+        state.machineStatus ==
+        MACHINE_HOLD
+    )
     {
         cnc.cyclestart();
     }
@@ -346,6 +517,10 @@ void PendantController::feedHoldCycleStart()
     }
 }
 
+
+// ============================================================
+// AXIS SELECTION
+// ============================================================
 
 void PendantController::selectXAxis()
 {
@@ -395,6 +570,10 @@ void PendantController::selectZAxis()
 }
 
 
+// ============================================================
+// JOG STEP
+// ============================================================
+
 void PendantController::decreaseJogStep()
 {
     if(
@@ -431,6 +610,10 @@ void PendantController::increaseJogStep()
 }
 
 
+// ============================================================
+// JOG ACTIONS
+// ============================================================
+
 void PendantController::homeAxis()
 {
     cnc.homeAxis(
@@ -444,10 +627,12 @@ void PendantController::unlock()
     cnc.unlock();
 }
 
+
 void PendantController::reset()
 {
     cnc.reset();
 }
+
 
 void PendantController::zeroAxis()
 {
@@ -478,6 +663,166 @@ void PendantController::handleJogEncoder(
 
 
 // ============================================================
+// CONTROL ACTION REQUESTS
+// ============================================================
+
+void PendantController::requestHomeX()
+{
+    pendingControlAction =
+        CONTROL_ACTION_HOME_X;
+
+    controlActionStartedAt =
+        millis();
+
+    displayDirty =
+        true;
+}
+
+
+void PendantController::requestHomeY()
+{
+    pendingControlAction =
+        CONTROL_ACTION_HOME_Y;
+
+    controlActionStartedAt =
+        millis();
+
+    displayDirty =
+        true;
+}
+
+
+void PendantController::requestHomeZ()
+{
+    pendingControlAction =
+        CONTROL_ACTION_HOME_Z;
+
+    controlActionStartedAt =
+        millis();
+
+    displayDirty =
+        true;
+}
+
+
+void PendantController::requestHomeAll()
+{
+    pendingControlAction =
+        CONTROL_ACTION_HOME_ALL;
+
+    controlActionStartedAt =
+        millis();
+
+    displayDirty =
+        true;
+}
+
+
+// ============================================================
+// CONTROL ACTION CONFIRMATION
+// ============================================================
+
+void PendantController::confirmControlAction()
+{
+    switch(pendingControlAction)
+    {
+        case CONTROL_ACTION_HOME_X:
+
+            cnc.homeAxis(
+                AXIS_X
+            );
+
+            break;
+
+
+        case CONTROL_ACTION_HOME_Y:
+
+            cnc.homeAxis(
+                AXIS_Y
+            );
+
+            break;
+
+
+        case CONTROL_ACTION_HOME_Z:
+
+            cnc.homeAxis(
+                AXIS_Z
+            );
+
+            break;
+
+
+        case CONTROL_ACTION_HOME_ALL:
+
+            cnc.homeAll();
+
+            break;
+
+
+        case CONTROL_ACTION_NONE:
+
+            return;
+    }
+
+
+    /*
+        De actie is uitgevoerd.
+        De bevestigingsvraag verdwijnt onmiddellijk.
+    */
+
+    pendingControlAction =
+        CONTROL_ACTION_NONE;
+
+    controlActionStartedAt =
+        0;
+
+    displayDirty =
+        true;
+}
+
+
+// ============================================================
+// CONTROL ACTION TIMEOUT
+// ============================================================
+
+void PendantController::checkControlActionTimeout()
+{
+    if(
+        pendingControlAction ==
+        CONTROL_ACTION_NONE
+    )
+    {
+        return;
+    }
+
+
+    /*
+        Gebruik een verschil met millis() in plaats van:
+
+            millis() >= start + timeout
+
+        zodat de normale millis()-overflow geen probleem vormt.
+    */
+
+    if(
+        millis() - controlActionStartedAt >=
+        CONTROL_CONFIRM_TIMEOUT_MS
+    )
+    {
+        pendingControlAction =
+            CONTROL_ACTION_NONE;
+
+        controlActionStartedAt =
+            0;
+
+        displayDirty =
+            true;
+    }
+}
+
+
+// ============================================================
 // UPDATE
 // ============================================================
 
@@ -486,11 +831,20 @@ void PendantController::update()
     /*
         CNCjs is onderdeel van de PendantController.
 
-        Daarom wordt de interface hier geüpdatet en niet meer
+        Daarom wordt de interface hier geüpdatet en niet
         rechtstreeks vanuit main.cpp.
     */
 
     cnc.update();
+
+
+    /*
+        --------------------------------------------------------
+        CONTROL CONFIRMATION TIMEOUT
+        --------------------------------------------------------
+    */
+
+    checkControlActionTimeout();
 
 
     /*
@@ -533,20 +887,33 @@ void PendantController::update()
         cnc.machineStateSnapshot();
 
 
-    JogCommand jog =
-        jogPlanner.update(
-            machineState
-        );
+    /*
+        De JogPlanner draait uitsluitend in de Jog-layer.
 
+        In Control en Info mag de planner dus geen jog
+        commands produceren.
+    */
 
     if(
-        jog.type !=
-        JOG_NONE
+        pendantState.layer ==
+        LAYER_JOG
     )
     {
-        cnc.execute(
-            jog
-        );
+        JogCommand jog =
+            jogPlanner.update(
+                machineState
+            );
+
+
+        if(
+            jog.type !=
+            JOG_NONE
+        )
+        {
+            cnc.execute(
+                jog
+            );
+        }
     }
 
 
@@ -589,12 +956,13 @@ void PendantController::checkStatusChanges()
     {
         switch(currentCncStatus)
         {
-            case CNCjsClientCore::CNCjsStatus::Ready:
+            case CNCjsInterface::CNCjsStatus::Ready:
             {
                 Event event;
 
                 event.type =
                     EVENT_CHANGED_TO_READY;
+
 
                 handle(
                     event
@@ -1026,14 +1394,21 @@ void PendantController::updateNormalDisplay()
     );
 
 
-    display.setStatus("");
+    display.setStatus(
+        ""
+    );
 
 
     switch(pendantState.layer)
     {
-        case LAYER_JOG:
+        // ----------------------------------------------------
+        // JOG
+        // ----------------------------------------------------
 
+        case LAYER_JOG:
+        {
             display.clear();
+
 
             char buffer[20];
 
@@ -1054,59 +1429,67 @@ void PendantController::updateNormalDisplay()
                 buffer
             );
 
-            break;
 
+            break;
+        }
+
+
+        // ----------------------------------------------------
+        // INFO
+        // ----------------------------------------------------
 
         case LAYER_INFO:
-
+        {
             display.clear();
 
 
-            {
-                MachineState machineState =
-                    cnc.machineStateSnapshot();
-
-
-                char wcsBuffer[20];
-
-
-                if(
-                    machineState.activeWcs.length() > 0
-                )
-                {
-                    snprintf(
-                        wcsBuffer,
-                        sizeof(wcsBuffer),
-                        "WCS %s",
-                        machineState.activeWcs.c_str()
-                    );
-                }
-                else
-                {
-                    snprintf(
-                        wcsBuffer,
-                        sizeof(wcsBuffer),
-                        "WCS"
-                    );
-                }
-
-
-                display.iconRightTextView(
-                    INFO_ICON,
-                    wcsBuffer,
-                    "Offsets"
-                );
-            }
-
-            break;
-
-
-        case LAYER_CONTROL:
-        {
             MachineState machineState =
                 cnc.machineStateSnapshot();
 
+
+            char wcsBuffer[20];
+
+
+            if(
+                machineState.activeWcs.length() > 0
+            )
+            {
+                snprintf(
+                    wcsBuffer,
+                    sizeof(wcsBuffer),
+                    "WCS %s",
+                    machineState.activeWcs.c_str()
+                );
+            }
+            else
+            {
+                snprintf(
+                    wcsBuffer,
+                    sizeof(wcsBuffer),
+                    "WCS"
+                );
+            }
+
+
+            display.iconRightTextView(
+                INFO_ICON,
+                wcsBuffer,
+                "Offsets"
+            );
+
+
+            break;
+        }
+
+
+        // ----------------------------------------------------
+        // CONTROL
+        // ----------------------------------------------------
+
+        case LAYER_CONTROL:
+        {
             display.clear();
+
 
             display.setIcon(
                 nullptr,
@@ -1114,21 +1497,41 @@ void PendantController::updateNormalDisplay()
             );
 
 
-            display.setLine1(
-                "Machine"
-            );
+            /*
+                Een openstaande ControlAction heeft prioriteit
+                boven de normale Machine-status.
+            */
+
+            if(
+                pendingControlAction !=
+                CONTROL_ACTION_NONE
+            )
+            {
+                display.setLine1(
+                    controlActionName()
+                );
 
 
-            display.setLine2(
-                machineStatusName()
-            );
+                display.setLine2(
+                    "Press encoder"
+                );
+            }
+            else
+            {
+                display.setLine1(
+                    "Machine"
+                );
+
+
+                display.setLine2(
+                    machineStatusName()
+                );
+            }
+
 
             break;
         }
     }
-
-
-    display.update();
 }
 
 
@@ -1142,12 +1545,17 @@ PendantController::layerName() const
     switch(pendantState.layer)
     {
         case LAYER_JOG:
+
             return "JOG";
 
+
         case LAYER_INFO:
+
             return "INFO";
 
+
         case LAYER_CONTROL:
+
             return "CONTROL";
     }
 
@@ -1166,15 +1574,22 @@ PendantController::axisName() const
     switch(pendantState.axis)
     {
         case AXIS_X:
+
             return "Axis X";
 
+
         case AXIS_Y:
+
             return "Axis Y";
 
+
         case AXIS_Z:
+
             return "Axis Z";
 
+
         default:
+
             return "";
     }
 }
@@ -1194,25 +1609,79 @@ PendantController::machineStatusName() const
     switch(machineState.machineStatus)
     {
         case MACHINE_DISCONNECTED:
+
             return "Disconnected";
 
+
         case MACHINE_IDLE:
+
             return "Idle";
 
+
         case MACHINE_RUN:
+
             return "Run";
 
+
         case MACHINE_HOLD:
+
             return "Hold";
 
+
         case MACHINE_ALARM:
+
             return "Alarm";
 
+
         default:
+
             return "Unknown";
     }
 }
 
+
+// ============================================================
+// CONTROL ACTION NAME
+// ============================================================
+
+const char*
+PendantController::controlActionName() const
+{
+    switch(pendingControlAction)
+    {
+        case CONTROL_ACTION_HOME_X:
+
+            return "Home X?";
+
+
+        case CONTROL_ACTION_HOME_Y:
+
+            return "Home Y?";
+
+
+        case CONTROL_ACTION_HOME_Z:
+
+            return "Home Z?";
+
+
+        case CONTROL_ACTION_HOME_ALL:
+
+            return "Home All?";
+
+
+        case CONTROL_ACTION_NONE:
+
+            return "";
+    }
+
+
+    return "";
+}
+
+
+// ============================================================
+// ICON FOR AXIS
+// ============================================================
 
 const uint8_t*
 PendantController::iconForAxis(
@@ -1253,30 +1722,47 @@ PendantController::cncStatusName() const
     switch(cnc.status())
     {
         case CNCjsInterface::CNCjsStatus::Offline:
+
             return "OFFLINE";
 
+
         case CNCjsInterface::CNCjsStatus::WiFiConnecting:
+
             return "CONNECTING";
+
 
         case CNCjsInterface::CNCjsStatus::Authenticating:
+
             return "AUTHENTICATING";
 
+
         case CNCjsInterface::CNCjsStatus::Connecting:
+
             return "CONNECTING";
+
 
         case CNCjsInterface::CNCjsStatus::WaitingForLists:
+
             return "WAITING";
 
+
         case CNCjsInterface::CNCjsStatus::ControllerSelectionPending:
+
             return "SELECT";
 
+
         case CNCjsInterface::CNCjsStatus::OpeningController:
+
             return "CONNECTING";
 
+
         case CNCjsInterface::CNCjsStatus::Ready:
+
             return "READY";
 
+
         case CNCjsInterface::CNCjsStatus::Error:
+
             return "ERROR";
     }
 

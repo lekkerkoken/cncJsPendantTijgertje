@@ -362,6 +362,13 @@ bool CNCjsInterface::feedHold()
     );
 }
 
+bool CNCjsInterface::homeAll()
+{
+    return sendCommand(
+        "homing"
+    );
+}
+
 bool CNCjsInterface::cyclestart()
 {
     return sendCommand(

@@ -161,6 +161,8 @@ public:
         Axis axis
     );
 
+    bool homeAll();
+
     bool unlock();
 
     bool reset();
