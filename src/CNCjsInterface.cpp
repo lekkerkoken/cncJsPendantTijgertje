@@ -314,6 +314,52 @@ bool CNCjsInterface::zeroAxis(
     );
 }
 
+bool CNCjsInterface::nextWcs()
+{
+    MachineState state =
+        machineStateSnapshot();
+
+    String nextWcs;
+
+    if(state.activeWcs == "G54")
+        nextWcs = "G55";
+    else if(state.activeWcs == "G55")
+        nextWcs = "G56";
+    else if(state.activeWcs == "G56")
+        nextWcs = "G57";
+    else if(state.activeWcs == "G57")
+        nextWcs = "G58";
+    else if(state.activeWcs == "G58")
+        nextWcs = "G59";
+    else
+        nextWcs = "G59";
+
+    return sendGcode(nextWcs);
+}
+
+bool CNCjsInterface::previousWcs()
+{
+    MachineState state =
+        machineStateSnapshot();
+
+    String previousWcs;
+
+    if(state.activeWcs == "G59")
+        previousWcs = "G58";
+    else if(state.activeWcs == "G58")
+        previousWcs = "G57";
+    else if(state.activeWcs == "G57")
+        previousWcs = "G56";
+    else if(state.activeWcs == "G56")
+        previousWcs = "G55";
+    else if(state.activeWcs == "G55")
+        previousWcs = "G54";
+    else
+        previousWcs = "G54";
+
+    return sendGcode(previousWcs);
+}
+
 
 bool CNCjsInterface::execute(
     const JogCommand& jog

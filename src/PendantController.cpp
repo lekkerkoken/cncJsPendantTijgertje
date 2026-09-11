@@ -430,11 +430,17 @@ void PendantController::enterCommandLayer()
     handlers.key5 =
         &PendantController::requestHomeAll;
 
+    handlers.key6 =
+        &PendantController::nextWcs;
+
     handlers.key7 =
         &PendantController::requestHomeZ;
 
     handlers.key8 =
         &PendantController::requestHomeX;
+
+    handlers.key9 =
+        &PendantController::previousWcs;
 
 
     /*
@@ -670,6 +676,16 @@ void PendantController::zeroAxis()
     cnc.zeroAxis(
         axis()
     );
+}
+
+void PendantController::nextWcs()
+{
+    cnc.nextWcs();
+}
+
+void PendantController::previousWcs()
+{
+    cnc.previousWcs();
 }
 
 

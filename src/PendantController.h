@@ -143,6 +143,10 @@ private:
 
     void zeroAxis();
 
+    void previousWcs();
+
+    void nextWcs();
+
     void unlock();
 
     void reset();

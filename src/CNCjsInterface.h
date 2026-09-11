@@ -187,7 +187,10 @@ public:
 
     bool gcodePause();
 
-    bool stop();
+    bool nextWcs();
+    bool previousWcs();
+
+    // bool stop();
 
     bool sendRealtime(
         uint8_t command
