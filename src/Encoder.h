@@ -78,7 +78,7 @@ private:
 
     static constexpr UBaseType_t TASK_PRIORITY = 3;
 
-    static constexpr uint32_t TASK_DELAY_MS = 1;
+    static constexpr uint32_t TASK_DELAY_MS = 60;
 
 
     static void taskEntry(
