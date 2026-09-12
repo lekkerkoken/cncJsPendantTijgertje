@@ -35,8 +35,8 @@ void Encoder::begin(
         External 10k pull-up to 3.3V.
 
         Button:
-        HIGH = released
-        LOW  = pressed
+        HIGH = pressed
+        LOW  = released
     */
 
     pinMode(
@@ -59,12 +59,13 @@ void Encoder::begin(
     // ========================================================
     // ROTARY ENCODER
     // ========================================================
-
+    delay(100);
     lastEncoderState =
         (
             (digitalRead(pinA) << 1) |
             digitalRead(pinB)
         );
+
 
 
     portENTER_CRITICAL(
@@ -232,6 +233,10 @@ void ARDUINO_ISR_ATTR Encoder::buttonISR(
 // ENCODER TRANSITION
 // ============================================================
 
+// ============================================================
+// ENCODER TRANSITION - DIAGNOSTIC TEST
+// ============================================================
+
 void Encoder::handleEncoderTransition()
 {
     static const int8_t transitionTable[16] =
@@ -243,21 +248,25 @@ void Encoder::handleEncoderTransition()
     };
 
 
-    uint8_t currentState =
+    const uint8_t previousState =
+        lastEncoderState;
+
+
+    const uint8_t currentState =
         (
             (digitalRead(pinA) << 1) |
             digitalRead(pinB)
         );
 
 
-    uint8_t index =
+    const uint8_t index =
         (
-            (lastEncoderState << 2) |
+            (previousState << 2) |
             currentState
         );
 
 
-    int8_t delta =
+    const int8_t delta =
         transitionTable[index];
 
 
@@ -266,8 +275,7 @@ void Encoder::handleEncoderTransition()
 
 
     if(
-        delta !=
-        0
+        delta != 0
     )
     {
         portENTER_CRITICAL_ISR(
@@ -280,9 +288,20 @@ void Encoder::handleEncoderTransition()
         portEXIT_CRITICAL_ISR(
             &encoderMux
         );
+
+
+        /*
+            DIAGNOSTIEK
+
+            LET OP:
+            Serial vanuit een ISR is normaal gesproken
+            niet ideaal.
+
+            Dit is alleen voor deze korte test.
+        */
+       
     }
 }
-
 
 // ============================================================
 // TASK ENTRY
@@ -331,33 +350,57 @@ void Encoder::task()
             &encoderMux
         );
 
-        if(
-            encoderAccumulator >=
-            2
-        )
-        {
-            delta =
-                1;
 
-            encoderAccumulator =
-                0;
-        }
-        else if(
-            encoderAccumulator <=
-            -2
-        )
-        {
-            delta =
-                -1;
+        /*
+            Test 1:
 
-            encoderAccumulator =
-                0;
-        }
+            Vier quadrature-counts in dezelfde richting
+            vormen één fysieke encoder-pulse.
+
+            Belangrijk:
+
+            We verwijderen alleen de vier gebruikte counts.
+            Een eventuele resterende accumulator blijft dus
+            behouden.
+
+            Voorbeeld:
+
+                +1 +1 +1 +1
+                -> pulse +1
+                -> accumulator 0
+        */
+
+if(
+    encoderAccumulator >=
+    2
+)
+{
+    delta =
+        1 * (encoderAccumulator / 2);
+
+    encoderAccumulator -=
+        encoderAccumulator / 2 * 2;
+}
+else if(
+    encoderAccumulator <=
+    -2
+)
+{
+    delta =
+        1 * (encoderAccumulator / 2);
+
+    encoderAccumulator -=
+        encoderAccumulator / 2 * 2;
+}
 
         portEXIT_CRITICAL(
             &encoderMux
         );
 
+
+        // ====================================================
+        // ENCODER EVENT
+        // ====================================================
 
         if(
             delta !=
@@ -652,11 +695,6 @@ void Encoder::updateButton()
                 }
 
 
-                /*
-                    buttonStateSince wordt nu gebruikt
-                    voor de debounce van de release.
-                */
-
                 buttonStateSince =
                     now;
 
@@ -676,15 +714,6 @@ void Encoder::updateButton()
                 pressed
             )
             {
-                /*
-                    Release was bounce.
-
-                    We gaan terug naar PRESSED.
-                    De oorspronkelijke press-tijd moet opnieuw
-                    worden gestart vanaf het moment waarop de
-                    knop weer stabiel als pressed wordt gezien.
-                */
-
                 buttonState =
                     BUTTON_DEBOUNCING_PRESS;
 

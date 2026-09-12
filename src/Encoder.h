@@ -92,7 +92,18 @@ private:
     // ROTARY ENCODER
     // ========================================================
 
+    /*
+        Iedere geldige quadrature-transitie levert
+        +1 of -1 op.
+
+        Voor deze test verzamelen we vier transities
+        in dezelfde richting.
+
+        Vier transities = één ENCODER_PULSE.
+    */
+
     volatile int encoderAccumulator = 0;
+
 
     uint8_t lastEncoderState = 1;
 
@@ -141,6 +152,7 @@ private:
 
 
     static constexpr unsigned long BUTTON_DEBOUNCE_TIME = 10;
+
 
     /*
         Tijdelijk hoog ingesteld voor debuggen.

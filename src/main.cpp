@@ -62,6 +62,7 @@ void setup()
         // ----------------------------------------------------
 
         oled.clear();
+#ifdef DISPLAY_DEBUG
 
         oled.setTextSize(
             1
@@ -112,6 +113,7 @@ void setup()
         );
 
         oled.display();
+#endif
     }
 
 

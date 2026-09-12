@@ -42,7 +42,7 @@ const int MATRIX_COL_PINS[MATRIX_COLS] =
 //#define CNCJS_EVENT_DEBUG
 //#define SOCKETIO_DEBUG
 //#define ENCODER_DEBUG
-#define DISPLAY_DEBUG
+//#define DISPLAY_DEBUG
 //#define JOGPLANNER_DEBUG
 
 #endif

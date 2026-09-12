@@ -178,6 +178,7 @@ void JogPlanner::encoder(
     Axis axis
 )
 {
+    Serial.println("[JogPlanner] encoderpulse received");
     if(
         event.type !=
         EVENT_ENCODER_PULSE
@@ -207,7 +208,9 @@ void JogPlanner::encoder(
 
     int pulses =
         abs(event.value);
-
+    Serial.print("[JogPlanner] pulses: ");
+    Serial.println(pulses);
+    
         if(intentDirection == 0)
         {
             intentDirection =
@@ -253,7 +256,7 @@ void JogPlanner::encoder(
 
                 Er wordt GEEN tegengestelde intentie toegevoegd.
         */
-        for (int i = 0 ; i++ ; i>=pulses){
+        for (int i = 0 ; i<pulses; i++){
         scaleDownIntent();
         }
 
