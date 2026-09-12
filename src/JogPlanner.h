@@ -108,7 +108,7 @@ private:
     // FEEDRATE
     // ========================================================
 
-    static constexpr int MIN_FEEDRATE = 100;
+    static constexpr int MIN_FEEDRATE = 10;
 
     Position maxFeedrate;
 
@@ -236,6 +236,8 @@ private:
 
 
     bool hasIntent() const;
+
+    int scaleDownCount = 0;
 
 
     float consumeIntent();

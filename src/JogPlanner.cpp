@@ -18,6 +18,8 @@ void JogPlanner::begin(
 
     clearIntent();
 
+    scaleDownCount = 0;
+
     consumeIndex =
         0;
 
@@ -95,6 +97,8 @@ void JogPlanner::setAxis(
         axis;
 
     clearIntent();
+
+    scaleDownCount = 0;
 
     intentDirection =
         0;
@@ -565,64 +569,7 @@ void JogPlanner::addIntent(
 
 void JogPlanner::scaleDownIntent()
 {
-    /*
-        Een tegengestelde pulse binnen het
-        JogReactionWindow is een correctie op de nog resterende
-        intentie.
-
-        We voegen GEEN negatieve intentie toe.
-
-        Iedere pulse maakt de resterende beweging kleiner,
-        terwijl de oorspronkelijke intentierichting behouden
-        blijft.
-
-        Bijvoorbeeld:
-
-            +8
-             ↓
-            +4
-             ↓
-            +2
-             ↓
-            +1
-    */
-
-    for(int i = 0; i < SLOT_COUNT; ++i)
-    {
-        int index =
-            (
-                consumeIndex +
-                i
-            )
-            %
-            SLOT_COUNT;
-
-
-        intent[index] *=
-            SCALE_DOWN_FACTOR;
-
-
-        if(
-            fabs(
-                intent[index]
-            )
-            <=
-            INTENT_EPSILON
-        )
-        {
-            intent[index] =
-                0.0f;
-        }
-    }
-
-
-#ifdef JOGPLANNER_DEBUG
-
-    Serial.println(
-        "[JogPlanner] Intent scaled down"
-    );
-
-#endif
+    scaleDownCount++;
 }
 
 
@@ -675,6 +622,9 @@ void JogPlanner::updateReactionWindow()
             0;
 
         reactionWindowUntil =
+            0;
+            
+        scaleDownCount =
             0;
 
 
@@ -752,27 +702,20 @@ bool JogPlanner::hasIntent() const
 
 float JogPlanner::consumeIntent()
 {
-    float delta =
-        intent[consumeIndex];
+    float delta = intent[consumeIndex];
 
-
-    /*
-        Dit slot is vanaf nu verleden tijd.
-
-        Wat hier zat kan nooit meer worden meegestuurd.
-    */
-
-    intent[consumeIndex] =
-        0.0f;
-
+    intent[consumeIndex] = 0.0f;
 
     consumeIndex =
-        nextIndex(
-            consumeIndex
+        nextIndex(consumeIndex);
+
+    float scale =
+        powf(
+            SCALE_DOWN_FACTOR,
+            scaleDownCount
         );
 
-
-    return delta;
+    return delta * scale;
 }
 
 
