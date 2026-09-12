@@ -71,9 +71,6 @@ void JogPlanner::begin(
     jogStepDistance =
         1.0f;
 
-    positionKnown =
-        false;
-
     lastUpdate =
         millis();
 }
@@ -191,24 +188,13 @@ void JogPlanner::encoder(
 
     if(event.value == 0)
     {
+        Serial.println("event nul value, this actually never happens");
         return;
     }
 
 
     setAxis(axis);
 
-
-    unsigned long now =
-        millis();
-
-
-    /*
-        Eerst bepalen we of een bestaande intentierichting
-        nog actief is.
-
-        Een verlopen JogReactionWindow maakt de oude intentie
-        volledig ongeldig.
-    */
 
     updateReactionWindow();
 
@@ -222,15 +208,6 @@ void JogPlanner::encoder(
     int pulses =
         abs(event.value);
 
-
-    for(int i = 0; i < pulses; ++i)
-    {
-        /*
-            Geen actieve intentie:
-
-                deze pulse zet een nieuwe intentierichting.
-        */
-
         if(intentDirection == 0)
         {
             intentDirection =
@@ -238,37 +215,32 @@ void JogPlanner::encoder(
 
             addIntent(
                 jogStepDistance *
-                direction
+                direction * pulses
             );
 
             refreshReactionWindow();
-
-            continue;
-        }
-
-
-        /*
-            Zelfde richting:
-
-                nieuwe intentie toevoegen.
-
-                Het JogReactionWindow wordt opnieuw gestart.
-        */
-
-        if(
+        }else if(
             intentDirection ==
             direction
         )
         {
+
+            /*
+                Zelfde richting:
+
+                    extra intentie toevoegen.
+
+                    Het JogReactionWindow wordt opnieuw gestart.
+            */
+
             addIntent(
                 jogStepDistance *
-                direction
+                direction * pulses
             );
 
             refreshReactionWindow();
 
-            continue;
-        }
+        }else{
 
 
         /*
@@ -281,11 +253,13 @@ void JogPlanner::encoder(
 
                 Er wordt GEEN tegengestelde intentie toegevoegd.
         */
-
+        for (int i = 0 ; i++ ; i>=pulses){
         scaleDownIntent();
+        }
 
         refreshReactionWindow();
-    }
+        }
+    
 
 
 #ifdef JOGPLANNER_DEBUG
@@ -356,52 +330,6 @@ JogCommand JogPlanner::update(
         command.type = JOG_CANCEL;
 
         return command;
-    }
-
-    /*
-        Eerste geldige machinepositie.
-
-        De positie is uitsluitend validatie/kalibratie.
-        Hij bepaalt NIET de inhoud van de intentiering.
-    */
-
-    if(!positionKnown)
-    {
-        if(
-            !(
-                machineState.machineStatus ==
-                    MACHINE_IDLE
-                ||
-                machineState.machineStatus ==
-                    MACHINE_RUN
-            )
-        )
-        {
-            return noCommand;
-        }
-
-
-        positionKnown =
-            true;
-
-        lastUpdate =
-            now;
-
-
-        Serial.print(
-            "[JogPlanner] Position synchronized: "
-        );
-
-        Serial.println(
-            machinePosition(
-                machineState,
-                selectedAxis
-            ),
-            3
-        );
-
-
-        return noCommand;
     }
 
 
@@ -726,32 +654,6 @@ void JogPlanner::refreshReactionWindow()
     );
 
 #endif
-}
-
-
-
-// ============================================================
-// HAS INTENT
-// ============================================================
-
-bool JogPlanner::hasIntent() const
-{
-    for(int i = 0; i < SLOT_COUNT; ++i)
-    {
-        if(
-            fabs(
-                intent[i]
-            )
-            >
-            INTENT_EPSILON
-        )
-        {
-            return true;
-        }
-    }
-
-
-    return false;
 }
 
 

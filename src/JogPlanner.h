@@ -180,15 +180,6 @@ private:
 
 
     /*
-        Geldige machinepositie ontvangen?
-
-        Dit voorkomt dat direct na startup encoderintentie wordt
-        toegevoegd zonder dat we weten of de machine beschikbaar is.
-    */
-    bool positionKnown = false;
-
-
-    /*
         Tijdstip waarop het huidige tijdslot beschikbaar komt.
     */
     unsigned long lastUpdate = 0;
@@ -234,8 +225,6 @@ private:
     */
     void refreshReactionWindow();
 
-
-    bool hasIntent() const;
 
     int scaleDownCount = 0;
 

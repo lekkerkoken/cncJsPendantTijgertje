@@ -2003,6 +2003,8 @@ void CNCjsClientCore::handleSocketEvent(
                 controllerSettingsBuffer_.publish(
                     snapshot
                 );
+                
+                machineHeartbeatReceived();
 
 
                 break;
@@ -2084,6 +2086,7 @@ void CNCjsClientCore::handleSocketEvent(
                 );
 
 #endif
+                machineHeartbeatReceived();
 
                 break;
             }
@@ -2124,6 +2127,7 @@ void CNCjsClientCore::handleSocketEvent(
                     snapshot
                 );
 
+                machineHeartbeatReceived();
 
                 break;
             }
