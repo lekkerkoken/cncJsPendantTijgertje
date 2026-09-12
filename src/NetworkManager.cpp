@@ -12,6 +12,8 @@
 void NetworkManager::begin()
 {
     resetAuthentication();
+
+    currentWiFiNetwork_ = 0;
 }
 
 
@@ -23,8 +25,28 @@ void NetworkManager::startWiFiConnection()
 {
     Serial.println();
 
+    Serial.print(
+        "[WiFi] Trying network "
+    );
+
+    Serial.print(
+        currentWiFiNetwork_ + 1
+    );
+
+    Serial.print(
+        "/"
+    );
+
+    Serial.print(
+        WIFI_NETWORK_COUNT
+    );
+
+    Serial.print(
+        ": "
+    );
+
     Serial.println(
-        "[WiFi] Starting connection..."
+        WIFI_NETWORKS[currentWiFiNetwork_].ssid
     );
 
     WiFi.mode(
@@ -36,8 +58,8 @@ void NetworkManager::startWiFiConnection()
     );
 
     WiFi.begin(
-        WIFI_SSID,
-        WIFI_PASSWORD
+        WIFI_NETWORKS[currentWiFiNetwork_].ssid,
+        WIFI_NETWORKS[currentWiFiNetwork_].password
     );
 }
 
@@ -76,6 +98,55 @@ bool NetworkManager::wifiConnected() const
 {
     return WiFi.status() ==
            WL_CONNECTED;
+}
+
+
+// ============================================================
+// WIFI ADVANCE
+// ============================================================
+
+void NetworkManager::advanceWiFiNetwork()
+{
+    if (
+        WIFI_NETWORK_COUNT == 0
+    )
+    {
+        return;
+    }
+
+    currentWiFiNetwork_++;
+
+    if (
+        currentWiFiNetwork_ >=
+        WIFI_NETWORK_COUNT
+    )
+    {
+        currentWiFiNetwork_ = 0;
+    }
+
+    Serial.print(
+        "[WiFi] Next network: "
+    );
+
+    Serial.print(
+        currentWiFiNetwork_ + 1
+    );
+
+    Serial.print(
+        "/"
+    );
+
+    Serial.print(
+        WIFI_NETWORK_COUNT
+    );
+
+    Serial.print(
+        ": "
+    );
+
+    Serial.println(
+        WIFI_NETWORKS[currentWiFiNetwork_].ssid
+    );
 }
 
 

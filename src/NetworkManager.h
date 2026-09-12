@@ -14,6 +14,8 @@ public:
     bool updateWiFiConnection();
     bool wifiConnected() const;
 
+    void advanceWiFiNetwork();
+
     bool resolve(
         const char* host,
         uint16_t port,
@@ -49,6 +51,8 @@ private:
     bool authenticatedState = false;
 
     String token_;
+
+    size_t currentWiFiNetwork_ = 0;
 
     bool extractAuthenticationBody(
         String& body

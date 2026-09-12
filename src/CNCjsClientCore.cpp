@@ -678,14 +678,10 @@ void CNCjsClientCore::updateConnection()
                     ConnectionState::Resolving
                 );
             }
-            else if (
-                millis() - stateStartedAt >=
-                WIFI_TIMEOUT
-            )
+            else if (millis() - stateStartedAt >= WIFI_TIMEOUT)
             {
-                connectionFailed(
-                    "WiFi timeout"
-                );
+                networkManager_.advanceWiFiNetwork();
+                connectionFailed("WiFi timeout");
             }
 
             break;
