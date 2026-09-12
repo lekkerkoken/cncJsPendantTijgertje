@@ -13,11 +13,18 @@ void JogPlanner::begin(
     const MachineSettings& settings
 )
 {
-    maxFeedrate = settings.maxFeedrate;
+    maxFeedrate =
+        settings.maxFeedrate;
 
     clearIntent();
 
     consumeIndex =
+        0;
+
+    intentDirection =
+        0;
+
+    reactionWindowUntil =
         0;
 
     selectedAxis =
@@ -48,7 +55,6 @@ void JogPlanner::setJogStepDistance(
         return;
     }
 
-
     jogStepDistance =
         distance;
 }
@@ -77,8 +83,12 @@ void JogPlanner::setAxis(
     /*
         Intentie hoort altijd bij één specifieke as.
 
-        Bij een aswissel laten we daarom alle toekomstige
-        intentie vervallen. De nieuwe as begint schoon.
+        Bij een aswissel laten we alle toekomstige
+        intentie vervallen.
+
+        De machinepositie blijft echter geldig:
+        een aswissel maakt de ontvangen machinepositie
+        niet ongeldig.
     */
 
     selectedAxis =
@@ -86,10 +96,14 @@ void JogPlanner::setAxis(
 
     clearIntent();
 
-    positionKnown =
-        false;
+    intentDirection =
+        0;
+
+    reactionWindowUntil =
+        0;
 
 #ifdef JOGPLANNER_DEBUG
+
     Serial.print(
         "[JogPlanner] Axis changed: "
     );
@@ -112,8 +126,8 @@ void JogPlanner::setAxis(
             Serial.println("NONE");
             break;
     }
-#endif
 
+#endif
 }
 
 
@@ -135,7 +149,6 @@ void JogPlanner::encoder(
         return;
     }
 
-
     if(event.value == 0)
     {
         return;
@@ -145,19 +158,20 @@ void JogPlanner::encoder(
     setAxis(axis);
 
 
+
+    unsigned long now =
+        millis();
+
+
     /*
-        Zonder geldige machineverbinding accepteren we nog geen
-        jogintentie.
+        Eerst bepalen we of een bestaande intentierichting
+        nog actief is.
+
+        Een verlopen JogReactionWindow maakt de oude intentie
+        volledig ongeldig.
     */
 
-    if(!positionKnown)
-    {
-        Serial.println(
-            "[JogPlanner] Encoder ignored: position not known"
-        );
-
-        return;
-    }
+    updateReactionWindow();
 
 
     int direction =
@@ -173,93 +187,95 @@ void JogPlanner::encoder(
     for(int i = 0; i < pulses; ++i)
     {
         /*
-            Zelfde richting:
+            Geen actieve intentie:
 
-                voeg één nieuwe intentiestap toe.
-
-            Tegengestelde richting:
-
-                breek de bestaande toekomstige intentie af.
+                deze pulse zet een nieuwe intentierichting.
         */
 
-        bool sameDirection =
-            true;
-
-
-        for(int slot = 0; slot < SLOT_COUNT; ++slot)
+        if(intentDirection == 0)
         {
-            if(
-                fabs(
-                    intent[slot]
-                ) >
-                INTENT_EPSILON
-            )
-            {
-                int existingDirection =
-                    intent[slot] > 0
-                        ? +1
-                        : -1;
+            intentDirection =
+                direction;
 
+            addIntent(
+                jogStepDistance *
+                direction
+            );
 
-                if(
-                    existingDirection !=
-                    direction
-                )
-                {
-                    sameDirection =
-                        false;
+            refreshReactionWindow();
 
-                    break;
-                }
-            }
+            continue;
         }
 
 
-        if(sameDirection)
+        /*
+            Zelfde richting:
+
+                nieuwe intentie toevoegen.
+
+                Het JogReactionWindow wordt opnieuw gestart.
+        */
+
+        if(
+            intentDirection ==
+            direction
+        )
         {
             addIntent(
                 jogStepDistance *
                 direction
             );
+
+            refreshReactionWindow();
+
+            continue;
         }
-        else
-        {
-            reverseIntent(
-                direction
-            );
-        }
+
+
+        /*
+            Tegengestelde richting binnen het actieve
+            JogReactionWindow:
+
+                uitsluitend de resterende intentie schalen.
+
+                De intentierichting blijft onveranderd.
+
+                Er wordt GEEN tegengestelde intentie toegevoegd.
+        */
+
+        scaleDownIntent();
+
+        refreshReactionWindow();
     }
+
+
 #ifdef JOGPLANNER_DEBUG
 
     Serial.print(
         "[JogPlanner] Encoder intent: "
     );
 
-
     Serial.print(
         event.value
     );
-
 
     Serial.print(
         "  direction="
     );
 
-
     Serial.print(
         direction
     );
-
 
     Serial.print(
         "  step="
     );
 
-
     Serial.println(
         jogStepDistance,
         3
     );
+
 #endif
 }
 
@@ -281,6 +297,17 @@ JogCommand JogPlanner::update(
 
 
     /*
+        Het JogReactionWindow is onafhankelijk van de
+        planner-scheduler.
+
+        Het window kan dus ook verlopen terwijl er geen
+        JogCommand wordt geproduceerd.
+    */
+
+    updateReactionWindow();
+
+
+    /*
         Eerste geldige machinepositie.
 
         De positie is uitsluitend validatie/kalibratie.
@@ -290,9 +317,14 @@ JogCommand JogPlanner::update(
     if(!positionKnown)
     {
         if(
-            !(machineState.machineStatus == MACHINE_IDLE ||
-machineState.machineStatus == MACHINE_RUN)
-)
+            !(
+                machineState.machineStatus ==
+                    MACHINE_IDLE
+                ||
+                machineState.machineStatus ==
+                    MACHINE_RUN
+            )
+        )
         {
             return noCommand;
         }
@@ -308,7 +340,6 @@ machineState.machineStatus == MACHINE_RUN)
         Serial.print(
             "[JogPlanner] Position synchronized: "
         );
-
 
         Serial.println(
             machinePosition(
@@ -387,61 +418,63 @@ machineState.machineStatus == MACHINE_RUN)
         fabs(deltaIntent);
 
 
-    if(calculatedDeltaAbs > maximumDelta)
+    if(
+        calculatedDeltaAbs >
+        maximumDelta
+    )
     {
         calculatedDeltaAbs =
             maximumDelta;
     }
 
-    float calculatedDelta =  deltaIntent > 0.0f
+
+    float calculatedDelta =
+        deltaIntent > 0.0f
             ? calculatedDeltaAbs
             : -calculatedDeltaAbs;
 
 
-    command.delta = calculatedDelta;
+    command.delta =
+        calculatedDelta;
+
 
 #ifdef JOGPLANNER_DEBUG
+
     Serial.println(
         "[JogPlanner] JOG_MOVE"
     );
 
-
     Serial.print(
         "  delta: "
     );
-
 
     Serial.println(
         calculatedDelta,
         4
     );
 
-
     Serial.print(
         "  duration: "
     );
-
 
     Serial.print(
         command.duration
     );
 
-
     Serial.println(
         " ms"
     );
 
-
     Serial.print(
         "  feedrate: "
     );
-
 
     Serial.println(
         command.feedrate
     );
 
 #endif
+
     return command;
 }
 
@@ -497,11 +530,10 @@ void JogPlanner::addIntent(
         De volledige nieuwe encoderintentie wordt over alle
         toekomstige tijdslots verdeeld.
 
-            Daardoor blijft:
+        Iedere pulse zet dus daadwerkelijk intentie in de
+        ringbuffer.
 
-                INTENT_LIFETIME == PLAN_AHEAD
-
-            en ontstaat geen onbeperkte toekomstbuffer.
+        Er wordt NIET gewacht op een volgende pulse.
     */
 
     float perSlot =
@@ -515,7 +547,8 @@ void JogPlanner::addIntent(
             (
                 consumeIndex +
                 i
-            ) %
+            )
+            %
             SLOT_COUNT;
 
 
@@ -527,44 +560,32 @@ void JogPlanner::addIntent(
 
 
 // ============================================================
-// REVERSE INTENT
+// SCALE DOWN INTENT
 // ============================================================
 
-void JogPlanner::reverseIntent(
-    int direction
-)
+void JogPlanner::scaleDownIntent()
 {
     /*
-        Een richtingswisseling probeert NIET een bestaand
-        commando te annuleren.
+        Een tegengestelde pulse binnen het
+        JogReactionWindow is een correctie op de nog resterende
+        intentie.
 
-            We veranderen de nog niet verlopen intentie.
+        We voegen GEEN negatieve intentie toe.
 
-            Iedere tegengestelde encoderstap halveert de resterende
-            oude intentie.
+        Iedere pulse maakt de resterende beweging kleiner,
+        terwijl de oorspronkelijke intentierichting behouden
+        blijft.
 
-            Daardoor wordt bijvoorbeeld:
+        Bijvoorbeeld:
 
-                ++++++++
-
-            eerst:
-
-                ++++....
-
-            daarna:
-
-                ++......
-
-            daarna:
-
-                +.......
-
-            waarna de nieuwe richting de ring kan overnemen.
+            +8
+             ↓
+            +4
+             ↓
+            +2
+             ↓
+            +1
     */
-
-    bool oldIntentRemaining =
-        false;
-
 
     for(int i = 0; i < SLOT_COUNT; ++i)
     {
@@ -572,47 +593,129 @@ void JogPlanner::reverseIntent(
             (
                 consumeIndex +
                 i
-            ) %
+            )
+            %
             SLOT_COUNT;
 
 
         intent[index] *=
-            REVERSAL_FACTOR;
+            SCALE_DOWN_FACTOR;
 
 
         if(
             fabs(
                 intent[index]
-            ) >
+            )
+            <=
             INTENT_EPSILON
         )
         {
-            oldIntentRemaining =
-                true;
+            intent[index] =
+                0.0f;
         }
     }
 
 
-    /*
-        Zodra de oude intentie praktisch verdwenen is, vullen we
-        de toekomst met de nieuwe richting.
+#ifdef JOGPLANNER_DEBUG
 
-        De oude intentie hoeft nooit te worden teruggestuurd.
+    Serial.println(
+        "[JogPlanner] Intent scaled down"
+    );
+
+#endif
+}
+
+
+
+// ============================================================
+// UPDATE REACTION WINDOW
+// ============================================================
+
+void JogPlanner::updateReactionWindow()
+{
+    if(intentDirection == 0)
+    {
+        return;
+    }
+
+
+    unsigned long now =
+        millis();
+
+
+    /*
+        Een window is verlopen zodra de eindtijd is bereikt.
+
+        millis() rollover wordt veilig afgehandeld door de
+        gebruikelijke unsigned vergelijking.
     */
 
-    if(!oldIntentRemaining)
+    if(
+        (long)(
+            now -
+            reactionWindowUntil
+        )
+        >=
+        0
+    )
     {
-        addIntent(
-            jogStepDistance *
-            direction
-        );
+        /*
+            De intentiecontext is nu verlopen.
+
+            Wat al naar de machine is gestuurd kan uiteraard
+            niet meer worden teruggedraaid.
+
+            Alleen nog niet geconsumeerde toekomstige intentie
+            wordt verwijderd.
+        */
+
+        clearIntent();
+
+        intentDirection =
+            0;
+
+        reactionWindowUntil =
+            0;
+
 
 #ifdef JOGPLANNER_DEBUG
+
         Serial.println(
-            "[JogPlanner] Direction reversed"
+            "[JogPlanner] JogReactionWindow expired"
         );
+
 #endif
     }
+}
+
+
+
+// ============================================================
+// REFRESH REACTION WINDOW
+// ============================================================
+
+void JogPlanner::refreshReactionWindow()
+{
+    reactionWindowUntil =
+        millis() +
+        JOG_REACTION_WINDOW;
+
+
+#ifdef JOGPLANNER_DEBUG
+
+    Serial.print(
+        "[JogPlanner] JogReactionWindow refreshed: "
+    );
+
+    Serial.print(
+        JOG_REACTION_WINDOW
+    );
+
+    Serial.println(
+        " ms"
+    );
+
+#endif
 }
 
 
@@ -628,7 +731,8 @@ bool JogPlanner::hasIntent() const
         if(
             fabs(
                 intent[i]
-            ) >
+            )
+            >
             INTENT_EPSILON
         )
         {
@@ -720,26 +824,32 @@ int JogPlanner::calculateFeedrate(
             MIN_FEEDRATE;
     }
 
+
     float maximum;
 
     switch(selectedAxis)
     {
         case AXIS_X:
-            maximum = maxFeedrate.x;
+            maximum =
+                maxFeedrate.x;
             break;
 
         case AXIS_Y:
-            maximum = maxFeedrate.y;
+            maximum =
+                maxFeedrate.y;
             break;
 
         case AXIS_Z:
-            maximum = maxFeedrate.z;
+            maximum =
+                maxFeedrate.z;
             break;
 
         default:
-            maximum = 0.0f;
+            maximum =
+                0.0f;
             break;
     }
+
 
     if(
         feedrate >
@@ -748,40 +858,53 @@ int JogPlanner::calculateFeedrate(
     {
         feedrate =
             (int)maximum;
+
+
 #ifdef JOGPLANNER_DEBUG
-            Serial.println(
+
+        Serial.println(
             "[JogPlanner] Max feedrate used"
         );
+
 #endif
-
     }
-
 
 
     return (int)feedrate;
 }
 
+
+
+// ============================================================
+// MAX DELTA
+// ============================================================
+
 float JogPlanner::maxDelta() const
 {
     float maximum;
 
+
     switch(selectedAxis)
     {
         case AXIS_X:
-            maximum = maxFeedrate.x;
+            maximum =
+                maxFeedrate.x;
             break;
 
         case AXIS_Y:
-            maximum = maxFeedrate.y;
+            maximum =
+                maxFeedrate.y;
             break;
 
         case AXIS_Z:
-            maximum = maxFeedrate.z;
+            maximum =
+                maxFeedrate.z;
             break;
 
         default:
             return 0.0f;
     }
+
 
     return
         maximum /
@@ -789,6 +912,7 @@ float JogPlanner::maxDelta() const
         SLOT_TIME /
         1000.0f;
 }
+
 
 
 // ============================================================
@@ -803,24 +927,20 @@ float JogPlanner::machinePosition(
     switch(axis)
     {
         case AXIS_X:
-
             return machineState.workPosition.x;
 
 
         case AXIS_Y:
-
             return machineState.workPosition.y;
 
 
         case AXIS_Z:
-
             return machineState.workPosition.z;
 
 
         case AXIS_NONE:
 
         default:
-
             return 0.0f;
     }
 }

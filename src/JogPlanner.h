@@ -13,7 +13,7 @@ public:
 
     void begin(
         const MachineSettings& machineSettings
-);
+    );
 
 
     /*
@@ -39,8 +39,12 @@ public:
     /*
         Verwerk encoderintentie.
 
-        Iedere encoderstap wordt als intentie over het volledige
-        planvenster verdeeld.
+        Iedere encoderpulse zet of beïnvloedt een
+        intentierichting.
+
+        De pulse wordt direct vertaald naar de intentiering.
+        JogReactionWindow bepaalt alleen hoe een volgende
+        pulse geïnterpreteerd wordt.
     */
     void encoder(
         const Event& event,
@@ -66,13 +70,22 @@ private:
     // ========================================================
 
     /*
-        Intentie blijft maximaal 0.5 seconde relevant.
-
-        Bij 20 Hz betekent dit 10 tijdslots van 50 ms.
+        Iedere ringbuffer-entry vertegenwoordigt één tijdslot.
     */
     static constexpr unsigned long SLOT_TIME = 50;
 
     static constexpr int SLOT_COUNT = 8;
+
+
+    /*
+        Het JogReactionWindow duurt even lang als het
+        planvenster.
+
+        Een encoderpulse start het window of verlegt het
+        window opnieuw.
+    */
+    static constexpr unsigned long JOG_REACTION_WINDOW =
+        SLOT_TIME * SLOT_COUNT+300;
 
 
     /*
@@ -83,14 +96,12 @@ private:
 
 
     /*
-        Bij een richtingswisseling wordt de bestaande toekomstige
-        intentie telkens gehalveerd.
+        Iedere tegengestelde pulse binnen het actieve
+        JogReactionWindow schaalt de resterende intentie.
 
-        Zodra de resterende intentie voldoende klein is, kan de
-        nieuwe richting de ring vullen.
+        De intentierichting zelf verandert daarbij niet.
     */
-    static constexpr float REVERSAL_FACTOR = 0.5f;
-    
+    static constexpr float SCALE_DOWN_FACTOR = 0.68f;
 
 
     // ========================================================
@@ -110,10 +121,7 @@ private:
         Iedere entry is de gewenste relatieve beweging voor één
         tijdslot van SLOT_TIME milliseconden.
 
-        De array is een logische ring:
-
-            writeIndex
-            consumeIndex
+        De array is een logische ring.
 
         De planner hoeft daardoor geen absolute positie of
         einddoel bij te houden.
@@ -126,6 +134,33 @@ private:
     */
     int consumeIndex = 0;
 
+
+    // ========================================================
+    // INTENT DIRECTION
+    // ========================================================
+
+    /*
+        Actieve intentierichting:
+
+            -1 = negatieve richting
+             0 = geen actieve intentie
+            +1 = positieve richting
+
+        De richting blijft actief zolang het
+        JogReactionWindow niet verlopen is.
+    */
+    int intentDirection = 0;
+
+
+    /*
+        Tijdstip waarop het huidige JogReactionWindow verloopt.
+    */
+    unsigned long reactionWindowUntil = 0;
+
+
+    // ========================================================
+    // JOG STATE
+    // ========================================================
 
     /*
         Geselecteerde encoder-as.
@@ -176,9 +211,28 @@ private:
     );
 
 
-    void reverseIntent(
-        int direction
-    );
+    /*
+        Verminder uitsluitend de nog niet geconsumeerde intentie.
+
+        Dit zet geen nieuwe tegengestelde intentie.
+    */
+    void scaleDownIntent();
+
+
+    /*
+        Controleer of het JogReactionWindow nog actief is.
+
+        Wanneer het window verlopen is, wordt de actieve
+        intentierichting unset en wordt resterende toekomstige
+        intentie verwijderd.
+    */
+    void updateReactionWindow();
+
+
+    /*
+        Start of verleg het JogReactionWindow.
+    */
+    void refreshReactionWindow();
 
 
     bool hasIntent() const;
@@ -191,7 +245,9 @@ private:
         float delta
     ) const;
 
+
     float maxDelta() const;
+
 
     float machinePosition(
         const MachineState& machineState,
