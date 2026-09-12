@@ -310,6 +310,18 @@ JogCommand JogPlanner::update(
 
     updateReactionWindow();
 
+    if(scaleDownCount > 3)
+        {
+            clearIntent();
+
+            scaleDownCount = 0;
+
+            JogCommand command;
+
+            command.type = JOG_CANCEL;
+
+            return command;
+        }
 
     /*
         Eerste geldige machinepositie.
@@ -570,6 +582,7 @@ void JogPlanner::addIntent(
 void JogPlanner::scaleDownIntent()
 {
     scaleDownCount++;
+
 }
 
 
@@ -623,7 +636,7 @@ void JogPlanner::updateReactionWindow()
 
         reactionWindowUntil =
             0;
-            
+
         scaleDownCount =
             0;
 

@@ -4074,7 +4074,7 @@ bool CNCjsClientCore::sendCommandInternal(
         output
     );
 
-
+#ifdef CNCJS_DEBUG
     Serial.print(
         "[CNCjs] COMMAND: "
     );
@@ -4082,7 +4082,7 @@ bool CNCjsClientCore::sendCommandInternal(
     Serial.println(
         output
     );
-
+#endif
 
     return socketIO.sendEVENT(
         output

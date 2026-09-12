@@ -365,6 +365,11 @@ bool CNCjsInterface::execute(
     const JogCommand& jog
 )
 {
+    if(jog.type == JOG_CANCEL)
+    {
+        return jogCancel();
+    }
+
     String gcode =
         machineMapper_.map(
             jog,
