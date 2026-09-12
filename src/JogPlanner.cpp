@@ -5,6 +5,42 @@
 #include "MachineSettings.h"
 
 
+namespace
+{
+    /*
+        Verdeling van één nieuwe encoderintentie over de
+        acht toekomstige tijdslots.
+
+            slot 0   15%
+            slot 1   15%
+            slot 2   15%
+            slot 3   15%
+            slot 4   15%
+            slot 5   13%
+            slot 6    9%
+            slot 7    3%
+
+        Totaal = 100%.
+    */
+
+    constexpr float INTENT_DISTRIBUTION[] =
+    {
+        0.15f,
+        0.15f,
+        0.15f,
+        0.15f,
+        0.15f,
+        0.13f,
+        0.09f,
+        0.03f
+    };
+
+    constexpr int INTENT_DISTRIBUTION_COUNT =
+        sizeof(INTENT_DISTRIBUTION) /
+        sizeof(INTENT_DISTRIBUTION[0]);
+}
+
+
 // ============================================================
 // BEGIN
 // ============================================================
@@ -162,7 +198,6 @@ void JogPlanner::encoder(
     setAxis(axis);
 
 
-
     unsigned long now =
         millis();
 
@@ -311,17 +346,17 @@ JogCommand JogPlanner::update(
     updateReactionWindow();
 
     if(scaleDownCount > 3)
-        {
-            clearIntent();
+    {
+        clearIntent();
 
-            scaleDownCount = 0;
+        scaleDownCount = 0;
 
-            JogCommand command;
+        JogCommand command;
 
-            command.type = JOG_CANCEL;
+        command.type = JOG_CANCEL;
 
-            return command;
-        }
+        return command;
+    }
 
     /*
         Eerste geldige machinepositie.
@@ -543,18 +578,30 @@ void JogPlanner::addIntent(
 )
 {
     /*
-        De volledige nieuwe encoderintentie wordt over alle
+        De volledige nieuwe encoderintentie wordt over de
         toekomstige tijdslots verdeeld.
 
-        Iedere pulse zet dus daadwerkelijk intentie in de
-        ringbuffer.
+        De verdeling is bewust niet uniform:
 
-        Er wordt NIET gewacht op een volgende pulse.
+            slot 0   15%
+            slot 1   15%
+            slot 2   15%
+            slot 3   15%
+            slot 4   15%
+            slot 5   13%
+            slot 6    9%
+            slot 7    3%
+
+        Totaal = 100%.
+
+        consumeIndex is het eerstvolgende slot dat door
+        update() wordt geconsumeerd.
     */
 
-    float perSlot =
-        delta /
-        SLOT_COUNT;
+    static_assert(
+        INTENT_DISTRIBUTION_COUNT == SLOT_COUNT,
+        "INTENT_DISTRIBUTION must match SLOT_COUNT"
+    );
 
 
     for(int i = 0; i < SLOT_COUNT; ++i)
@@ -569,7 +616,8 @@ void JogPlanner::addIntent(
 
 
         intent[index] +=
-            perSlot;
+            delta *
+            INTENT_DISTRIBUTION[i];
     }
 }
 
@@ -582,7 +630,6 @@ void JogPlanner::addIntent(
 void JogPlanner::scaleDownIntent()
 {
     scaleDownCount++;
-
 }
 
 
@@ -715,18 +762,26 @@ bool JogPlanner::hasIntent() const
 
 float JogPlanner::consumeIntent()
 {
-    float delta = intent[consumeIndex];
+    float delta =
+        intent[consumeIndex];
 
-    intent[consumeIndex] = 0.0f;
+
+    intent[consumeIndex] =
+        0.0f;
+
 
     consumeIndex =
-        nextIndex(consumeIndex);
+        nextIndex(
+            consumeIndex
+        );
+
 
     float scale =
         powf(
             SCALE_DOWN_FACTOR,
             scaleDownCount
         );
+
 
     return delta * scale;
 }
