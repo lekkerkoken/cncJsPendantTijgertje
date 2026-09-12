@@ -9,7 +9,7 @@
 #include "CNCjsInterface.h"
 #include "JogPlanner.h"
 #include "PendantState.h"
-
+#include "MacroManager.h"
 
 class PendantController;
 
@@ -79,6 +79,8 @@ private:
     JogPlanner jogPlanner;
 
     PendantState pendantState;
+
+    MacroManager macroManager;
 
 
     // ============================================================

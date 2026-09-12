@@ -777,7 +777,7 @@ void PendantController::requestGcodeStop()
     if(
         state.machineStatus !=
         MACHINE_HOLD
-    ){exit;}
+    ){return;}
     pendingCommandAction =
         COMMAND_ACTION_GCODE_STOP;
 

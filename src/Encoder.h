@@ -96,10 +96,10 @@ private:
         Iedere geldige quadrature-transitie levert
         +1 of -1 op.
 
-        Voor deze test verzamelen we vier transities
-        in dezelfde richting.
+        Bij deze encoder zijn twee geldige transities
+        één fysieke detent.
 
-        Vier transities = één ENCODER_PULSE.
+        Twee transities = één ENCODER_PULSE.
     */
 
     volatile int encoderAccumulator = 0;
