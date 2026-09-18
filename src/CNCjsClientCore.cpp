@@ -1,7 +1,8 @@
 #include "CNCjsClientCore.h"
 
 #include <Preferences.h>
-
+#include <HTTPClient.h>
+#include <WiFiClient.h>
 
 CNCjsClientCore* CNCjsClientCore::instance =
     nullptr;
@@ -85,6 +86,30 @@ void CNCjsClientCore::begin()
 
     lastHeartbeatPing =
         0;
+
+
+    /*
+        Controller identification is a session-level mechanism.
+
+        It is deliberately reset only during begin(), so a later
+        connection loss does not cause another automatic
+        controller selection.
+    */
+
+    controllerVerifiedThisSession_ =
+        false;
+
+    controllerCorrectionAttemptedThisSession_ =
+        false;
+
+
+    serialportReadHandler_ =
+        [this](const JsonArray& array)
+        {
+            handleControllerIdentification(
+                array
+            );
+        };
 
 
     eventDebug_ =
@@ -635,6 +660,111 @@ void CNCjsClientCore::enterConnectionState(
 
             break;
     }
+}
+
+bool CNCjsClientCore::fetchMacros(
+    JsonDocument& document
+)
+{
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        fetchMacrosInternal(
+            document
+        );
+
+    unlock();
+
+
+    return result;
+}
+
+
+bool CNCjsClientCore::fetchMacrosInternal(
+    JsonDocument& document
+)
+{
+    if(
+        !authenticatedState ||
+        token.isEmpty()
+    )
+    {
+        return false;
+    }
+
+    if(
+        !serverIP_
+    )
+    {
+        return false;
+    }
+
+    WiFiClient client;
+    HTTPClient http;
+
+    String url =
+        "http://" +
+        serverIP_.toString() +
+        ":" +
+        String(serverPort_) +
+        "/api/macros";
+
+    if(
+        !http.begin(
+            client,
+            url
+        )
+    )
+    {
+        return false;
+    }
+
+    String authorization =
+        "Bearer " +
+        token;
+
+    http.addHeader(
+        "Authorization",
+        authorization
+    );
+
+    int httpCode =
+        http.GET();
+
+    if(
+        httpCode !=
+        HTTP_CODE_OK
+    )
+    {
+        http.end();
+        return false;
+    }
+
+    String response =
+        http.getString();
+
+    http.end();
+
+    DeserializationError error =
+        deserializeJson(
+            document,
+            response
+        );
+
+    if(
+        error
+    )
+    {
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -1340,6 +1470,7 @@ void CNCjsClientCore::updateHeartbeat()
         invalidateControllerState();
     }
 }
+
 
 // ============================================================
 // HEARTBEAT PING
@@ -2131,6 +2262,7 @@ void CNCjsClientCore::handleSocketEvent(
 
                 break;
             }
+
             // ------------------------------------------------
             // G-CODE UNLOAD
             // ------------------------------------------------
@@ -2185,6 +2317,7 @@ void CNCjsClientCore::handleSocketEvent(
 
                 break;
             }
+
             // ------------------------------------------------
             // GRBL STATE
             // ------------------------------------------------
@@ -2213,27 +2346,14 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
-                const char* response =
-                    array[1];
-
-
                 if (
-                    response == nullptr
+                    serialportReadHandler_
                 )
                 {
-                    break;
+                    serialportReadHandler_(
+                        array
+                    );
                 }
-
-
-                if (
-                    response[0] != '<'
-                )
-                {
-                    break;
-                }
-
-
-                machineHeartbeatReceived();
 
                 break;
             }
@@ -2283,6 +2403,379 @@ void CNCjsClientCore::handleSocketEvent(
 
             break;
     }
+}
+
+
+// ============================================================
+// CONTROLLER IDENTIFICATION HANDLER
+// ============================================================
+
+void CNCjsClientCore::handleControllerIdentification(
+    const JsonArray& array
+)
+{
+    String detectedController =
+        identifyControllerFromStatusReport(
+            array
+        );
+
+
+    /*
+        Unknown serialport data is not evidence of a wrong
+        controller. We simply wait for a usable statusreport.
+    */
+
+    if (
+        detectedController.length() == 0
+    )
+    {
+        return;
+    }
+
+
+    machineHeartbeatReceived();
+
+
+    Serial.print(
+        "[CNCjs] Controller identified by statusreport: "
+    );
+
+    Serial.println(
+        detectedController
+    );
+
+
+    /*
+        The controller has already been verified during this
+        power-on session. From this point onward the normal
+        serialport:read handler owns the event stream.
+    */
+
+    if (
+        controllerVerifiedThisSession_
+    )
+    {
+        serialportReadHandler_ =
+            [this](const JsonArray& readArray)
+            {
+                handleSerialportRead(
+                    readArray
+                );
+            };
+
+        return;
+    }
+
+
+    /*
+        The statusreport matches the currently selected
+        controller.
+
+        No correction is necessary.
+    */
+
+    if (
+        detectedController.equals(
+            selectedControllerNameState
+        )
+    )
+    {
+        Serial.println(
+            "[CNCjs] Controller selection verified"
+        );
+
+
+        controllerVerifiedThisSession_ =
+            true;
+
+
+        serialportReadHandler_ =
+            [this](const JsonArray& readArray)
+            {
+                handleSerialportRead(
+                    readArray
+                );
+            };
+
+        return;
+    }
+
+
+    /*
+        The statusreport identifies a different controller.
+
+        Only one automatic correction is allowed during a
+        session. The stored controller preference is deliberately
+        not changed here.
+    */
+
+    if (
+        controllerCorrectionAttemptedThisSession_
+    )
+    {
+        Serial.println(
+            "[CNCjs] Controller mismatch remains after automatic correction"
+        );
+
+        return;
+    }
+
+
+    int controllerIndex =
+        findControllerByName(
+            detectedController.c_str()
+        );
+
+
+    if (
+        controllerIndex < 0
+    )
+    {
+        Serial.print(
+            "[CNCjs] Detected controller is not available in CNCjs controller list: "
+        );
+
+        Serial.println(
+            detectedController
+        );
+
+        return;
+    }
+
+
+    /*
+        Remember that the automatic correction has now been
+        attempted. This prevents a second automatic controller
+        switch during the same power-on session.
+    */
+
+    controllerCorrectionAttemptedThisSession_ =
+        true;
+
+
+    Serial.println();
+    Serial.println(
+        "[CNCjs] Controller mismatch detected"
+    );
+
+    Serial.print(
+        "  Selected: "
+    );
+
+    Serial.println(
+        selectedControllerNameState
+    );
+
+    Serial.print(
+        "  Detected: "
+    );
+
+    Serial.println(
+        detectedController
+    );
+
+
+    /*
+        Runtime-only correction.
+
+        IMPORTANT:
+        The runtime selection is updated here, but nothing is
+        written to Preferences.
+
+        Therefore the user's stored controller preference remains
+        unchanged for the next power-on.
+    */
+
+    selectedControllerIndex =
+        controllerIndex;
+
+    selectedControllerNameState =
+        controllers[
+            controllerIndex
+        ];
+
+
+    Serial.print(
+        "[CNCjs] Runtime controller selection changed to: "
+    );
+
+    Serial.println(
+        selectedControllerNameState
+    );
+
+
+    int baudrate =
+        baudrateForController(
+            selectedControllerNameState.c_str()
+        );
+
+
+    Serial.println(
+        "[CNCjs] Automatically opening detected controller for this session"
+    );
+
+
+    openControllerInternal(
+        selectedPortNameState.c_str(),
+        selectedControllerNameState.c_str(),
+        baudrate
+    );
+}
+
+// ============================================================
+// SERIAL PORT READ HANDLER
+// ============================================================
+
+void CNCjsClientCore::handleSerialportRead(
+    const JsonArray& array
+)
+{
+    const char* response =
+        array[1];
+
+
+    if (
+        response == nullptr
+    )
+    {
+        return;
+    }
+
+
+    /*
+        Grbl status reports start with '<'.
+    */
+
+    if (
+        response[0] == '<'
+    )
+    {
+        machineHeartbeatReceived();
+
+        return;
+    }
+
+
+    /*
+        TinyG status reports are JSON objects containing r.sr.
+        The normal handler does not need to identify the
+        controller anymore; that has already happened during
+        this session's initial verification.
+    */
+
+    JsonDocument doc;
+
+
+    DeserializationError error =
+        deserializeJson(
+            doc,
+            response
+        );
+
+
+    if (
+        error
+    )
+    {
+        return;
+    }
+
+
+    JsonVariant statusReport =
+        doc["r"]["sr"];
+
+
+    if (
+        !statusReport.isNull()
+    )
+    {
+        machineHeartbeatReceived();
+    }
+}
+
+
+// ============================================================
+// IDENTIFY CONTROLLER FROM STATUS REPORT
+// ============================================================
+
+String CNCjsClientCore::identifyControllerFromStatusReport(
+    const JsonArray& array
+) const
+{
+    const char* response =
+        array[1];
+
+
+    if (
+        response == nullptr
+    )
+    {
+        return "";
+    }
+
+
+    /*
+        Grbl status reports have the well-known
+        <State|...> format.
+    */
+
+    if (
+        response[0] == '<'
+    )
+    {
+        return "Grbl";
+    }
+
+
+    /*
+        TinyG status reports are JSON and contain:
+            {
+                "r": {
+                    "sr": {
+                        ...
+                    }
+                },
+                ...
+            }
+    */
+
+    JsonDocument doc;
+
+
+    DeserializationError error =
+        deserializeJson(
+            doc,
+            response
+        );
+
+
+    if (
+        error
+    )
+    {
+        return "";
+    }
+
+
+    JsonVariant statusReport =
+        doc["r"]["sr"];
+
+
+    if (
+        !statusReport.isNull()
+    )
+    {
+        return "TinyG";
+    }
+
+
+    /*
+        No usable controller identity was found.
+
+        This is deliberately not treated as a mismatch.
+    */
+
+    return "";
 }
 
 

@@ -306,3 +306,150 @@ Command display
 Dat lijkt me een veel betere volgorde dan nu alvast een homed-veld toevoegen.
 
 Kortom: eerst Issue 1 uitvoeren. Daarna hebben we de echte gegevens waarop we het Command-display kunnen ontwerpen.
+
+
+# MacroSnapshot en eenmalig ophalen van CNCjs-macro's
+
+## Doel
+
+De CNCjs-pendant moet bij het opstarten de beschikbare macro's uit CNCjs kunnen ophalen.
+
+CNCjs biedt hiervoor:
+
+```text
+GET /api/macros
+Authorization: Bearer <JWT>
+```
+
+De macro's hoeven voorlopig **slechts één keer per verbinding/opstart** opgehaald te worden. Er is daarom geen periodieke synchronisatie of aparte request-queue nodig.
+
+## Scope
+
+In deze stap bouwen we alleen de communicatie tussen `CNCjsClientCore` en CNCjs.
+
+We voegen:
+
+* een kleine `MacroSnapshot` toe aan `CNCjsClientCore`;
+* een methode toe om de macro's via `GET /api/macros` op te halen;
+* het ophalen uit zodra de CNCjs-verbinding daadwerkelijk `Ready` is;
+* de opgehaalde JSON beschikbaar via een snapshot.
+
+De bestaande `MacroManager` wordt in deze stap **nog niet gevuld**.
+
+De vertaling van de CNCjs-response naar `MacroInfo` en het vullen van `MacroManager` volgt in een apart issue.
+
+## Architectuur
+
+De verantwoordelijkheden blijven gescheiden:
+
+```text
+PendantController
+        │
+        ▼
+CNCjsInterface
+        │
+        ▼
+CNCjsClientCore
+        │
+        ├── NetworkManager
+        ├── Socket.IO
+        └── HTTP GET /api/macros
+                    │
+                    ▼
+                  CNCjs
+```
+
+`MacroManager` blijft onafhankelijk van CNCjs:
+
+```text
+CNCjsClientCore
+      │
+      │ MacroSnapshot
+      ▼
+CNCjsInterface
+      │
+      │ MacroInfo[]
+      ▼
+MacroManager
+```
+
+## Belangrijke ontwerpkeuzes
+
+### 1. CNCjs blijft source of truth
+
+De pendant bewaart de macro's lokaal alleen als runtime-state.
+
+De lijst wordt door CNCjs geleverd en is dus niet zelfstandig editable vanuit de pendant.
+
+### 2. Eénmalig ophalen
+
+Het ophalen gebeurt nadat CNCjs:
+
+* met WiFi verbonden is;
+* de CNCjs-server heeft gevonden;
+* succesvol geauthenticeerd is;
+* en de Socket.IO-verbinding klaar is.
+
+Daarna wordt `/api/macros` niet periodiek opnieuw aangeroepen.
+
+### 3. JWT blijft intern
+
+De JWT die tijdens authenticatie door `CNCjsClientCore` wordt verkregen, blijft onderdeel van de CNCjs-communicatielaag.
+
+`MacroManager` en `PendantController` krijgen geen JWT en hoeven niets van authenticatie te weten.
+
+### 4. Bestaande mutex gebruiken
+
+De bestaande `CNCjsClientCore::lock()` / `unlock()`-mechaniek wordt gebruikt.
+
+Er wordt geen tweede mutex geïntroduceerd.
+
+HTTP-functionaliteit (`HTTPClient.h`, `WiFiClient.h`) blijft een implementation detail van `CNCjsClientCore.cpp` en hoeft niet in het publieke `.h`-bestand.
+
+### 5. Geen nieuwe netwerk-task
+
+Omdat het ophalen slechts één keer gebeurt, voegen we geen aparte HTTP-task of request-queue toe.
+
+De bestaande netwerkarchitectuur blijft leidend.
+
+## MacroSnapshot
+
+Maak een eenvoudige snapshot die vergelijkbaar is met de bestaande state/settings snapshots.
+
+De snapshot bevat minimaal:
+
+```text
+valid
+macros
+```
+
+waarbij `macros` de door CNCjs geretourneerde JSON bevat.
+
+De snapshot moet ongeldig kunnen worden gemaakt wanneer de macro-data niet langer geldig is.
+
+## Acceptatiecriteria
+
+* [ ] `MacroSnapshot` bestaat als aparte snapshot-structuur.
+* [ ] `CNCjsClientCore` beschikt over een `macroSnapshot()` accessor.
+* [ ] `CNCjsClientCore` kan `GET /api/macros` uitvoeren.
+* [ ] De bestaande JWT wordt gebruikt als `Authorization: Bearer <JWT>`.
+* [ ] De HTTP-functionaliteit blijft intern in `CNCjsClientCore.cpp`.
+* [ ] De bestaande `lock()` / `unlock()` wordt gebruikt.
+* [ ] Het ophalen gebeurt pas nadat de CNCjs-verbinding `Ready` is.
+* [ ] Het ophalen gebeurt slechts één keer.
+* [ ] Een succesvolle response wordt in `MacroSnapshot` opgeslagen.
+* [ ] Bij een mislukte HTTP-call of ongeldige JSON wordt de snapshot niet als geldig beschouwd.
+* [ ] `MacroManager` wordt in dit issue nog niet aangepast of gevuld.
+* [ ] Geen wijzigingen aan jog-, layer- of displayfunctionaliteit.
+
+## Niet in scope
+
+Deze zaken volgen later:
+
+* JSON → `MacroInfo` mapping;
+* vullen van `MacroManager`;
+* macro's selecteren op de pendant;
+* macro's uitvoeren;
+* `macro:run`;
+* runtime `context` meegeven aan een macro;
+

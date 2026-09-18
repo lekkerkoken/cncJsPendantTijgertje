@@ -5,6 +5,7 @@
 #include <WebSocketsClient.h>
 #include <SocketIOclient.h>
 #include <ArduinoJson.h>
+#include <functional>
 
 #include "NetworkManager.h"
 #include "ControllerSettingsSnapshot.h"
@@ -217,7 +218,8 @@ public:
         int baudrate
     );
 
-
+    bool fetchMacros(JsonDocument& document);
+    
     // ========================================================
     // G-CODE
     // ========================================================
@@ -285,6 +287,8 @@ private:
     );
 
     void networkTask();
+
+    bool fetchMacrosInternal(JsonDocument& document);
 
 
     // ========================================================
@@ -542,6 +546,33 @@ private:
 
 
     // ========================================================
+    // SERIAL PORT READ HANDLER
+    // ========================================================
+
+    std::function<void(const JsonArray&)> serialportReadHandler_;
+
+    bool controllerVerifiedThisSession_ =
+        false;
+
+    bool controllerCorrectionAttemptedThisSession_ =
+        false;
+
+
+    void handleControllerIdentification(
+        const JsonArray& array
+    );
+
+    void handleSerialportRead(
+        const JsonArray& array
+    );
+
+    String identifyControllerFromStatusReport(
+        const JsonArray& array
+    ) const;
+
+
+
+    // ========================================================
     // SERIAL PORTS
     // ========================================================
 
@@ -674,9 +705,9 @@ private:
     );
 
     bool sendCommandInternal(
-    const String& command,
-    const JsonObjectConst& options
-)   ;
+        const String& command,
+        const JsonObjectConst& options
+    );
 
 };
 

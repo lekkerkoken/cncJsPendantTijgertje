@@ -213,10 +213,109 @@ MachineState MachineMapper::map(
 
 
         case CONTROLLER_TINYG:
+        {
+            JsonObjectConst status =
+                snapshot.state["sr"].as<JsonObjectConst>();
 
-            // TinyG state mapping
+            if(status.isNull())
+            {
+                return state;
+            }
+
+            int machineState =
+                status["machineState"].as<int>();
+
+            switch(machineState)
+            {
+                case 1:
+                case 3:
+                case 4:
+
+                    state.machineStatus =
+                        MACHINE_IDLE;
+
+                    break;
+
+
+                case 2:
+                case 11:
+
+                    state.machineStatus =
+                        MACHINE_ALARM;
+
+                    break;
+
+
+                case 5:
+                case 7:
+                case 8:
+                case 9:
+                case 10:
+
+                    state.machineStatus =
+                        MACHINE_RUN;
+
+                    break;
+
+
+                case 6:
+
+                    state.machineStatus =
+                        MACHINE_HOLD;
+
+                    break;
+
+
+                default:
+
+                    return state;
+            }
+
+            JsonObjectConst machinePosition =
+                status["mpos"].as<JsonObjectConst>();
+
+            JsonObjectConst workPosition =
+                status["wpos"].as<JsonObjectConst>();
+
+            if(
+                machinePosition.isNull() ||
+                workPosition.isNull()
+            )
+            {
+                return state;
+            }
+
+            state.machinePosition.x =
+                machinePosition["x"].as<float>();
+
+            state.machinePosition.y =
+                machinePosition["y"].as<float>();
+
+            state.machinePosition.z =
+                machinePosition["z"].as<float>();
+
+            state.workPosition.x =
+                workPosition["x"].as<float>();
+
+            state.workPosition.y =
+                workPosition["y"].as<float>();
+
+            state.workPosition.z =
+                workPosition["z"].as<float>();
+
+            state.feedrate =
+                status["feedrate"].as<float>();
+
+            state.spindleSpeed =
+                status["spd"].as<int>();
+
+            state.activeWcs =
+                status["modal"]["wcs"].as<String>();
+
+            valid = true;
 
             break;
+        }
 
 
         case CONTROLLER_UNKNOWN:

@@ -72,7 +72,7 @@ private:
     /*
         Iedere ringbuffer-entry vertegenwoordigt één tijdslot.
     */
-    static constexpr unsigned long SLOT_TIME = 50;
+    static constexpr unsigned long SLOT_TIME = 40;
 
     static constexpr int SLOT_COUNT = 8;
 
