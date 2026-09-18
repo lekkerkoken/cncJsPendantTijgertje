@@ -91,7 +91,14 @@ MachineSettings MachineMapper::map(
 
         case CONTROLLER_TINYG:
 
-            // TinyG settings mapping
+            settings.maxFeedrate.x =
+                snapshot.settings["xfr"].as<float>();
+
+            settings.maxFeedrate.y =
+                snapshot.settings["yfr"].as<float>();
+
+            settings.maxFeedrate.z =
+                snapshot.settings["zfr"].as<float>();
 
             break;
 
@@ -310,7 +317,7 @@ MachineState MachineMapper::map(
                 status["spd"].as<int>();
 
             state.activeWcs =
-                status["modal"]["wcs"].as<String>();
+                status["coor"].as<String>();
 
             valid = true;
 
