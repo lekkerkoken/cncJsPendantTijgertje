@@ -59,7 +59,7 @@ void Encoder::begin(
     // ========================================================
     // ROTARY ENCODER
     // ========================================================
-    delay(100);
+    delay(100); //made to make sure that the pins settle to a stable state
     lastEncoderState =
         (
             (digitalRead(pinA) << 1) |
