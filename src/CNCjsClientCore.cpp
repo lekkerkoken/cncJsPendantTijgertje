@@ -1634,6 +1634,7 @@ void CNCjsClientCore::handleSocketEvent(
 
             socketConnectedState = false;
             controllerReadyState = false;
+            controllerSettingsReadyState = false; 
             startupReceivedState = false;
             portListReceivedState = false;
             controllerListProcessedState = false;
@@ -1666,6 +1667,9 @@ void CNCjsClientCore::handleSocketEvent(
 
             controllerReadyState =
                 false;
+
+            controllerSettingsReadyState = 
+                false; 
 
             startupReceivedState =
                 false;
@@ -2037,6 +2041,9 @@ void CNCjsClientCore::handleSocketEvent(
 
                     controllerReadyState =
                         false;
+
+                    controllerSettingsReadyState = 
+                        false; 
 
 
                     enterConnectionState(
@@ -4264,7 +4271,9 @@ bool CNCjsClientCore::openControllerInternal(
 
     controllerReadyState =
         false;
-
+        
+    controllerSettingsReadyState = 
+        false; 
 
     enterConnectionState(
         ConnectionState::OpeningController
@@ -4430,8 +4439,8 @@ bool CNCjsClientCore::sendGcodeInternal(
 )
 {
     if (
-        !socketConnectedState ||
-        !controllerReadyState
+        !controllerSettingsReadyState ||
+        !controllerReadyState || !socketConnectedState
     )
     {
         return false;
@@ -4536,8 +4545,7 @@ bool CNCjsClientCore::sendCommandInternal(
 )
 {
     if(
-        !socketConnectedState ||
-        !controllerReadyState
+        !controllerSettingsReadyState || !controllerReadyState || !socketConnectedState
     )
     {
         return false;

@@ -383,6 +383,7 @@ private:
         SocketConnecting,
         WaitingForLists,
         OpeningController,
+        WaitingForControllerSettings,
         Ready,
         Backoff
     };
@@ -647,6 +648,7 @@ private:
     bool controllerReadyState =
         false;
 
+    bool controllerSettingsReadyState = false;
 
     // ========================================================
     // CONTROLLER SELECTION
