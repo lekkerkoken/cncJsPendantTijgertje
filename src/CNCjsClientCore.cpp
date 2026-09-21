@@ -1572,17 +1572,12 @@ void CNCjsClientCore::handleSocketEvent(
         {
             if (
                 !socketConnectedState &&
-                connectionState ==
-                    ConnectionState::SocketConnecting
+                connectionState == ConnectionState::SocketConnecting
             )
             {
-                Serial.println(
-                    "[Socket.IO] Initial disconnect ignored"
-                );
-
+                Serial.println("[Socket.IO] Initial disconnect ignored");
                 break;
             }
-
 
             socketConnectedState =
                 false;
