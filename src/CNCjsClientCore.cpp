@@ -372,6 +372,7 @@ CNCjsClientCore::jobSnapshot() const
     return snapshot;
 }
 
+
 // ============================================================
 // INVALIDATE FEED STATUS
 // ============================================================
@@ -525,7 +526,6 @@ void CNCjsClientCore::networkTask()
             updateHeartbeat();
 
 
-
             unlock();
         }
 
@@ -576,11 +576,53 @@ void CNCjsClientCore::enterConnectionState(
     ConnectionState state
 )
 {
+    ConnectionState previousState =
+        connectionState;
+
+
     connectionState =
         state;
 
     stateStartedAt =
         millis();
+
+
+    /*
+        TEMPORARY DEBUG
+
+        Log iedere overgang van de interne connection state.
+
+        Hiermee kunnen we precies zien waardoor de pendant
+        uiteindelijk in Offline terechtkomt.
+    */
+
+    Serial.print(
+        "[CNCjs] Connection state: "
+    );
+
+    Serial.print(
+        static_cast<int>(previousState)
+    );
+
+    Serial.print(
+        " -> "
+    );
+
+    Serial.print(
+        static_cast<int>(state)
+    );
+
+    Serial.print(
+        " @ "
+    );
+
+    Serial.print(
+        millis()
+    );
+
+    Serial.println(
+        " ms"
+    );
 
 
     switch (state)
@@ -661,6 +703,7 @@ void CNCjsClientCore::enterConnectionState(
             break;
     }
 }
+
 
 bool CNCjsClientCore::fetchMacros(
     JsonDocument& document
@@ -1570,73 +1613,51 @@ void CNCjsClientCore::handleSocketEvent(
     {
         case sIOtype_DISCONNECT:
         {
-            if (
-                !socketConnectedState &&
-                connectionState ==
-                    ConnectionState::SocketConnecting
-            )
+            Serial.print("[Socket.IO] DISCONNECT @ ");
+            Serial.print(millis());
+            Serial.println(" ms");
+
+            Serial.print("[Socket.IO] State before disconnect: ");
+            Serial.print(static_cast<int>(connectionState));
+            Serial.print(", socketConnected=");
+            Serial.print(socketConnectedState);
+            Serial.print(", controllerReady=");
+            Serial.println(controllerReadyState);
+
+            if (!socketConnectedState)
             {
                 Serial.println(
-                    "[Socket.IO] Initial disconnect ignored"
+                    "[Socket.IO] DISCONNECT ignored: no active socket session"
                 );
-
                 break;
             }
 
-
-            socketConnectedState =
-                false;
-
-            controllerReadyState =
-                false;
-
-            startupReceivedState =
-                false;
-
-            portListReceivedState =
-                false;
-
-            controllerListProcessedState =
-                false;
-
-            listRequested =
-                false;
-
-            socketBeginRequested =
-                false;
-
-            lastCncjsActivity =
-                0;
-
-            lastHeartbeatPing =
-                0;
-
-
-            currentStatus_ =
-                CNCjsStatus::Offline;
-
-
-            invalidateControllerState();
-
-            invalidateControllerSettings();
-
-            invalidateSenderStatus();
-
-            invalidateJob();
+            socketConnectedState = false;
+            controllerReadyState = false;
+            startupReceivedState = false;
+            portListReceivedState = false;
+            controllerListProcessedState = false;
+            listRequested = false;
+            socketBeginRequested = false;
+            lastCncjsActivity = 0;
+            lastHeartbeatPing = 0;
 
             Serial.println(
-                "[Socket.IO] Disconnected"
+                "[CNCjs] Setting status OFFLINE because Socket.IO disconnected"
             );
 
+            currentStatus_ = CNCjsStatus::Offline;
 
-            enterConnectionState(
-                ConnectionState::Backoff
-            );
+            invalidateControllerState();
+            invalidateControllerSettings();
+            invalidateSenderStatus();
+            invalidateJob();
 
+            Serial.println("[Socket.IO] Disconnected");
 
+            enterConnectionState(ConnectionState::Backoff);
             break;
         }
-
 
         case sIOtype_CONNECT:
         {
@@ -2134,7 +2155,7 @@ void CNCjsClientCore::handleSocketEvent(
                 controllerSettingsBuffer_.publish(
                     snapshot
                 );
-                
+
                 machineHeartbeatReceived();
 
 
@@ -2217,6 +2238,7 @@ void CNCjsClientCore::handleSocketEvent(
                 );
 
 #endif
+
                 machineHeartbeatReceived();
 
                 break;
@@ -2263,6 +2285,7 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
+
             // ------------------------------------------------
             // G-CODE UNLOAD
             // ------------------------------------------------
@@ -2278,6 +2301,7 @@ void CNCjsClientCore::handleSocketEvent(
 
                 break;
             }
+
 
             // ------------------------------------------------
             // G-CODE LOAD
@@ -2317,6 +2341,7 @@ void CNCjsClientCore::handleSocketEvent(
 
                 break;
             }
+
 
             // ------------------------------------------------
             // GRBL STATE
@@ -2621,6 +2646,7 @@ void CNCjsClientCore::handleControllerIdentification(
         baudrate
     );
 }
+
 
 // ============================================================
 // SERIAL PORT READ HANDLER
