@@ -453,3 +453,288 @@ Deze zaken volgen later:
 * `macro:run`;
 * runtime `context` meegeven aan een macro;
 
+
+TinyG native jog mapping toevoegen en testen
+Doel
+
+De bestaande JogCommand moet ook voor een TinyG-controller worden gemapt naar het native TinyG JSON jog-command.
+
+Voor TinyG gebruiken we daarbij bewust de platte JSON-vorm:
+
+{"jogx":-1.2}
+
+Deze vorm sluit aan bij de bestaande TinyG JSON-commando's die in de huidige verbinding al succesvol worden gebruikt.
+
+De mapping moet via de bestaande architectuur lopen:
+
+JogCommand
+    ↓
+CNCjsInterface::execute()
+    ↓
+MachineMapper::map()
+    ↓
+MachineMapper::mapJogMove()
+    ↓
+MachineMapper::mapTinyGJog()
+    ↓
+{"jogx":-1.2}
+    ↓
+CNCjsInterface::sendGcode()
+Huidige situatie
+
+MachineMapper::mapJogMove() ondersteunt momenteel alleen GRBL:
+
+case CONTROLLER_GRBL:
+
+    return mapGrblJog(
+        jog
+    );
+
+
+case CONTROLLER_TINYG:
+
+    // TinyG jog mapping
+
+    return unsupported();
+
+Daardoor kan een JogCommand voor TinyG momenteel niet worden uitgevoerd.
+
+De GRBL-mapping gebruikt:
+
+$J=G91 X... F...
+
+Voor TinyG willen we geen G-code-jog construeren.
+
+TinyG heeft hiervoor een native JSON-command per as:
+
+{"jogx":-1.2}
+
+met overeenkomstige commands:
+
+{"jogx":1}
+{"jogy":1}
+{"jogz":-1}
+{"joga":1}
+
+De waarde is de relatieve jog-afstand.
+
+Gewenste implementatie
+
+Voeg in MachineMapper een TinyG-specifieke mapping toe, bijvoorbeeld:
+
+String mapTinyGJog(
+    const JogCommand& jog
+);
+
+De mapping moet minimaal de volgende assen ondersteunen:
+
+AXIS_X → jogx
+AXIS_Y → jogy
+AXIS_Z → jogz
+AXIS_A → joga
+
+De waarde van jog.delta wordt rechtstreeks als relatieve TinyG-jogafstand gebruikt.
+
+Voorbeeld:
+
+JogCommand
+    axis  = AXIS_X
+    delta = -1.2
+
+moet worden:
+
+{"jogx":-1.2}
+
+Een mogelijke implementatie is bijvoorbeeld:
+
+String MachineMapper::mapTinyGJog(
+    const JogCommand& jog
+)
+{
+    if(
+        jog.axis == AXIS_NONE
+    )
+    {
+        return unsupported();
+    }
+
+    const char* command = nullptr;
+
+    switch(jog.axis)
+    {
+        case AXIS_X:
+            command = "jogx";
+            break;
+
+        case AXIS_Y:
+            command = "jogy";
+            break;
+
+        case AXIS_Z:
+            command = "jogz";
+            break;
+
+        case AXIS_A:
+            command = "joga";
+            break;
+
+        case AXIS_NONE:
+        default:
+            return unsupported();
+    }
+
+    char buffer[64];
+
+    snprintf(
+        buffer,
+        sizeof(buffer),
+        "{\"%s\":%.3f}",
+        command,
+        jog.delta
+    );
+
+    return String(buffer);
+}
+
+mapJogMove() wordt vervolgens:
+
+case CONTROLLER_TINYG:
+
+    return mapTinyGJog(
+        jog
+    );
+Belangrijk: geen feedrate toevoegen
+
+De TinyG native jog-command moet uitsluitend de relatieve afstand bevatten.
+
+Dus niet:
+
+{"jogx":-1.2,"feedrate":1000}
+
+en ook niet:
+
+{"jogx":-1.2,"f":1000}
+
+maar:
+
+{"jogx":-1.2}
+
+De JogPlanner mag zijn feedrate dus voorlopig buiten deze TinyG mapping houden.
+
+Test
+
+De mapping moet niet alleen worden getest door handmatig een JSON-command naar TinyG te sturen.
+
+De test moet de volledige bestaande route gebruiken:
+
+JogCommand
+    ↓
+CNCjsInterface::execute()
+    ↓
+MachineMapper
+    ↓
+TinyG JSON
+    ↓
+CNCjs
+    ↓
+TinyG
+Testcase 1 — X negatief
+
+Maak een JogCommand met:
+
+type  = JOG_MOVE
+axis  = AXIS_X
+delta = -1.2
+
+Voer deze uit via:
+
+cncjs.execute(jog);
+
+De MachineMapper moet exact produceren:
+
+{"jogx":-1.2}
+
+De daadwerkelijke TinyG moet vervolgens de X-as 1,2 mm in negatieve richting bewegen.
+
+De test is geslaagd wanneer zowel:
+
+de mapping het verwachte JSON-command oplevert;
+de TinyG daadwerkelijk de overeenkomstige beweging uitvoert.
+Testcase 2 — X positief
+axis  = AXIS_X
+delta = 1.0
+
+Verwacht:
+
+{"jogx":1.000}
+
+De TinyG moet X +1 mm bewegen.
+
+Testcase 3 — Y
+axis  = AXIS_Y
+delta = -0.5
+
+Verwacht:
+
+{"jogy":-0.500}
+Testcase 4 — Z
+axis  = AXIS_Z
+delta = 0.25
+
+Verwacht:
+
+{"jogz":0.250}
+Testcase 5 — ongeldige as
+
+Een JogCommand met:
+
+axis = AXIS_NONE
+
+moet geen TinyG-command opleveren.
+
+MachineMapper::unsupported() moet worden gebruikt.
+
+Testgrens
+
+Deze eerste test richt zich uitsluitend op de mapping en uitvoering van één native TinyG jog-command.
+
+Nog niet onderdeel van dit issue:
+
+jog-cancel tijdens een lopende TinyG jog;
+meerdere jog-commands achter elkaar;
+jog buffering;
+feedrate-configuratie;
+xfr / yfr / zfr;
+TinyG jog-state tijdens de beweging;
+wijzigingen aan JogPlanner;
+timing van de 50 ms slots.
+
+Die zaken kunnen daarna afzonderlijk worden onderzocht.
+
+Acceptatiecriteria
+
+MachineMapper ondersteunt CONTROLLER_TINYG voor JOG_MOVE.
+
+X wordt gemapt naar {"jogx":...}.
+
+Y wordt gemapt naar {"jogy":...}.
+
+Z wordt gemapt naar {"jogz":...}.
+
+A wordt gemapt naar {"joga":...} indien AXIS_A in JogCommand beschikbaar is.
+
+De waarde van jog.delta wordt als relatieve TinyG-jogafstand gebruikt.
+
+Er wordt geen feedrate aan het TinyG JSON-command toegevoegd.
+
+Een AXIS_NONE resulteert in unsupported().
+
+De test wordt uitgevoerd via CNCjsInterface::execute() en niet door het JSON-command los van de pendant-architectuur te versturen.
+
+Een test met delta = -1.2 produceert exact de TinyG-vorm:
+
+{"jogx":-1.2}
+
+De fysieke TinyG beweegt vervolgens 1,2 mm in negatieve X-richting.
+
+De bestaande GRBL-mapping blijft ongewijzigd.

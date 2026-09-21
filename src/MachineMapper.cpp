@@ -127,25 +127,8 @@ MachineState MachineMapper::map(
 
     MachineState state;
 
-    Serial.println();
-    Serial.println(
-        "[MachineMapper] ========================================"
-    );
-    Serial.println(
-        "[MachineMapper] Mapping controller state"
-    );
-
-    Serial.printf(
-        "[MachineMapper] controllerType='%s'\n",
-        snapshot.controllerType.c_str()
-    );
-
     if(snapshot.state.isNull())
     {
-        Serial.println(
-            "[MachineMapper] state is NULL"
-        );
-
         return state;
     }
 
@@ -153,11 +136,6 @@ MachineState MachineMapper::map(
         controllerTypeFromString(
             snapshot.controllerType
         );
-
-    Serial.printf(
-        "[MachineMapper] controller type enum=%d\n",
-        type
-    );
 
     switch(type)
     {
@@ -251,33 +229,16 @@ MachineState MachineMapper::map(
 
         case CONTROLLER_TINYG:
         {
-            Serial.println(
-                "[MachineMapper] TinyG state mapping"
-            );
-
             JsonObjectConst status =
                 snapshot.state["sr"].as<JsonObjectConst>();
 
             if(status.isNull())
             {
-                Serial.println(
-                    "[MachineMapper] TinyG: sr NOT FOUND"
-                );
-
                 return state;
             }
 
-            Serial.println(
-                "[MachineMapper] TinyG: sr found"
-            );
-
             int machineState =
                 status["machineState"].as<int>();
-
-            Serial.printf(
-                "[MachineMapper] TinyG: machineState=%d\n",
-                machineState
-            );
 
 
             // ------------------------------------------------
@@ -327,20 +288,8 @@ MachineState MachineMapper::map(
 
                 default:
 
-                    Serial.printf(
-                        "[MachineMapper] TinyG: "
-                        "UNKNOWN machineState=%d\n",
-                        machineState
-                    );
-
                     return state;
             }
-
-            Serial.printf(
-                "[MachineMapper] TinyG: "
-                "mapped machineStatus=%d\n",
-                state.machineStatus
-            );
 
 
             // ------------------------------------------------
@@ -353,27 +302,11 @@ MachineState MachineMapper::map(
             JsonObjectConst workPosition =
                 status["wpos"].as<JsonObjectConst>();
 
-            Serial.printf(
-                "[MachineMapper] TinyG: "
-                "mpos=%s wpos=%s\n",
-                machinePosition.isNull()
-                    ? "NULL"
-                    : "OK",
-                workPosition.isNull()
-                    ? "NULL"
-                    : "OK"
-            );
-
             if(
                 machinePosition.isNull() ||
                 workPosition.isNull()
             )
             {
-                Serial.println(
-                    "[MachineMapper] TinyG: "
-                    "position data missing"
-                );
-
                 return state;
             }
 
@@ -426,44 +359,10 @@ MachineState MachineMapper::map(
 
 
             // ------------------------------------------------
-            // DEBUG OUTPUT
-            // ------------------------------------------------
-
-            Serial.printf(
-                "[MachineMapper] TinyG: "
-                "MPos=(%.3f, %.3f, %.3f) "
-                "WPos=(%.3f, %.3f, %.3f)\n",
-
-                state.machinePosition.x,
-                state.machinePosition.y,
-                state.machinePosition.z,
-
-                state.workPosition.x,
-                state.workPosition.y,
-                state.workPosition.z
-            );
-
-            Serial.printf(
-                "[MachineMapper] TinyG: "
-                "feedrate=%.3f "
-                "spindleSpeed=%d "
-                "activeWcs='%s'\n",
-
-                state.feedrate,
-                state.spindleSpeed,
-                state.activeWcs.c_str()
-            );
-
-
-            // ------------------------------------------------
             // VALID
             // ------------------------------------------------
 
             valid = true;
-
-            Serial.println(
-                "[MachineMapper] TinyG: VALID = true"
-            );
 
             break;
         }
@@ -477,21 +376,8 @@ MachineState MachineMapper::map(
 
         default:
 
-            Serial.println(
-                "[MachineMapper] Unknown controller type"
-            );
-
             break;
     }
-
-    Serial.printf(
-        "[MachineMapper] Returning state, valid=%s\n",
-        valid ? "true" : "false"
-    );
-
-    Serial.println(
-        "[MachineMapper] ========================================"
-    );
 
     return state;
 }
