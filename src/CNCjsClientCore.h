@@ -64,6 +64,8 @@ public:
 
         bool controllerReady;
 
+        bool controllerSettingsReadyState;
+
         String controllerPort;
         String controllerType;
         int controllerBaudrate;
@@ -175,6 +177,8 @@ public:
     // ========================================================
 
     bool controllerSelectionReady() const;
+
+    void updateControllerReadyState();
 
     int selectedController() const;
 
@@ -469,6 +473,14 @@ private:
     // CONNECTION FLAGS
     // ========================================================
 
+    void updateControllerSettingsRequest();
+
+    bool reopenActiveController();
+
+    unsigned long controllerSettingsLastRequest = 0;
+
+uint8_t controllerSettingsRetryCount = 0;
+
     bool authenticatedState =
         false;
 
@@ -526,6 +538,10 @@ private:
         5000;
 
 
+    static constexpr unsigned long CONTROLLER_SETTINGS_RETRY_INTERVAL = 2000;
+
+    static constexpr uint8_t CONTROLLER_SETTINGS_MAX_RETRIES = 3;
+    
     unsigned long lastCncjsActivity =
         0;
 

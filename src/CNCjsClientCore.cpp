@@ -249,6 +249,9 @@ CNCjsClientCore::snapshot() const
     result.controllerReady =
         controllerReadyState;
 
+    result.controllerSettingsReadyState = 
+        controllerSettingsReadyState;
+
     result.controllerPort =
         activeControllerPortState;
 
@@ -682,6 +685,12 @@ void CNCjsClientCore::enterConnectionState(
 
             break;
 
+        case ConnectionState::WaitingForControllerSettings:
+
+            currentStatus_ =
+                CNCjsStatus::OpeningController;
+
+            break;
 
         case ConnectionState::Ready:
 
@@ -973,30 +982,13 @@ void CNCjsClientCore::updateConnection()
 
         case ConnectionState::OpeningController:
 
-            if (
-                controllerReadyState
-            )
-            {
-                enterConnectionState(
-                    ConnectionState::Ready
-                );
-
-
-                invalidateControllerState();
-
-
-                lastMachineStateTime =
-                    millis();
-
-                lastCncjsActivity =
-                    millis();
-
-                lastHeartbeatPing =
-                    millis();
-            }
-
             break;
 
+        case ConnectionState::WaitingForControllerSettings:
+
+            updateControllerSettingsRequest();
+
+             break;
 
         case ConnectionState::Ready:
 
@@ -1045,8 +1037,17 @@ void CNCjsClientCore::connectionFailed(
     controllerReadyState =
         false;
 
+    controllerSettingsReadyState =
+        false;
+
     controllerSelectionReadyState =
         false;
+
+    controllerSettingsLastRequest =
+    0;
+
+controllerSettingsRetryCount =
+    0;
 
     startupReceivedState =
         false;
@@ -1600,6 +1601,165 @@ bool CNCjsClientCore::heartbeatPing()
 
 
 // ============================================================
+// CONTROLLER SETTINGS REQUEST UPDATE
+// ============================================================
+
+void CNCjsClientCore::updateControllerSettingsRequest()
+{
+    if (
+        controllerSettingsReadyState
+    )
+    {
+        return;
+    }
+
+    unsigned long now =
+        millis();
+
+    /*
+        First request is sent immediately.
+
+        Subsequent requests are limited by
+        CONTROLLER_SETTINGS_RETRY_INTERVAL.
+    */
+
+    if (
+        controllerSettingsLastRequest != 0 &&
+        now - controllerSettingsLastRequest <
+        CONTROLLER_SETTINGS_RETRY_INTERVAL
+    )
+    {
+        return;
+    }
+
+    if (
+        controllerSettingsRetryCount >=
+        CONTROLLER_SETTINGS_MAX_RETRIES
+    )
+    {
+        Serial.println(
+            "[CNCjs] Controller settings request failed after maximum retries"
+        );
+
+        connectionFailed(
+            "Controller settings timeout"
+        );
+
+        return;
+    }
+
+    Serial.print(
+        "[CNCjs] Requesting controller settings ("
+    );
+
+    Serial.print(
+        controllerSettingsRetryCount + 1
+    );
+
+    Serial.print(
+        "/"
+    );
+
+    Serial.print(
+        CONTROLLER_SETTINGS_MAX_RETRIES
+    );
+
+    Serial.println(
+        ")"
+    );
+
+    controllerSettingsLastRequest =
+        now;
+
+    controllerSettingsRetryCount++;
+}
+
+// ============================================================
+// REOPEN ACTIVE CONTROLLER
+// ============================================================
+
+bool CNCjsClientCore::reopenActiveController()
+{
+    if (
+        !socketConnectedState
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        activeControllerPortState.length() == 0
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        activeControllerTypeState.length() == 0
+    )
+    {
+        return false;
+    }
+
+
+    Serial.print(
+        "[CNCjs] Reopening active controller: "
+    );
+
+    Serial.print(
+        activeControllerTypeState
+    );
+
+    Serial.print(
+        " on "
+    );
+
+    Serial.println(
+        activeControllerPortState
+    );
+
+
+    return openControllerInternal(
+        activeControllerPortState.c_str(),
+        activeControllerTypeState.c_str(),
+        activeControllerBaudrateState
+    );
+}
+
+void CNCjsClientCore::updateControllerReadyState()
+{
+    if (
+        controllerReadyState &&
+        controllerSettingsReadyState
+    )
+    {
+        enterConnectionState(
+            ConnectionState::Ready
+        );
+
+        lastMachineStateTime =
+            millis();
+
+        lastCncjsActivity =
+            millis();
+
+        lastHeartbeatPing =
+            millis();
+#ifdef IOC_DEBUG
+
+        Serial.println();
+        Serial.println(
+            "[CNCjs] Controller READY"
+        );
+
+#endif
+    }
+}
+
+
+// ============================================================
 // SOCKET EVENT HANDLER
 // ============================================================
 
@@ -1635,6 +1795,13 @@ void CNCjsClientCore::handleSocketEvent(
             socketConnectedState = false;
             controllerReadyState = false;
             controllerSettingsReadyState = false; 
+
+            controllerSettingsLastRequest =
+                0;
+
+            controllerSettingsRetryCount =
+                0;
+
             startupReceivedState = false;
             portListReceivedState = false;
             controllerListProcessedState = false;
@@ -1670,6 +1837,12 @@ void CNCjsClientCore::handleSocketEvent(
 
             controllerSettingsReadyState = 
                 false; 
+
+            controllerSettingsLastRequest =
+                0;
+
+            controllerSettingsRetryCount =
+                0;
 
             startupReceivedState =
                 false;
@@ -2008,21 +2181,24 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
+                Serial.print(
+                    "[DEBUG] serialport:open received, connectionState="
+                );
+
+                Serial.println(
+                    static_cast<int>(connectionState)
+                );
                 JsonObject info =
                     array[1];
-
 
                 const char* portName =
                     info["port"];
 
-
                 const char* controllerType =
                     info["controllerType"];
 
-
                 int baudrate =
                     info["baudrate"];
-
 
                 if (
                     portName != nullptr &&
@@ -2038,106 +2214,122 @@ void CNCjsClientCore::handleSocketEvent(
                     activeControllerBaudrateState =
                         baudrate;
 
-
                     controllerReadyState =
                         false;
 
-                    controllerSettingsReadyState = 
-                        false; 
+                    controllerSettingsReadyState =
+                        false;
 
-
-                    enterConnectionState(
-                        ConnectionState::OpeningController
-                    );
-
+                    if (
+                        controllerSettingsRetryCount == 0
+                    )
+                    {
+                        controllerSettingsLastRequest =
+                            0;
+                    }
 
                     invalidateControllerState();
-
-
-                    /*
-                        The previous controller settings and feed
-                        status no longer describe the controller
-                        that is being opened.
-                    */
-
                     invalidateControllerSettings();
-
                     invalidateSenderStatus();
-
                     invalidateJob();
 
-                    Serial.println();
-
-                    Serial.println(
-                        "[CNCjs] Serial port opened"
-                    );
-
-
-                    Serial.print(
-                        "  Port: "
-                    );
-
-                    Serial.println(
-                        activeControllerPortState
-                    );
-
-
-                    Serial.print(
-                        "  Controller: "
-                    );
-
-                    Serial.println(
-                        activeControllerTypeState
-                    );
-
-
-                    Serial.print(
-                        "  Baudrate: "
-                    );
-
-                    Serial.println(
-                        activeControllerBaudrateState
+                    enterConnectionState(
+                        ConnectionState::WaitingForControllerSettings
                     );
                 }
 
-
                 break;
             }
-
 
             // ------------------------------------------------
             // CONTROLLER SETTINGS
             // ------------------------------------------------
 
-            if (
+            if(
                 strcmp(
                     eventName,
                     "controller:settings"
                 ) == 0
             )
             {
-#ifdef IOC_DEBUG
-
-                delay(2000);
-
-                Serial.println(
-                    "[CNCjs] Controller settings received"
-                );
-
-#endif
-
                 const char* controllerType =
                     array[1];
-
 
                 JsonObject settings =
                     array[2]["settings"];
 
+                Serial.println();
+                Serial.println(
+                    "[CNCjs] ========================================"
+                );
+                Serial.println(
+                    "[CNCjs] controller:settings RECEIVED"
+                );
+
+                Serial.print(
+                    "[CNCjs] controllerType: "
+                );
+
+                if(controllerType != nullptr)
+                {
+                    Serial.println(
+                        controllerType
+                    );
+                }
+                else
+                {
+                    Serial.println(
+                        "<null>"
+                    );
+                }
+
+                Serial.print(
+                    "[CNCjs] settings.isNull(): "
+                );
+
+                Serial.println(
+                    settings.isNull()
+                        ? "YES"
+                        : "NO"
+                );
+
+                if(!settings.isNull())
+                {
+                    Serial.print(
+                        "[CNCjs] $110: "
+                    );
+                    Serial.println(
+                        settings["$110"].as<float>()
+                    );
+
+                    Serial.print(
+                        "[CNCjs] $111: "
+                    );
+                    Serial.println(
+                        settings["$111"].as<float>()
+                    );
+
+                    Serial.print(
+                        "[CNCjs] $112: "
+                    );
+                    Serial.println(
+                        settings["$112"].as<float>()
+                    );
+                }
+
+                Serial.print(
+                    "[CNCjs] controllerSettingsReadyState BEFORE: "
+                );
+
+                Serial.println(
+                    controllerSettingsReadyState
+                        ? "true"
+                        : "false"
+                );
 
                 ControllerSettingsSnapshot snapshot;
 
-
-                if (
+                if(
                     controllerType != nullptr
                 )
                 {
@@ -2145,8 +2337,7 @@ void CNCjsClientCore::handleSocketEvent(
                         controllerType;
                 }
 
-
-                if (
+                if(
                     !settings.isNull()
                 )
                 {
@@ -2154,21 +2345,50 @@ void CNCjsClientCore::handleSocketEvent(
                         settings;
                 }
 
-
                 snapshot.valid =
                     true;
-
 
                 controllerSettingsBuffer_.publish(
                     snapshot
                 );
 
+                Serial.println(
+                    "[CNCjs] controllerSettingsSnapshot published"
+                );
+
+                controllerSettingsReadyState =
+                    true;
+
+                controllerSettingsLastRequest =
+                    0;
+
+                controllerSettingsRetryCount =
+                    0;
+
+                Serial.print(
+                    "[CNCjs] controllerSettingsReadyState AFTER: "
+                );
+
+                Serial.println(
+                    controllerSettingsReadyState
+                        ? "true"
+                        : "false"
+                );
+
+                Serial.println(
+                    "[CNCjs] Calling updateControllerReadyState()"
+                );
+
+                updateControllerReadyState();
+
                 machineHeartbeatReceived();
 
+                Serial.println(
+                    "[CNCjs] ========================================"
+                );
 
                 break;
             }
-
 
             // ------------------------------------------------
             // CONTROLLER STATE
@@ -2232,19 +2452,7 @@ void CNCjsClientCore::handleSocketEvent(
                 );
 
 
-                enterConnectionState(
-                    ConnectionState::Ready
-                );
-
-
-#ifdef IOC_DEBUG
-
-                Serial.println();
-                Serial.println(
-                    "[CNCjs] Controller READY"
-                );
-
-#endif
+                updateControllerReadyState();
 
                 machineHeartbeatReceived();
 
@@ -4271,9 +4479,17 @@ bool CNCjsClientCore::openControllerInternal(
 
     controllerReadyState =
         false;
-        
-    controllerSettingsReadyState = 
-        false; 
+
+    controllerSettingsReadyState =
+        false;
+
+    if (
+        controllerSettingsRetryCount == 0
+    )
+    {
+        controllerSettingsLastRequest =
+            0;
+    }
 
     enterConnectionState(
         ConnectionState::OpeningController
