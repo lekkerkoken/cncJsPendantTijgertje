@@ -64,6 +64,8 @@ public:
 
         bool controllerReady;
 
+        bool controllerSettingsReadyState;
+
         String controllerPort;
         String controllerType;
         int controllerBaudrate;
@@ -123,6 +125,14 @@ public:
     ControllerSettingsSnapshot
     controllerSettingsSnapshot() const;
 
+    uint32_t
+    controllerSettingsPublicationId() const
+    {
+        return controllerSettingsPublicationId_;
+    }
+
+    void confirmControllerSettingsPublished();
+
     SenderStatusSnapshot
     senderStatusSnapshot() const;
 
@@ -176,6 +186,8 @@ public:
 
     bool controllerSelectionReady() const;
 
+    void updateControllerReadyState();
+
     int selectedController() const;
 
     String selectedControllerName() const;
@@ -219,7 +231,7 @@ public:
     );
 
     bool fetchMacros(JsonDocument& document);
-    
+
     // ========================================================
     // G-CODE
     // ========================================================
@@ -383,6 +395,7 @@ private:
         SocketConnecting,
         WaitingForLists,
         OpeningController,
+        WaitingForControllerSettingsPublication,
         Ready,
         Backoff
     };
@@ -468,6 +481,8 @@ private:
     // CONNECTION FLAGS
     // ========================================================
 
+    bool reopenActiveController();
+
     bool authenticatedState =
         false;
 
@@ -490,6 +505,9 @@ private:
 
     LatestStateTripleBuffer<JobSnapshot>
         jobBuffer_;
+
+    uint32_t controllerSettingsPublicationId_;
+
 
     void invalidateControllerState();
 
@@ -524,6 +542,10 @@ private:
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
         5000;
 
+
+    static constexpr unsigned long CONTROLLER_SETTINGS_RETRY_INTERVAL = 2000;
+
+    static constexpr uint8_t CONTROLLER_SETTINGS_MAX_RETRIES = 3;
 
     unsigned long lastCncjsActivity =
         0;
@@ -647,6 +669,7 @@ private:
     bool controllerReadyState =
         false;
 
+    bool controllerSettingsReadyState = false;
 
     // ========================================================
     // CONTROLLER SELECTION

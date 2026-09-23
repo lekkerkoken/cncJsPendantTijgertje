@@ -26,6 +26,72 @@ ControllerType MachineMapper::controllerTypeFromString(
 
 
 // ============================================================
+// CONTROLLER SETTINGS STATE
+// ============================================================
+
+MachineMapper::SettingsState
+MachineMapper::settingsState(
+    const ControllerSettingsSnapshot& snapshot
+) const
+{
+    ControllerType controllerType =
+        controllerTypeFromString(
+            snapshot.controllerType
+        );
+
+    switch(controllerType)
+    {
+        // ====================================================
+        // GRBL
+        // ====================================================
+
+        case CONTROLLER_GRBL:
+        {
+            if(
+                snapshot.settings["$110"].is<String>() &&
+                snapshot.settings["$111"].is<String>() &&
+                snapshot.settings["$112"].is<String>()
+            )
+            {
+                return CONTROLLER_SETTINGS_AVAILABLE;
+            }
+
+            return CONTROLLER_DECLARATION_ONLY;
+        }
+
+
+        // ====================================================
+        // TinyG
+        // ====================================================
+
+        case CONTROLLER_TINYG:
+        {
+            if(
+                snapshot.settings["xfr"].is<float>() &&
+                snapshot.settings["yfr"].is<float>() &&
+                snapshot.settings["zfr"].is<float>()
+            )
+            {
+                return CONTROLLER_SETTINGS_AVAILABLE;
+            }
+
+            return CONTROLLER_DECLARATION_ONLY;
+        }
+
+
+        // ====================================================
+        // UNKNOWN
+        // ====================================================
+
+        case CONTROLLER_UNKNOWN:
+
+        default:
+
+            return CONTROLLER_DECLARATION_ONLY;
+    }
+}
+
+// ============================================================
 // MAP JOG COMMAND
 // ============================================================
 

@@ -201,6 +201,10 @@ public:
 
 private:
 
+    uint32_t handledControllerSettingsPublicationId_ = 0;
+    void controllerSettingsPublished();
+
+
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
     Machine machine_;
@@ -208,6 +212,5 @@ private:
     ControllerType cachedControllerType =
         CONTROLLER_UNKNOWN;
 };
-
 
 #endif
