@@ -1063,15 +1063,6 @@ void PendantController::checkStatusChanges()
         displayDirty =
             true;
 
-
-        Serial.print(
-            "[Pendant] CNCjs status changed: "
-        );
-
-
-        Serial.println(
-            cncStatusName()
-        );
     }
 
 

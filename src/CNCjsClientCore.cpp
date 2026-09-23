@@ -7,7 +7,6 @@
 CNCjsClientCore* CNCjsClientCore::instance =
     nullptr;
 
-
 // ============================================================
 // BEGIN
 // ============================================================
@@ -324,6 +323,13 @@ CNCjsClientCore::controllerSettingsSnapshot() const
     return snapshot;
 }
 
+void CNCjsClientCore::confirmControllerSettingsPublished()
+{
+    controllerSettingsReadyState = true;
+    Serial.println("confirmControllerSettingsPublished");
+
+    updateControllerReadyState();
+}
 
 // ============================================================
 // INVALIDATE CONTROLLER SETTINGS
@@ -685,7 +691,7 @@ void CNCjsClientCore::enterConnectionState(
 
             break;
 
-        case ConnectionState::WaitingForControllerSettings:
+        case ConnectionState::WaitingForControllerSettingsPublication:
 
             currentStatus_ =
                 CNCjsStatus::OpeningController;
@@ -984,9 +990,7 @@ void CNCjsClientCore::updateConnection()
 
             break;
 
-        case ConnectionState::WaitingForControllerSettings:
-
-            updateControllerSettingsRequest();
+        case ConnectionState::WaitingForControllerSettingsPublication:
 
              break;
 
@@ -1043,11 +1047,6 @@ void CNCjsClientCore::connectionFailed(
     controllerSelectionReadyState =
         false;
 
-    controllerSettingsLastRequest =
-    0;
-
-controllerSettingsRetryCount =
-    0;
 
     startupReceivedState =
         false;
@@ -1601,80 +1600,6 @@ bool CNCjsClientCore::heartbeatPing()
 
 
 // ============================================================
-// CONTROLLER SETTINGS REQUEST UPDATE
-// ============================================================
-
-void CNCjsClientCore::updateControllerSettingsRequest()
-{
-    if (
-        controllerSettingsReadyState
-    )
-    {
-        return;
-    }
-
-    unsigned long now =
-        millis();
-
-    /*
-        First request is sent immediately.
-
-        Subsequent requests are limited by
-        CONTROLLER_SETTINGS_RETRY_INTERVAL.
-    */
-
-    if (
-        controllerSettingsLastRequest != 0 &&
-        now - controllerSettingsLastRequest <
-        CONTROLLER_SETTINGS_RETRY_INTERVAL
-    )
-    {
-        return;
-    }
-
-    if (
-        controllerSettingsRetryCount >=
-        CONTROLLER_SETTINGS_MAX_RETRIES
-    )
-    {
-        Serial.println(
-            "[CNCjs] Controller settings request failed after maximum retries"
-        );
-
-        connectionFailed(
-            "Controller settings timeout"
-        );
-
-        return;
-    }
-
-    Serial.print(
-        "[CNCjs] Requesting controller settings ("
-    );
-
-    Serial.print(
-        controllerSettingsRetryCount + 1
-    );
-
-    Serial.print(
-        "/"
-    );
-
-    Serial.print(
-        CONTROLLER_SETTINGS_MAX_RETRIES
-    );
-
-    Serial.println(
-        ")"
-    );
-
-    controllerSettingsLastRequest =
-        now;
-
-    controllerSettingsRetryCount++;
-}
-
-// ============================================================
 // REOPEN ACTIVE CONTROLLER
 // ============================================================
 
@@ -1796,11 +1721,6 @@ void CNCjsClientCore::handleSocketEvent(
             controllerReadyState = false;
             controllerSettingsReadyState = false; 
 
-            controllerSettingsLastRequest =
-                0;
-
-            controllerSettingsRetryCount =
-                0;
 
             startupReceivedState = false;
             portListReceivedState = false;
@@ -1837,12 +1757,6 @@ void CNCjsClientCore::handleSocketEvent(
 
             controllerSettingsReadyState = 
                 false; 
-
-            controllerSettingsLastRequest =
-                0;
-
-            controllerSettingsRetryCount =
-                0;
 
             startupReceivedState =
                 false;
@@ -2220,13 +2134,6 @@ void CNCjsClientCore::handleSocketEvent(
                     controllerSettingsReadyState =
                         false;
 
-                    if (
-                        controllerSettingsRetryCount == 0
-                    )
-                    {
-                        controllerSettingsLastRequest =
-                            0;
-                    }
 
                     invalidateControllerState();
                     invalidateControllerSettings();
@@ -2234,7 +2141,7 @@ void CNCjsClientCore::handleSocketEvent(
                     invalidateJob();
 
                     enterConnectionState(
-                        ConnectionState::WaitingForControllerSettings
+                        ConnectionState::WaitingForControllerSettingsPublication
                     );
                 }
 
@@ -2252,6 +2159,22 @@ void CNCjsClientCore::handleSocketEvent(
                 ) == 0
             )
             {
+                Serial.print(
+    "[CNCjs] RAW controller:settings @ "
+);
+
+Serial.print(
+    millis()
+);
+
+Serial.println(" ms:");
+
+serializeJson(
+    array,
+    Serial
+);
+
+Serial.println();
                 const char* controllerType =
                     array[1];
 
@@ -2352,18 +2275,19 @@ void CNCjsClientCore::handleSocketEvent(
                     snapshot
                 );
 
+                controllerSettingsPublicationId_++;
+
                 Serial.println(
                     "[CNCjs] controllerSettingsSnapshot published"
                 );
 
-                controllerSettingsReadyState =
-                    true;
+                Serial.print(
+                    "[CNCjs] controllerSettings publication ID: "
+                );
 
-                controllerSettingsLastRequest =
-                    0;
-
-                controllerSettingsRetryCount =
-                    0;
+                Serial.println(
+                    controllerSettingsPublicationId_
+                );
 
                 Serial.print(
                     "[CNCjs] controllerSettingsReadyState AFTER: "
@@ -4263,10 +4187,6 @@ String CNCjsClientCore::selectedPortName() const
 }
 
 
-// ============================================================
-// CONTROLLER READY
-// ============================================================
-
 bool CNCjsClientCore::controllerReady() const
 {
     if (
@@ -4276,13 +4196,11 @@ bool CNCjsClientCore::controllerReady() const
         return false;
     }
 
-
     bool result =
-        controllerReadyState;
-
+        controllerReadyState &&
+        controllerSettingsReadyState;
 
     unlock();
-
 
     return result;
 }
@@ -4482,14 +4400,6 @@ bool CNCjsClientCore::openControllerInternal(
 
     controllerSettingsReadyState =
         false;
-
-    if (
-        controllerSettingsRetryCount == 0
-    )
-    {
-        controllerSettingsLastRequest =
-            0;
-    }
 
     enterConnectionState(
         ConnectionState::OpeningController

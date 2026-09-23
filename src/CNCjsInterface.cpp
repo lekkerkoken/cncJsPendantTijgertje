@@ -71,6 +71,8 @@ void CNCjsInterface::update()
         !core_.controllerReady()
     )
     {
+        controllerSettingsPublished();
+
         machine_.state.machineStatus =
             MACHINE_DISCONNECTED;
 
@@ -101,7 +103,6 @@ void CNCjsInterface::update()
             state;
     }
 }
-
 
 // ============================================================
 // CONNECTION
@@ -227,6 +228,45 @@ bool CNCjsInterface::controllerReady() const
 }
 
 
+void CNCjsInterface::controllerSettingsPublished()
+{
+    uint32_t publicationId =
+        core_.controllerSettingsPublicationId();
+
+    if(
+        publicationId ==
+        handledControllerSettingsPublicationId_
+    )
+    {
+        return;
+    }
+
+    handledControllerSettingsPublicationId_ =
+        publicationId;
+
+    ControllerSettingsSnapshot snapshot =
+        core_.controllerSettingsSnapshot();
+
+    switch(
+        machineMapper_.settingsState(snapshot)
+    )
+    {
+        case MachineMapper::CONTROLLER_DECLARATION_ONLY:
+
+            // Controller is known.
+            // The actual controller settings are not available yet.
+
+            break;
+
+
+        case MachineMapper::CONTROLLER_SETTINGS_AVAILABLE:
+
+            core_.confirmControllerSettingsPublished();
+
+            break;
+    }
+}
+
 void CNCjsInterface::cacheControllerSettings()
 {
     MachineSettings settings =
@@ -314,6 +354,7 @@ bool CNCjsInterface::zeroAxis(
     );
 }
 
+
 bool CNCjsInterface::nextWcs()
 {
     MachineState state =
@@ -336,6 +377,7 @@ bool CNCjsInterface::nextWcs()
 
     return sendGcode(nextWcs);
 }
+
 
 bool CNCjsInterface::previousWcs()
 {

@@ -125,6 +125,14 @@ public:
     ControllerSettingsSnapshot
     controllerSettingsSnapshot() const;
 
+    uint32_t
+    controllerSettingsPublicationId() const
+    {
+        return controllerSettingsPublicationId_;
+    }
+
+    void confirmControllerSettingsPublished();
+
     SenderStatusSnapshot
     senderStatusSnapshot() const;
 
@@ -387,7 +395,7 @@ private:
         SocketConnecting,
         WaitingForLists,
         OpeningController,
-        WaitingForControllerSettings,
+        WaitingForControllerSettingsPublication,
         Ready,
         Backoff
     };
@@ -473,13 +481,7 @@ private:
     // CONNECTION FLAGS
     // ========================================================
 
-    void updateControllerSettingsRequest();
-
     bool reopenActiveController();
-
-    unsigned long controllerSettingsLastRequest = 0;
-
-uint8_t controllerSettingsRetryCount = 0;
 
     bool authenticatedState =
         false;
@@ -503,6 +505,9 @@ uint8_t controllerSettingsRetryCount = 0;
 
     LatestStateTripleBuffer<JobSnapshot>
         jobBuffer_;
+
+    uint32_t controllerSettingsPublicationId_;
+
 
     void invalidateControllerState();
 

@@ -28,6 +28,18 @@ public:
     // SETTINGS
     // ========================================================
 
+    enum SettingsState
+    {
+        CONTROLLER_DECLARATION_ONLY,
+        CONTROLLER_SETTINGS_AVAILABLE
+    };
+
+
+    SettingsState settingsState(
+        const ControllerSettingsSnapshot& snapshot
+    ) const;
+
+
     MachineSettings map(
         const ControllerSettingsSnapshot& snapshot
     ) const;
