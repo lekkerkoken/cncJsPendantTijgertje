@@ -596,42 +596,6 @@ void CNCjsClientCore::enterConnectionState(
         millis();
 
 
-    /*
-        TEMPORARY DEBUG
-
-        Log iedere overgang van de interne connection state.
-
-        Hiermee kunnen we precies zien waardoor de pendant
-        uiteindelijk in Offline terechtkomt.
-    */
-
-    Serial.print(
-        "[CNCjs] Connection state: "
-    );
-
-    Serial.print(
-        static_cast<int>(previousState)
-    );
-
-    Serial.print(
-        " -> "
-    );
-
-    Serial.print(
-        static_cast<int>(state)
-    );
-
-    Serial.print(
-        " @ "
-    );
-
-    Serial.print(
-        millis()
-    );
-
-    Serial.println(
-        " ms"
-    );
 
 
     switch (state)
