@@ -82,6 +82,10 @@ private:
         ControllerType type
     );
 
+    String mapTinyGJog(
+        const JogCommand& jog
+    );
+
 
     String mapGrblJog(
         const JogCommand& jog

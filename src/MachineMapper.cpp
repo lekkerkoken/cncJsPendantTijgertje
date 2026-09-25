@@ -469,9 +469,9 @@ String MachineMapper::mapJogMove(
 
         case CONTROLLER_TINYG:
 
-            // TinyG jog mapping
-
-            return unsupported();
+            return mapTinyGJog(
+                jog
+            );
 
 
         case CONTROLLER_UNKNOWN:
@@ -480,6 +480,52 @@ String MachineMapper::mapJogMove(
 
             return unsupported();
     }
+}
+
+String MachineMapper::mapTinyGJog(
+    const JogCommand& jog
+)
+{
+    if(
+        jog.axis ==
+        AXIS_NONE
+    )
+    {
+        return unsupported();
+    }
+
+    char axisChar;
+
+    switch(jog.axis)
+    {
+        case AXIS_X:
+            axisChar = 'x';
+            break;
+
+        case AXIS_Y:
+            axisChar = 'y';
+            break;
+
+        case AXIS_Z:
+            axisChar = 'z';
+            break;
+
+        case AXIS_NONE:
+        default:
+            return unsupported();
+    }
+
+    char buffer[32];
+
+    snprintf(
+        buffer,
+        sizeof(buffer),
+        "{\"jog%c\":%.3f}\r",
+        axisChar,
+        jog.delta
+    );
+
+    return String(buffer);
 }
 
 

@@ -4604,6 +4604,119 @@ bool CNCjsClientCore::sendGcodeInternal(
     );
 }
 
+// ============================================================
+// SEND WRITE
+// ============================================================
+
+bool CNCjsClientCore::sendWrite(
+    const char* data
+)
+{
+    if (
+        !lock()
+    )
+    {
+        return false;
+    }
+
+
+    bool result =
+        false;
+
+
+    if (
+        controllerReadyState
+    )
+    {
+        result =
+            sendWriteInternal(
+                activeControllerPortState.c_str(),
+                data
+            );
+    }
+
+
+    unlock();
+
+
+    return result;
+}
+
+
+// ============================================================
+// SEND WRITE INTERNAL
+// ============================================================
+
+bool CNCjsClientCore::sendWriteInternal(
+    const char* portName,
+    const char* data
+)
+{
+    if (
+        !controllerSettingsReadyState ||
+        !controllerReadyState ||
+        !socketConnectedState
+    )
+    {
+        return false;
+    }
+
+
+    if (
+        portName == nullptr ||
+        data == nullptr
+    )
+    {
+        return false;
+    }
+
+
+    JsonDocument doc;
+
+
+    JsonArray array =
+        doc.to<JsonArray>();
+
+
+    array.add(
+        "write"
+    );
+
+    array.add(
+        portName
+    );
+
+    array.add(
+        data
+    );
+
+
+    String output;
+
+
+    serializeJson(
+        doc,
+        output
+    );
+
+
+#ifdef CNCJS_EVENT_DEBUG
+
+    Serial.print(
+        "[CNCjs] WRITE: "
+    );
+
+    Serial.println(
+        output
+    );
+
+#endif
+
+
+    return socketIO.sendEVENT(
+        output
+    );
+}
 
 // ============================================================
 // SEND COMMAND

@@ -255,6 +255,9 @@ public:
         const JsonObjectConst& options = JsonObjectConst()
     );
 
+    bool sendWrite(
+        const char* data
+    );
 
     bool sendRealtime(
         uint8_t command
@@ -720,6 +723,11 @@ private:
         const char* port,
         const char* controllerType,
         int baudrate
+    );
+
+    bool sendWriteInternal(
+        const char* portName,
+        const char* data
     );
 
     bool sendGcodeInternal(
