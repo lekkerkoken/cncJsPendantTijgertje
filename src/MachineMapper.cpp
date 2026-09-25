@@ -631,9 +631,21 @@ String MachineMapper::mapHome(
 
         case CONTROLLER_TINYG:
 
-            // TinyG home mapping
+            switch(axis)
+            {
+                case AXIS_X:
+                    return "G28.2X0";
 
-            return unsupported();
+                case AXIS_Y:
+                    return "G28.2Y0";
+
+                case AXIS_Z:
+                    return "G28.2Z0";
+
+                case AXIS_NONE:
+                default:
+                    return unsupported();
+            }
 
 
         case CONTROLLER_UNKNOWN:
@@ -644,6 +656,36 @@ String MachineMapper::mapHome(
     }
 }
 
+String MachineMapper::mapHomeAll(
+    ControllerType type
+)
+{
+    switch(type)
+    {
+        case CONTROLLER_GRBL:
+
+            /*
+                Standaard GRBL ondersteunt geen individuele
+                axis-homing via bijvoorbeeld "$H X".
+
+                Daarom voorlopig unsupported.
+            */
+
+            return unsupported();
+
+
+        case CONTROLLER_TINYG:
+
+            return "G28.2X0Y0Z0";
+
+
+        case CONTROLLER_UNKNOWN:
+
+        default:
+
+            return unsupported();
+    }
+}
 
 // ============================================================
 // MAP ZERO WCS AXIS

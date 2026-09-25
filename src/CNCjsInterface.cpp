@@ -471,8 +471,13 @@ bool CNCjsInterface::feedHold()
 
 bool CNCjsInterface::homeAll()
 {
-    return sendCommand(
-        "homing"
+    String gcode =
+        machineMapper_.mapHomeAll(
+            cachedControllerType
+        );
+
+    return sendGcode(
+        gcode.c_str()
     );
 }
 

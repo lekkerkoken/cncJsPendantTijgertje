@@ -64,6 +64,8 @@ public:
         ControllerType type
     );
 
+    String mapHomeAll(ControllerType type);
+
 
     // ========================================================
     // ZERO WCS AXIS
