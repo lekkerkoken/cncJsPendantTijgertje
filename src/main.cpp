@@ -5,7 +5,6 @@
 #include "ButtonMatrix.h"
 #include "Encoder.h"
 #include "OLED.h"
-
 #include "PendantController.h"
 
 
@@ -26,7 +25,6 @@ OLED oled;
 
 PendantController controller;
 
-
 // ============================================================
 // SETUP
 // ============================================================
@@ -36,7 +34,6 @@ void setup()
     Serial.begin(
         115200
     );
-    
 
 
     // --------------------------------------------------------

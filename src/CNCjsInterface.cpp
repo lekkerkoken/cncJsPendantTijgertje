@@ -33,7 +33,9 @@ CNCjsInterface::machineSettingsSnapshot() const
         return settings;
     }
 
-    return machineMapper_.map(snapshot);
+    return machineMapper_.map(
+        snapshot
+    );
 }
 
 
@@ -103,6 +105,7 @@ void CNCjsInterface::update()
             state;
     }
 }
+
 
 // ============================================================
 // CONNECTION
@@ -228,10 +231,21 @@ bool CNCjsInterface::controllerReady() const
 }
 
 
+int CNCjsInterface::controllerBaudrate() const
+{
+    return core_.controllerBaudrate();
+}
+
+
+// ============================================================
+// CONTROLLER SETTINGS PUBLICATION
+// ============================================================
+
 void CNCjsInterface::controllerSettingsPublished()
 {
     uint32_t publicationId =
         core_.controllerSettingsPublicationId();
+
 
     if(
         publicationId ==
@@ -241,20 +255,35 @@ void CNCjsInterface::controllerSettingsPublished()
         return;
     }
 
+
     handledControllerSettingsPublicationId_ =
         publicationId;
+
 
     ControllerSettingsSnapshot snapshot =
         core_.controllerSettingsSnapshot();
 
+
+    if(
+        !core_.handleControllerIdentification(
+            snapshot.controllerType.c_str()
+        )
+    )
+    {
+        return;
+    }
+
+
     switch(
-        machineMapper_.settingsState(snapshot)
+        machineMapper_.settingsState(
+            snapshot
+        )
     )
     {
         case MachineMapper::CONTROLLER_DECLARATION_ONLY:
 
             // Controller is known.
-            // The actual controller settings are not available yet.
+            // Controller-specific settings are not available yet.
 
             break;
 
@@ -274,12 +303,6 @@ void CNCjsInterface::cacheControllerSettings()
 
     cachedControllerType =
         settings.controllerType;
-}
-
-
-int CNCjsInterface::controllerBaudrate() const
-{
-    return core_.controllerBaudrate();
 }
 
 
@@ -306,6 +329,10 @@ bool CNCjsInterface::openController(
     );
 }
 
+
+// ============================================================
+// COMMANDS
+// ============================================================
 
 bool CNCjsInterface::homeAxis(
     Axis axis
@@ -375,7 +402,9 @@ bool CNCjsInterface::nextWcs()
     else
         nextWcs = "G59";
 
-    return sendGcode(nextWcs);
+    return sendGcode(
+        nextWcs
+    );
 }
 
 
@@ -399,7 +428,9 @@ bool CNCjsInterface::previousWcs()
     else
         previousWcs = "G54";
 
-    return sendGcode(previousWcs);
+    return sendGcode(
+        previousWcs
+    );
 }
 
 
@@ -407,7 +438,9 @@ bool CNCjsInterface::execute(
     const JogCommand& jog
 )
 {
-    if(jog.type == JOG_CANCEL)
+    if(
+        jog.type == JOG_CANCEL
+    )
     {
         return jogCancel();
     }
@@ -518,7 +551,8 @@ bool CNCjsInterface::gcodeStop()
 {
     JsonDocument options;
 
-    options["force"] = true;
+    options["force"] =
+        true;
 
     return sendCommand(
         "gcode:stop",

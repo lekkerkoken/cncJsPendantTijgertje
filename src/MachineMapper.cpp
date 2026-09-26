@@ -67,9 +67,7 @@ MachineMapper::settingsState(
         case CONTROLLER_TINYG:
         {
             if(
-                snapshot.settings["xfr"].is<float>() &&
-                snapshot.settings["yfr"].is<float>() &&
-                snapshot.settings["zfr"].is<float>()
+                true
             )
             {
                 return CONTROLLER_SETTINGS_AVAILABLE;

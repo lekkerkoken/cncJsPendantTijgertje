@@ -85,6 +85,7 @@ public:
             selectedPortName(""),
             controllerSelectionReady(false),
             controllerReady(false),
+            controllerSettingsReadyState(false),
             controllerPort(""),
             controllerType(""),
             controllerBaudrate(0)
@@ -101,7 +102,6 @@ public:
     // state     → snapshot uit Core
     //
     // Publieke commando-methodes zijn thread-safe.
-    //
     //
     // ========================================================
 
@@ -232,6 +232,16 @@ public:
 
     bool fetchMacros(JsonDocument& document);
 
+
+    // ========================================================
+    // CONTROLLER IDENTIFICATION
+    // ========================================================
+
+    bool handleControllerIdentification(
+        const char* detectedControllerType
+    );
+
+
     // ========================================================
     // G-CODE
     // ========================================================
@@ -303,7 +313,9 @@ private:
 
     void networkTask();
 
-    bool fetchMacrosInternal(JsonDocument& document);
+    bool fetchMacrosInternal(
+        JsonDocument& document
+    );
 
 
     // ========================================================
@@ -319,6 +331,7 @@ private:
         uint32_t grblStateEvents = 0;
         uint32_t serialportReadEvents = 0;
         uint32_t serialportWriteEvents = 0;
+        uint32_t serialportCloseEvents = 0;
         uint32_t otherEvents = 0;
 
         uint32_t socketLoopTotalUs = 0;
@@ -399,6 +412,7 @@ private:
         WaitingForLists,
         OpeningController,
         WaitingForControllerSettingsPublication,
+        ClosingController,
         Ready,
         Backoff
     };
@@ -520,23 +534,9 @@ private:
 
     void invalidateJob();
 
+
     // ========================================================
     // MACHINE HEARTBEAT / ACTIVITY WATCHDOG
-    // ========================================================
-    //
-    // lastCncjsActivity:
-    //   Laatste ontvangen controller:state.
-    //
-    // TOLERABLE_SILENCE_DURATION:
-    //   Hoe lang we geen controller:state willen missen
-    //   voordat we actief om een statusreport vragen.
-    //
-    // lastHeartbeatPing:
-    //   Laatste heartbeat-ping.
-    //
-    // HEARTBEAT_TIMEOUT:
-    //   Onafhankelijke watchdog voor machine-state.
-    //
     // ========================================================
 
     static constexpr unsigned long TOLERABLE_SILENCE_DURATION =
@@ -545,10 +545,11 @@ private:
     static constexpr unsigned long HEARTBEAT_TIMEOUT =
         5000;
 
+    static constexpr unsigned long CONTROLLER_SETTINGS_RETRY_INTERVAL =
+        2000;
 
-    static constexpr unsigned long CONTROLLER_SETTINGS_RETRY_INTERVAL = 2000;
-
-    static constexpr uint8_t CONTROLLER_SETTINGS_MAX_RETRIES = 3;
+    static constexpr uint8_t CONTROLLER_SETTINGS_MAX_RETRIES =
+        3;
 
     unsigned long lastCncjsActivity =
         0;
@@ -569,9 +570,16 @@ private:
     void machineHeartbeatReceived();
 
 
-
     // ========================================================
     // SERIAL PORT READ HANDLER
+    // ========================================================
+    //
+    // Deze callback blijft beschikbaar voor serialport:read,
+    // maar wordt NIET meer gebruikt voor controlleridentificatie.
+    //
+    // Controlleridentificatie gebeurt uitsluitend via
+    // controller:settings.
+    //
     // ========================================================
 
     std::function<void(const JsonArray&)> serialportReadHandler_;
@@ -583,18 +591,13 @@ private:
         false;
 
 
-    void handleControllerIdentification(
+    // ========================================================
+    // SERIAL PORT CLOSE
+    // ========================================================
+
+    void handleSerialportClose(
         const JsonArray& array
     );
-
-    void handleSerialportRead(
-        const JsonArray& array
-    );
-
-    String identifyControllerFromStatusReport(
-        const JsonArray& array
-    ) const;
-
 
 
     // ========================================================
@@ -674,6 +677,7 @@ private:
 
     bool controllerSettingsReadyState = false;
 
+
     // ========================================================
     // CONTROLLER SELECTION
     // ========================================================
@@ -724,6 +728,8 @@ private:
         const char* controllerType,
         int baudrate
     );
+
+    bool closeControllerInternal();
 
     bool sendWriteInternal(
         const char* portName,
