@@ -112,7 +112,9 @@ public:
 
     void begin();
 
-
+    void setSerialportReadHandler(
+        std::function<void(const JsonArray&)> handler
+    );
     // ========================================================
     // SNAPSHOTS
     // ========================================================

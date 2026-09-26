@@ -184,6 +184,13 @@ void CNCjsClientCore::begin()
     );
 }
 
+void CNCjsClientCore::setSerialportReadHandler(
+    std::function<void(const JsonArray&)> handler
+)
+{
+    serialportReadHandler_ = handler;
+}
+
 
 // ============================================================
 // SNAPSHOT

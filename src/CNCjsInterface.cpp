@@ -33,9 +33,12 @@ CNCjsInterface::machineSettingsSnapshot() const
         return settings;
     }
 
-    return machineMapper_.map(
-        snapshot
-    );
+    settings =
+        machineMapper_.map(
+            snapshot
+        );
+
+    return settings;
 }
 
 
@@ -63,6 +66,13 @@ CNCjsInterface::status() const
 
 void CNCjsInterface::begin()
 {
+    core_.setSerialportReadHandler(
+        [this](const JsonArray& array)
+        {
+            handleSerialportRead(array);
+        }
+    );
+
     core_.begin();
 }
 
@@ -295,6 +305,14 @@ void CNCjsInterface::controllerSettingsPublished()
             break;
     }
 }
+
+void CNCjsInterface::handleSerialportRead(
+    const JsonArray& array
+)
+{
+    (void)array;
+}
+
 
 void CNCjsInterface::cacheControllerSettings()
 {

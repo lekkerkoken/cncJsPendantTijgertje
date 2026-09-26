@@ -738,3 +738,585 @@ Een test met delta = -1.2 produceert exact de TinyG-vorm:
 De fysieke TinyG beweegt vervolgens 1,2 mm in negatieve X-richting.
 
 De bestaande GRBL-mapping blijft ongewijzigd.
+
+
+Maar eerst:
+
+# Controller-specifieke serial-read verwerking en TinyG max-feedrates
+
+## Doel
+
+Controller-specifieke informatie die via `serialport:read` binnenkomt, moet beschikbaar kunnen worden gemaakt als controller-onafhankelijke domeininformatie voor de pendant.
+
+Voor TinyG betekent dit onder andere dat de maximale feedrates:
+
+```text
+xfr
+yfr
+zfr
+```
+
+beschikbaar worden via:
+
+```cpp
+MachineSettings.maxFeedrate
+```
+
+De oplossing moet daarbij de scheiding tussen CNCjs-communicatie, controllerkennis en pendantlogica behouden.
+
+---
+
+# Architectuur
+
+De verantwoordelijkheid wordt als volgt verdeeld:
+
+```text
+CNCjsClientCore
+      │
+      │ serialport:read
+      ▼
+CNCjsInterface
+      │
+      │ generieke controllerdata
+      ▼
+MachineMapper
+      │
+      │ controller-specifieke interpretatie
+      ▼
+┌──────────────────────────────────────┐
+│ MachineSettings                      │
+│ MachineState                         │
+│ ControllerIdentification             │
+│ MachineAlarm                         │
+│ ...                                  │
+└──────────────────────────────────────┘
+      │
+      ▼
+PendantController
+```
+
+Het belangrijke uitgangspunt is:
+
+> `CNCjsClientCore` hoeft niet te weten wat de ontvangen controllerdata betekent.
+
+En:
+
+> `CNCjsInterface` hoeft niet te weten dat `xfr` bij TinyG een maximale feedrate is.
+
+Die kennis hoort bij `MachineMapper`.
+
+---
+
+# CNCjsClientCore
+
+`CNCjsClientCore` blijft volledig controller-agnostisch.
+
+Core is verantwoordelijk voor:
+
+* Socket.IO-communicatie
+* controller openen/sluiten
+* CNCjs-events ontvangen
+* `serialport:read` ontvangen
+* de ontvangen `JsonArray` via `serialportReadHandler_` doorgeven
+* generieke writes
+* bestaande controller state/settings snapshots
+* bestaande controllerselectie en verificatie
+
+De bestaande callback blijft:
+
+```cpp
+std::function<void(const JsonArray&)> serialportReadHandler_;
+```
+
+De verwerking van `serialport:read` blijft in principe:
+
+```cpp
+if (serialportReadHandler_)
+{
+    serialportReadHandler_(array);
+}
+```
+
+Er wordt geen TinyG- of GRBL-kennis aan `CNCjsClientCore` toegevoegd.
+
+---
+
+# CNCjsInterface
+
+`CNCjsInterface` vormt de verbinding tussen `CNCjsClientCore` en de rest van de pendant.
+
+De interface ontvangt generieke `serialport:read`-data van Core en geeft deze door aan de laag die de controller-taal kent.
+
+De interface hoeft daarbij niet zelf te bepalen of bijvoorbeeld:
+
+```json
+{"r":{"xfr":16000},"f":[3,0,5]}
+```
+
+een settings-, state- of ander controllerbericht is.
+
+Dat is controllerkennis en hoort niet in `CNCjsInterface`.
+
+De interface kan dus conceptueel iets doen als:
+
+```cpp
+handleSerialRead(
+    const JsonArray& data
+);
+```
+
+en de controllerdata doorgeven aan `MachineMapper`.
+
+---
+
+# MachineMapper
+
+`MachineMapper` is de laag die de controller-taal kent.
+
+De mapper vertaalt controller-specifieke berichten naar controller-onafhankelijke pendant-domeintypes.
+
+Een serial-read kan verschillende soorten informatie bevatten:
+
+```text
+serialport:read
+       │
+       ▼
+MachineMapper
+       │
+       ├── MachineSettings
+       ├── MachineState
+       ├── ControllerIdentification
+       ├── MachineAlarm
+       └── ...
+```
+
+De mapper kan hiervoor bijvoorbeeld een `std::variant` retourneren:
+
+```cpp
+using MachineData = std::variant<
+    MachineSettings,
+    MachineState,
+    ControllerIdentification,
+    MachineAlarm
+>;
+```
+
+Conceptueel:
+
+```cpp
+MachineData MachineMapper::map(
+    const JsonDocument& data
+) const;
+```
+
+of, afhankelijk van de bestaande `serialport:read` datastructuur, een passende variant daarvan.
+
+De mapper heeft geen eigen permanente toestand nodig.
+
+Hij vertaalt uitsluitend:
+
+```text
+controllerdata → pendantdata
+```
+
+---
+
+# Controllerkeuze
+
+De controllerkeuze blijft onderdeel van de bestaande verbindings- en verificatieflow.
+
+De nieuwe serial-read verwerking mag de bestaande controllerselectie, verificatie of correctie niet wijzigen.
+
+Nadat het daadwerkelijke controllertype bekend is, moet `MachineMapper` over voldoende informatie beschikken om de ontvangen data volgens de juiste controller-taal te interpreteren.
+
+Bijvoorbeeld:
+
+```text
+MachineMapper
+    │
+    ├── TinyG → TinyG-interpretatie
+    │
+    └── GRBL  → GRBL-interpretatie
+```
+
+Dit betekent niet dat iedere serial-read verwerking een grote centrale `switch` hoeft te bevatten.
+
+De controller-specifieke kennis mag intern worden georganiseerd op een manier die verdere uitbreiding naar andere controllers eenvoudig maakt.
+
+---
+
+# TinyG max-feedrates
+
+TinyG publiceert `xfr`, `yfr` en `zfr` niet in de eerste `controller:settings`.
+
+Wanneer het daadwerkelijke controllertype TinyG is vastgesteld, moeten deze waarden daarom expliciet worden opgevraagd.
+
+De volgende TinyG-commando's worden verstuurd:
+
+```json
+{"xfr":null}
+{"yfr":null}
+{"zfr":null}
+```
+
+Elke JSON-regel wordt afgesloten met:
+
+```text
+\r
+```
+
+De bestaande generieke write-functionaliteit van `CNCjsClientCore` wordt hiervoor gebruikt.
+
+Er hoeft hiervoor geen TinyG-specifieke communicatiefunctionaliteit aan Core te worden toegevoegd.
+
+---
+
+# TinyG response
+
+Een TinyG-response kan bijvoorbeeld zijn:
+
+```json
+{"r":{"xfr":16000},"f":[3,0,5]}
+```
+
+De TinyG-specifieke interpretatie herkent hierin:
+
+```text
+r.xfr
+```
+
+als de maximale X-feedrate.
+
+Op dezelfde manier worden:
+
+```text
+r.yfr
+r.zfr
+```
+
+herkend.
+
+De overige informatie in de response:
+
+```text
+f
+```
+
+hoeft voor deze functionaliteit niet te worden gebruikt.
+
+---
+
+# Partial responses
+
+Een response hoeft niet alle drie de feedrates tegelijk te bevatten.
+
+Bijvoorbeeld:
+
+```json
+{"r":{"xfr":15000},"f":[3,0,5]}
+```
+
+Als de huidige `MachineSettings` bevat:
+
+```text
+X = 16000
+Y = 16000
+Z = 12000
+```
+
+dan mag verwerking van bovenstaande response alleen X wijzigen:
+
+```text
+X = 15000
+Y = 16000
+Z = 12000
+```
+
+Ontbrekende waarden worden dus niet overschreven.
+
+Hetzelfde geldt voor afzonderlijke `yfr`- en `zfr`-responses.
+
+---
+
+# MachineSettings
+
+De controller-specifieke TinyG-waarden worden uiteindelijk vertaald naar:
+
+```cpp
+MachineSettings.maxFeedrate
+```
+
+Daarmee ziet de rest van de applicatie uitsluitend:
+
+```cpp
+settings.maxFeedrate.x
+settings.maxFeedrate.y
+settings.maxFeedrate.z
+```
+
+en hoeft deze code niets te weten van:
+
+```text
+xfr
+yfr
+zfr
+```
+
+of van TinyG.
+
+---
+
+# Belangrijk architectuurprincipe
+
+De verantwoordelijkheid is daarmee:
+
+```text
+CNCjsClientCore
+    ↓
+"Ik heb controllerdata ontvangen."
+
+CNCjsInterface
+    ↓
+"Ik geef die controllerdata door."
+
+MachineMapper
+    ↓
+"Ik spreek de taal van de controller en bepaal wat deze data betekent."
+
+PendantController
+    ↓
+"Ik werk met MachineSettings, MachineState, MachineAlarm, enz."
+```
+
+`MachineMapper` bewaart geen machinegegevens en is geen eigenaar van de actuele `MachineSettings` of `MachineState`.
+
+Het is uitsluitend een vertaallaag.
+
+---
+
+# Acceptatiecriteria
+
+* `CNCjsClientCore` bevat geen TinyG-kennis.
+* `CNCjsClientCore` blijft `serialport:read` generiek doorgeven.
+* `CNCjsInterface` hoeft niet te weten wat `xfr`, `yfr` of `zfr` betekenen.
+* Controller-specifieke interpretatie vindt plaats in `MachineMapper`.
+* TinyG `xfr`, `yfr` en `zfr` kunnen expliciet worden opgevraagd nadat TinyG als daadwerkelijke controller is vastgesteld.
+* Een TinyG-response met slechts één feedrate wijzigt alleen die feedrate.
+* `MachineSettings.maxFeedrate` bevat uiteindelijk de controller-onafhankelijke waarden.
+* Bestaande controllerselectie en sessieverificatie blijven ongewijzigd.
+* De oplossing maakt het mogelijk om later andere controller-specifieke serial-read informatie op dezelfde manier te vertalen.
+
+
+COMMITS COMMITS COMMITS
+1. Pass serialport:read data from Core to Interface
+
+Doel: een generieke route creëren voor controllerdata die via serialport:read binnenkomt.
+
+CNCjsClientCore
+      │
+      │ serialport:read
+      ▼
+CNCjsInterface
+
+In deze commit:
+
+CNCjsClientCore blijft volledig controller-agnostisch.
+serialportReadHandler_ blijft de bestaande callback.
+CNCjsInterface krijgt de ontvangen JsonArray.
+Nog geen interpretatie van de inhoud.
+Nog geen TinyG-code.
+Bestaande controllerselectie/verificatie blijft ongemoeid.
+
+Commit:
+
+Pass serialport:read data from Core to Interface
+2. Publish mapped machine data from Interface
+
+Dit is de architecturale stap die we zojuist scherp hebben gekregen.
+
+De huidige gedachte:
+
+PendantController
+      ↓
+machineSettingsSnapshot()
+      ↓
+"haal alle relevante settings ergens vandaan"
+
+werkt niet controller-onafhankelijk.
+
+We willen naar:
+
+CNCjs data
+     ↓
+CNCjsInterface
+     ↓
+MachineMapper
+     ↓
+machine data
+     ↓
+PendantController
+
+In deze commit leggen we dus vast dat binnenkomende data actief verwerkt en gepubliceerd kan worden.
+
+Belangrijk:
+
+MachineMapper blijft stateless.
+CNCjsInterface blijft de adapter tussen CNCjs en de pendant.
+PendantController krijgt domeininformatie, geen CNCjs-events.
+De bestaande machineSettingsSnapshot()-benadering wordt niet verder uitgebouwd.
+Als er bestaande snapshot-code nodig is voor de overgang, laten we die tijdelijk bestaan waar nodig.
+
+Nog steeds geen TinyG-specifieke xfr-logica.
+
+Commit:
+
+Publish mapped machine data from Interface
+3. Map controller-specific serial data in MachineMapper
+
+Nu krijgt MachineMapper daadwerkelijk een taak voor serialport:read.
+
+De hoofdlijn wordt:
+
+serialport:read
+       │
+       ▼
+CNCjsInterface
+       │
+       ▼
+MachineMapper
+       │
+       ├── MachineSettings
+       ├── MachineState
+       ├── ControllerIdentification
+       ├── MachineAlarm
+       └── ...
+
+Hier bepalen we ook hoe verschillende soorten controllerdata worden onderscheiden.
+
+Bijvoorbeeld conceptueel:
+
+MachineData MachineMapper::mapSerialData(...)
+
+waarbij MachineData eventueel een std::variant kan zijn.
+
+Maar dat is een implementatiedetail van deze commit. Het hoofddoel is:
+
+Controller-specifieke betekenis wordt uitsluitend in MachineMapper bepaald.
+
+Nog steeds hoeft deze commit geen TinyG max-feedrate te implementeren. We leggen eerst het generieke mechanisme vast.
+
+Commit:
+
+Map controller-specific serial data in MachineMapper
+4. Map TinyG maximum feedrates from serial responses
+
+Nu komt de concrete TinyG-functionaliteit.
+
+Een response als:
+
+{"r":{"xfr":16000},"f":[3,0,5]}
+
+wordt door MachineMapper geïnterpreteerd als:
+
+MachineSettings.maxFeedrate.x = 16000
+
+en:
+
+r.yfr → maxFeedrate.y
+r.zfr → maxFeedrate.z
+
+Hier hoort ook meteen het partial-response gedrag bij.
+
+Dus:
+
+bestaand:
+X = 16000
+Y = 16000
+Z = 12000
+
+ontvangen:
+xfr = 15000
+
+resultaat:
+X = 15000
+Y = 16000
+Z = 12000
+
+Ontbrekende waarden worden niet overschreven.
+
+Daarmee testen we eigenlijk de belangrijkste inhoudelijke vertaling van dit issue:
+
+TinyG-taal
+    ↓
+MachineMapper
+    ↓
+MachineSettings
+
+Commit:
+
+Map TinyG maximum feedrates from serial responses
+5. Request TinyG maximum feedrates after controller verification
+
+Pas nu zorgen we ervoor dat de waarden ook daadwerkelijk beschikbaar komen.
+
+Nadat de controller als TinyG is vastgesteld:
+
+TinyG verified
+      │
+      ├── {"xfr":null}\r
+      ├── {"yfr":null}\r
+      └── {"zfr":null}\r
+
+via de bestaande generieke write-functionaliteit.
+
+De flow wordt dan compleet:
+
+                 controller verification
+                         │
+                         ▼
+                       TinyG
+                         │
+                request xfr/yfr/zfr
+                         │
+                         ▼
+                  serialport:read
+                         │
+                         ▼
+                  CNCjsInterface
+                         │
+                         ▼
+                   MachineMapper
+                         │
+                         ▼
+                  MachineSettings
+                         │
+                         ▼
+                 PendantController
+
+Hiermee blijft:
+
+Core → communicatie;
+Interface → adapter/coördinator;
+Mapper → controllerkennis;
+PendantController → domeinlogica.
+
+Commit:
+
+Request TinyG maximum feedrates after controller verification
+Uiteindelijk dus vijf commits
+1. Pass serialport:read data from Core to Interface
+
+2. Publish mapped machine data from Interface
+
+3. Map controller-specific serial data in MachineMapper
+
+4. Map TinyG maximum feedrates from serial responses
+
+5. Request TinyG maximum feedrates after controller verification
+Waarom ik het hierbij zou laten
+
+Ik zou geen aparte cleanup-commit meer plannen. Cleanup hoort gewoon onderdeel te zijn van de relevante commit.
+
+En ik zou ook geen aparte commit maken voor MachineSettings. De belangrijke architectuurverandering is niet "MachineSettings uitbreiden", maar dat MachineSettings voortaan een resultaat van controllerdata kan zijn, in plaats van dat CNCjsInterface::machineSettingsSnapshot() probeert alle mogelijke controllerarchitecturen achteraf bij elkaar te schrapen.
+
+Dat onderscheid is volgens mij nu de hoofdlijn van het hele issue.

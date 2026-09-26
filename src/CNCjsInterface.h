@@ -202,8 +202,12 @@ public:
 private:
 
     uint32_t handledControllerSettingsPublicationId_ = 0;
+
     void controllerSettingsPublished();
 
+    void handleSerialportRead(
+        const JsonArray& array
+    );
 
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
