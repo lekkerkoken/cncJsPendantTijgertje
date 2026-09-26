@@ -2,7 +2,6 @@
 
 #include <cstdio>
 
-
 // ============================================================
 // CONTROLLER TYPE
 // ============================================================
@@ -24,6 +23,22 @@ ControllerType MachineMapper::controllerTypeFromString(
     return CONTROLLER_UNKNOWN;
 }
 
+// ============================================================
+// MAP SERIAL DATA
+// ============================================================
+
+bool MachineMapper::mapSerialData(
+    const JsonArray& data,
+    MachineData& result
+) const
+{
+    (void)data;
+
+    result.type =
+        MachineData::MACHINE_DATA_NONE;
+
+    return false;
+}
 
 // ============================================================
 // CONTROLLER SETTINGS STATE
@@ -41,10 +56,6 @@ MachineMapper::settingsState(
 
     switch(controllerType)
     {
-        // ====================================================
-        // GRBL
-        // ====================================================
-
         case CONTROLLER_GRBL:
         {
             if(
@@ -58,11 +69,6 @@ MachineMapper::settingsState(
 
             return CONTROLLER_DECLARATION_ONLY;
         }
-
-
-        // ====================================================
-        // TinyG
-        // ====================================================
 
         case CONTROLLER_TINYG:
         {
@@ -78,15 +84,8 @@ MachineMapper::settingsState(
             return CONTROLLER_DECLARATION_ONLY;
         }
 
-
-        // ====================================================
-        // UNKNOWN
-        // ====================================================
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             return CONTROLLER_DECLARATION_ONLY;
     }
 }
@@ -103,21 +102,13 @@ String MachineMapper::map(
     switch(jog.type)
     {
         case JOG_MOVE:
-
-            return mapJogMove(
-                jog,
-                type
-            );
-
+            return mapJogMove(jog, type);
 
         case JOG_NONE:
-
         default:
-
             return unsupported();
     }
 }
-
 
 // ============================================================
 // MAP CONTROLLER SETTINGS
@@ -142,43 +133,30 @@ MachineSettings MachineMapper::map(
     switch(settings.controllerType)
     {
         case CONTROLLER_GRBL:
-
             settings.maxFeedrate.x =
                 snapshot.settings["$110"].as<float>();
-
             settings.maxFeedrate.y =
                 snapshot.settings["$111"].as<float>();
-
             settings.maxFeedrate.z =
                 snapshot.settings["$112"].as<float>();
-
             break;
-
 
         case CONTROLLER_TINYG:
-
             settings.maxFeedrate.x =
                 snapshot.settings["xfr"].as<float>();
-
             settings.maxFeedrate.y =
                 snapshot.settings["yfr"].as<float>();
-
             settings.maxFeedrate.z =
                 snapshot.settings["zfr"].as<float>();
-
             break;
 
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             break;
     }
 
     return settings;
 }
-
 
 // ============================================================
 // MAP CONTROLLER STATE
@@ -205,10 +183,6 @@ MachineState MachineMapper::map(
 
     switch(type)
     {
-        // ====================================================
-        // GRBL
-        // ====================================================
-
         case CONTROLLER_GRBL:
         {
             JsonObjectConst status =
@@ -224,23 +198,19 @@ MachineState MachineMapper::map(
 
             if(activeState == "Idle")
             {
-                state.machineStatus =
-                    MACHINE_IDLE;
+                state.machineStatus = MACHINE_IDLE;
             }
             else if(activeState == "Run")
             {
-                state.machineStatus =
-                    MACHINE_RUN;
+                state.machineStatus = MACHINE_RUN;
             }
             else if(activeState == "Hold")
             {
-                state.machineStatus =
-                    MACHINE_HOLD;
+                state.machineStatus = MACHINE_HOLD;
             }
             else if(activeState == "Alarm")
             {
-                state.machineStatus =
-                    MACHINE_ALARM;
+                state.machineStatus = MACHINE_ALARM;
             }
             else
             {
@@ -263,19 +233,15 @@ MachineState MachineMapper::map(
 
             state.machinePosition.x =
                 machinePosition["x"].as<float>();
-
             state.machinePosition.y =
                 machinePosition["y"].as<float>();
-
             state.machinePosition.z =
                 machinePosition["z"].as<float>();
 
             state.workPosition.x =
                 workPosition["x"].as<float>();
-
             state.workPosition.y =
                 workPosition["y"].as<float>();
-
             state.workPosition.z =
                 workPosition["z"].as<float>();
 
@@ -284,14 +250,8 @@ MachineState MachineMapper::map(
                     .as<String>();
 
             valid = true;
-
             break;
         }
-
-
-        // ====================================================
-        // TinyG
-        // ====================================================
 
         case CONTROLLER_TINYG:
         {
@@ -306,61 +266,34 @@ MachineState MachineMapper::map(
             int machineState =
                 status["machineState"].as<int>();
 
-
-            // ------------------------------------------------
-            // MACHINE STATE
-            // ------------------------------------------------
-
             switch(machineState)
             {
                 case 1:
                 case 3:
                 case 4:
-
-                    state.machineStatus =
-                        MACHINE_IDLE;
-
+                    state.machineStatus = MACHINE_IDLE;
                     break;
-
 
                 case 2:
                 case 11:
-
-                    state.machineStatus =
-                        MACHINE_ALARM;
-
+                    state.machineStatus = MACHINE_ALARM;
                     break;
-
 
                 case 5:
                 case 7:
                 case 8:
                 case 9:
                 case 10:
-
-                    state.machineStatus =
-                        MACHINE_RUN;
-
+                    state.machineStatus = MACHINE_RUN;
                     break;
-
 
                 case 6:
-
-                    state.machineStatus =
-                        MACHINE_HOLD;
-
+                    state.machineStatus = MACHINE_HOLD;
                     break;
 
-
                 default:
-
                     return state;
             }
-
-
-            // ------------------------------------------------
-            // POSITIONS
-            // ------------------------------------------------
 
             JsonObjectConst machinePosition =
                 status["mpos"].as<JsonObjectConst>();
@@ -376,38 +309,19 @@ MachineState MachineMapper::map(
                 return state;
             }
 
-
-            // ------------------------------------------------
-            // MACHINE POSITION
-            // ------------------------------------------------
-
             state.machinePosition.x =
                 machinePosition["x"].as<float>();
-
             state.machinePosition.y =
                 machinePosition["y"].as<float>();
-
             state.machinePosition.z =
                 machinePosition["z"].as<float>();
 
-
-            // ------------------------------------------------
-            // WORK POSITION
-            // ------------------------------------------------
-
             state.workPosition.x =
                 workPosition["x"].as<float>();
-
             state.workPosition.y =
                 workPosition["y"].as<float>();
-
             state.workPosition.z =
                 workPosition["z"].as<float>();
-
-
-            // ------------------------------------------------
-            // FEEDRATE / SPINDLE
-            // ------------------------------------------------
 
             state.feedrate =
                 status["feedrate"].as<float>();
@@ -415,39 +329,20 @@ MachineState MachineMapper::map(
             state.spindleSpeed =
                 status["spd"].as<int>();
 
-
-            // ------------------------------------------------
-            // ACTIVE WCS
-            // ------------------------------------------------
-
             state.activeWcs =
                 status["coor"].as<String>();
 
-
-            // ------------------------------------------------
-            // VALID
-            // ------------------------------------------------
-
             valid = true;
-
             break;
         }
 
-
-        // ====================================================
-        // UNKNOWN
-        // ====================================================
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             break;
     }
 
     return state;
 }
-
 
 // ============================================================
 // MAP JOG MOVE
@@ -461,23 +356,13 @@ String MachineMapper::mapJogMove(
     switch(type)
     {
         case CONTROLLER_GRBL:
-
-            return mapGrblJog(
-                jog
-            );
-
+            return mapGrblJog(jog);
 
         case CONTROLLER_TINYG:
-
-            return mapTinyGJog(
-                jog
-            );
-
+            return mapTinyGJog(jog);
 
         case CONTROLLER_UNKNOWN:
-
         default:
-
             return unsupported();
     }
 }
@@ -486,10 +371,7 @@ String MachineMapper::mapTinyGJog(
     const JogCommand& jog
 )
 {
-    if(
-        jog.axis ==
-        AXIS_NONE
-    )
+    if(jog.axis == AXIS_NONE)
     {
         return unsupported();
     }
@@ -528,7 +410,6 @@ String MachineMapper::mapTinyGJog(
     return String(buffer);
 }
 
-
 // ============================================================
 // MAP GRBL JOG
 // ============================================================
@@ -537,47 +418,29 @@ String MachineMapper::mapGrblJog(
     const JogCommand& jog
 )
 {
-    if(
-        jog.axis ==
-        AXIS_NONE
-    )
+    if(jog.axis == AXIS_NONE)
     {
         return unsupported();
     }
 
-    char axisChar =
-        'X';
+    char axisChar = 'X';
 
     switch(jog.axis)
     {
         case AXIS_X:
-
-            axisChar =
-                'X';
-
+            axisChar = 'X';
             break;
-
 
         case AXIS_Y:
-
-            axisChar =
-                'Y';
-
+            axisChar = 'Y';
             break;
-
 
         case AXIS_Z:
-
-            axisChar =
-                'Z';
-
+            axisChar = 'Z';
             break;
 
-
         case AXIS_NONE:
-
         default:
-
             return unsupported();
     }
 
@@ -605,7 +468,6 @@ String MachineMapper::mapGrblJog(
     return String(buffer);
 }
 
-
 // ============================================================
 // MAP HOME
 // ============================================================
@@ -618,40 +480,30 @@ String MachineMapper::mapHome(
     switch(type)
     {
         case CONTROLLER_GRBL:
-
             /*
                 Standaard GRBL ondersteunt geen individuele
                 axis-homing via bijvoorbeeld "$H X".
 
                 Daarom voorlopig unsupported.
             */
-
             return unsupported();
 
-
         case CONTROLLER_TINYG:
-
             switch(axis)
             {
                 case AXIS_X:
                     return "G28.2X0";
-
                 case AXIS_Y:
                     return "G28.2Y0";
-
                 case AXIS_Z:
                     return "G28.2Z0";
-
                 case AXIS_NONE:
                 default:
                     return unsupported();
             }
 
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             return unsupported();
     }
 }
@@ -663,26 +515,19 @@ String MachineMapper::mapHomeAll(
     switch(type)
     {
         case CONTROLLER_GRBL:
-
             /*
                 Standaard GRBL ondersteunt geen individuele
                 axis-homing via bijvoorbeeld "$H X".
 
                 Daarom voorlopig unsupported.
             */
-
             return unsupported();
 
-
         case CONTROLLER_TINYG:
-
             return "G28.2X0Y0Z0";
 
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             return unsupported();
     }
 }
@@ -716,33 +561,19 @@ String MachineMapper::mapZeroAxis(
             switch(axis)
             {
                 case AXIS_X:
-
-                    axisChar =
-                        'X';
-
+                    axisChar = 'X';
                     break;
-
 
                 case AXIS_Y:
-
-                    axisChar =
-                        'Y';
-
+                    axisChar = 'Y';
                     break;
-
 
                 case AXIS_Z:
-
-                    axisChar =
-                        'Z';
-
+                    axisChar = 'Z';
                     break;
 
-
                 case AXIS_NONE:
-
                 default:
-
                     return unsupported();
             }
 
@@ -758,22 +589,15 @@ String MachineMapper::mapZeroAxis(
             return String(buffer);
         }
 
-
         case CONTROLLER_TINYG:
-
             // TinyG zero-axis mapping
-
             return unsupported();
 
-
         case CONTROLLER_UNKNOWN:
-
         default:
-
             return unsupported();
     }
 }
-
 
 // ============================================================
 // UNSUPPORTED

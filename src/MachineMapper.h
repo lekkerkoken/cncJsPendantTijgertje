@@ -1,14 +1,17 @@
 #ifndef MACHINE_MAPPER_H
 #define MACHINE_MAPPER_H
 
+#include <ArduinoJson.h>
+#include <optional>
+
 #include "JogCommand.h"
+#include "MachineData.h"
 #include "MachineSettings.h"
 #include "MachineState.h"
 #include "ControllerType.h"
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
-
 
 class MachineMapper
 {
@@ -23,6 +26,14 @@ public:
         ControllerType type
     );
 
+    // ========================================================
+    // SERIAL DATA
+    // ========================================================
+
+    bool mapSerialData(
+        const JsonArray& data,
+        MachineData& result
+    ) const;
 
     // ========================================================
     // SETTINGS
@@ -34,16 +45,13 @@ public:
         CONTROLLER_SETTINGS_AVAILABLE
     };
 
-
     SettingsState settingsState(
         const ControllerSettingsSnapshot& snapshot
     ) const;
 
-
     MachineSettings map(
         const ControllerSettingsSnapshot& snapshot
     ) const;
-
 
     // ========================================================
     // STATE
@@ -53,7 +61,6 @@ public:
         const ControllerStateSnapshot& snapshot,
         bool& valid
     ) const;
-
 
     // ========================================================
     // HOME
@@ -66,7 +73,6 @@ public:
 
     String mapHomeAll(ControllerType type);
 
-
     // ========================================================
     // ZERO WCS AXIS
     // ========================================================
@@ -75,7 +81,6 @@ public:
         Axis axis,
         ControllerType type
     );
-
 
 private:
 
@@ -88,16 +93,13 @@ private:
         const JogCommand& jog
     );
 
-
     String mapGrblJog(
         const JogCommand& jog
     );
 
-
     ControllerType controllerTypeFromString(
         const String& type
     ) const;
-
 
     String unsupported() const;
 };

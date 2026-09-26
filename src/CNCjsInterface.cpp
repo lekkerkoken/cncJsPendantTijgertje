@@ -306,13 +306,65 @@ void CNCjsInterface::controllerSettingsPublished()
     }
 }
 
+
+// ============================================================
+// SERIAL DATA
+// ============================================================
+
 void CNCjsInterface::handleSerialportRead(
     const JsonArray& array
 )
 {
-    (void)array;
+    MachineData data;
+
+    if(
+        !machineMapper_.mapSerialData(
+            array,
+            data
+        )
+    )
+    {
+        return;
+    }
+
+    switch(data.type)
+    {
+        case MachineData::MACHINE_DATA_SETTINGS:
+
+            // Controller settings received through serial data.
+            //
+            // Currently only MachineSettings.maxFeedrate
+            // is relevant here.
+
+            // verwerking volgt in de TinyG max-feedrate commit
+
+            break;
+
+
+        case MachineData::MACHINE_DATA_STATE:
+
+            // MachineState transport is already supported by
+            // the architecture, but serialport:read state data
+            // is not consumed yet.
+            //
+            // Future examples:
+            // spindle speed, overrides, controller-specific
+            // runtime information, etc.
+
+            break;
+
+
+        case MachineData::MACHINE_DATA_NONE:
+
+            // No mapped machine data.
+
+            break;
+    }
 }
 
+// ============================================================
+// CONTROLLER SETTINGS CACHE
+// ============================================================
 
 void CNCjsInterface::cacheControllerSettings()
 {

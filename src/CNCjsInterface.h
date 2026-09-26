@@ -10,12 +10,13 @@
 #include "Machine.h"
 #include "PendantState.h"
 
+#include "MachineData.h"
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
 #include "SenderStatusSnapshot.h"
 #include "JobSnapshot.h"
 
-
+#include <functional>
 class CNCjsInterface
 {
 public:
@@ -154,6 +155,9 @@ public:
     //     const char* gcode
     // );
 
+    using MachineDataHandler =
+    std::function<void(const MachineData&)>;
+
     bool sendCommand(
         const String& command,
         const JsonObjectConst& options = JsonObjectConst()
@@ -201,6 +205,8 @@ public:
 
 private:
 
+
+    
     uint32_t handledControllerSettingsPublicationId_ = 0;
 
     void controllerSettingsPublished();
@@ -212,7 +218,7 @@ private:
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
     Machine machine_;
-
+    
     ControllerType cachedControllerType =
         CONTROLLER_UNKNOWN;
 };

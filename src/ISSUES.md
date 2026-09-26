@@ -1108,26 +1108,7 @@ Het is uitsluitend een vertaallaag.
 
 
 COMMITS COMMITS COMMITS
-1. Pass serialport:read data from Core to Interface
 
-Doel: een generieke route creëren voor controllerdata die via serialport:read binnenkomt.
-
-CNCjsClientCore
-      │
-      │ serialport:read
-      ▼
-CNCjsInterface
-
-In deze commit:
-
-CNCjsClientCore blijft volledig controller-agnostisch.
-serialportReadHandler_ blijft de bestaande callback.
-CNCjsInterface krijgt de ontvangen JsonArray.
-Nog geen interpretatie van de inhoud.
-Nog geen TinyG-code.
-Bestaande controllerselectie/verificatie blijft ongemoeid.
-
-Commit:
 
 Pass serialport:read data from Core to Interface
 2. Publish mapped machine data from Interface
