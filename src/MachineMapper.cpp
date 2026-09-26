@@ -67,7 +67,9 @@ MachineMapper::settingsState(
         case CONTROLLER_TINYG:
         {
             if(
-                true
+                snapshot.settings["mfo"].is<int>() &&
+                snapshot.settings["mto"].is<int>() &&
+                snapshot.settings["sso"].is<int>()
             )
             {
                 return CONTROLLER_SETTINGS_AVAILABLE;
