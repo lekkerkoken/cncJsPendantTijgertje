@@ -2097,53 +2097,7 @@ void CNCjsClientCore::handleSocketEvent(
                     array[1];
 
                 JsonObject settings =
-                    array[2]["settings"];
-
-                Serial.println();
-                Serial.println(
-                    "[CNCjs] ========================================"
-                );
-                Serial.println(
-                    "[CNCjs] controller:settings RECEIVED"
-                );
-
-                Serial.print(
-                    "[CNCjs] controllerType: "
-                );
-
-                if(controllerType != nullptr)
-                {
-                    Serial.println(
-                        controllerType
-                    );
-                }
-                else
-                {
-                    Serial.println(
-                        "<null>"
-                    );
-                }
-
-                Serial.print(
-                    "[CNCjs] settings.isNull(): "
-                );
-
-                Serial.println(
-                    settings.isNull()
-                        ? "YES"
-                        : "NO"
-                );
-
-
-                Serial.print(
-                    "[CNCjs] controllerSettingsReadyState BEFORE: "
-                );
-
-                Serial.println(
-                    controllerSettingsReadyState
-                        ? "true"
-                        : "false"
-                );
+                    array[2];
 
                 ControllerSettingsSnapshot snapshot;
 
