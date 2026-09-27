@@ -459,8 +459,6 @@ void PendantController::enterCommandLayer()
 
 void PendantController::initialiseJogPlanner()
 {
-    cnc.cacheControllerSettings();
-
 
     MachineSettings machineSettings =
         cnc.machineSettingsSnapshot();

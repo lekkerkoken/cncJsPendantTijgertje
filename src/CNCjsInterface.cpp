@@ -479,20 +479,6 @@ void CNCjsInterface::consumeMachineData(
 
 
 // ============================================================
-// CONTROLLER SETTINGS CACHE
-// ============================================================
-
-void CNCjsInterface::cacheControllerSettings()
-{
-    MachineSettings settings =
-        machineSettingsSnapshot();
-
-    cachedControllerType =
-        settings.controllerType;
-}
-
-
-// ============================================================
 // CONTROLLER COMMUNICATION
 // ============================================================
 

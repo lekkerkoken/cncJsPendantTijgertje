@@ -195,9 +195,6 @@ public:
         uint8_t command
     );
 
-    void cacheControllerSettings();
-
-
 private:
 
     uint32_t handledControllerSettingsPublicationId_ =
