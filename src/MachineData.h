@@ -11,7 +11,7 @@ struct MachineData
     {
         MACHINE_DATA_NONE,
         MACHINE_DATA_SETTINGS,
-        MACHINE_DATA_STATE
+        MACHINE_DATA_STATE        //ControllerIdentification,MachineAlarm
     };
 
     Type type = MACHINE_DATA_NONE;

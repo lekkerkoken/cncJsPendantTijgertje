@@ -29,15 +29,80 @@ ControllerType MachineMapper::controllerTypeFromString(
 
 bool MachineMapper::mapSerialData(
     const JsonArray& data,
+    ControllerType type,
     MachineData& result
 ) const
 {
-    (void)data;
-
     result.type =
         MachineData::MACHINE_DATA_NONE;
 
-    return false;
+    switch(type)
+    {
+        case CONTROLLER_TINYG:
+        {
+            if(data.isNull())
+            {
+                return false;
+            }
+
+            JsonObjectConst response =
+                data[0].as<JsonObjectConst>();
+
+            if(response.isNull())
+            {
+                return false;
+            }
+
+            JsonObjectConst values =
+                response["r"].as<JsonObjectConst>();
+
+            if(values.isNull())
+            {
+                return false;
+            }
+
+            bool settingsReceived = false;
+
+            if(values["xfr"].is<float>() || values["xfr"].is<int>())
+            {
+                result.settings.maxFeedrate.x =
+                    values["xfr"].as<float>();
+
+                settingsReceived = true;
+            }
+
+            if(values["yfr"].is<float>() || values["yfr"].is<int>())
+            {
+                result.settings.maxFeedrate.y =
+                    values["yfr"].as<float>();
+
+                settingsReceived = true;
+            }
+
+            if(values["zfr"].is<float>() || values["zfr"].is<int>())
+            {
+                result.settings.maxFeedrate.z =
+                    values["zfr"].as<float>();
+
+                settingsReceived = true;
+            }
+            
+            if(!settingsReceived)
+            {
+                return false;
+            }
+
+            result.type =
+                MachineData::MACHINE_DATA_SETTINGS;
+
+            return true;
+        }
+
+        case CONTROLLER_GRBL:
+        case CONTROLLER_UNKNOWN:
+        default:
+            return false;
+    }
 }
 
 // ============================================================
