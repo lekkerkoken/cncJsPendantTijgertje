@@ -1235,69 +1235,167 @@ MachineSettings
 
 Commit:
 
-Map TinyG maximum feedrates from serial responses
-5. Request TinyG maximum feedrates after controller verification
+5. Consume partial machine data
+Doel
 
-Pas nu zorgen we ervoor dat de waarden ook daadwerkelijk beschikbaar komen.
+Laat CNCjsInterface de door MachineMapper geproduceerde MachineData verwerken.
 
-Nadat de controller als TinyG is vastgesteld:
+serialport:read kan controllerafhankelijke informatie bevatten die:
 
-TinyG verified
-      │
-      ├── {"xfr":null}\r
-      ├── {"yfr":null}\r
-      └── {"zfr":null}\r
+niet compleet is;
+in meerdere responses binnenkomt;
+verschillende onderdelen van de machine-informatie afzonderlijk aanlevert.
 
-via de bestaande generieke write-functionaliteit.
+Daarom moet CNCjsInterface ontvangen machine-data mergen met de bestaande Machine-state, in plaats van een volledige snapshot te vervangen.
 
-De flow wordt dan compleet:
+Flow
+CNCjs serialport:read
+        ↓
+CNCjsClientCore
+        ↓
+CNCjsInterface::handleSerialportRead()
+        ↓
+MachineMapper::mapSerialData()
+        ↓
+MachineData
+        ↓
+CNCjsInterface consumeert MachineData
+        ↓
+Machine
 
-                 controller verification
-                         │
-                         ▼
-                       TinyG
-                         │
-                request xfr/yfr/zfr
-                         │
-                         ▼
-                  serialport:read
-                         │
-                         ▼
-                  CNCjsInterface
-                         │
-                         ▼
-                   MachineMapper
-                         │
-                         ▼
-                  MachineSettings
-                         │
-                         ▼
-                 PendantController
+Voor settings:
 
-Hiermee blijft:
+TinyG:
+    {"r":{"xfr":1000}}
+             ↓
+MachineData.settings.maxFeedrate.x = 1000
+             ↓
+merge
+             ↓
+Machine.settings.maxFeedrate.x = 1000
 
-Core → communicatie;
-Interface → adapter/coördinator;
-Mapper → controllerkennis;
-PendantController → domeinlogica.
+Later:
 
-Commit:
+TinyG:
+    {"r":{"yfr":1200}}
+             ↓
+MachineData.settings.maxFeedrate.y = 1200
+             ↓
+merge
+             ↓
+Machine.settings:
+    X = 1000
+    Y = 1200
+    Z = bestaande waarde
+
+Dat laatste is de kern van deze commit.
+
+En hiermee zie ik ook een belangrijk gevolg
+
+De bestaande:
+
+MachineSettings
+CNCjsInterface::machineSettingsSnapshot() const
+{
+    MachineSettings settings;
+
+    ControllerSettingsSnapshot snapshot =
+        core_.controllerSettingsSnapshot();
+
+    ...
+}
+
+is inderdaad een overblijfsel van de oude GRBL-aanpak.
+
+Want daar was de impliciete aanname:
+
+controller:settings
+        ↓
+complete snapshot
+        ↓
+MachineSettings
+
+Maar nu hebben we twee verschillende bronnen van machine-informatie:
+
+1. CNCjs controller:settings
+
+Dat is een CNCjs settings snapshot:
+
+ControllerSettingsSnapshot
+
+Die gebruiken we onder andere voor:
+
+controller identification
+controller settings publication
+controller ready
+2. Controller serialport:read
+
+Dat is machine-data, mogelijk partieel:
+
+MachineData
+
+Die moet uiteindelijk de Machine opbouwen.
+
+Dat betekent dat Machine steeds meer de echte samengestelde machinecontext wordt:
+
+Machine
+├── state
+└── settings
+
+en CNCjsInterface is de laag die die informatie samenbrengt.
+
+Dat vind ik een veel sterkere architectuur dan telkens opnieuw een settings snapshot uit Core mappen.
+
+
+Commit 6 — daarna
+
+Dan komt inderdaad het oorspronkelijke request-gedeelte:
 
 Request TinyG maximum feedrates after controller verification
-Uiteindelijk dus vijf commits
-1. Pass serialport:read data from Core to Interface
 
-2. Publish mapped machine data from Interface
+De volledige flow is dan:
 
-3. Map controller-specific serial data in MachineMapper
+                    TinyG
+                      │
+                      │ {"xfr":null}
+                      │ {"yfr":null}
+                      │ {"zfr":null}
+                      ▼
+              CNCjsClientCore
+                      │
+                serialport:read
+                      ▼
+              CNCjsInterface
+                      │
+                      ▼
+              MachineMapper
+                      │
+             TinyG interpretatie
+                      │
+                      ▼
+               MachineData
+                      │
+                      ▼
+              CNCjsInterface
+                      │
+                consume data
+                      ▼
+             MachineSettings
+                      │
+                      ▼
+             PendantController
+
+En daarmee wordt het onderscheid tussen commits 4, 5 en 6 heel scherp:
+
+Commit	Vraag die de code beantwoordt
+4	Wat betekent deze TinyG-response?
+5	Wat doe ik met de machinegegevens die de mapper heeft geproduceerd?
+6	Wanneer vraag ik de TinyG-gegevens op?
+
+Dat vind ik eigenlijk een veel betere commitstructuur dan mijn eerdere voorstel. Vooral omdat commit 5 nu een zelfstandige architectuurstap is: mapping en consumptie zijn daadwerkelijk twee verschillende verantwoordelijkheden.
+
+Dus ik zou de actuele reeks vanaf hier simpelweg zo documenteren:
 
 4. Map TinyG maximum feedrates from serial responses
-
-5. Request TinyG maximum feedrates after controller verification
-Waarom ik het hierbij zou laten
-
-Ik zou geen aparte cleanup-commit meer plannen. Cleanup hoort gewoon onderdeel te zijn van de relevante commit.
-
-En ik zou ook geen aparte commit maken voor MachineSettings. De belangrijke architectuurverandering is niet "MachineSettings uitbreiden", maar dat MachineSettings voortaan een resultaat van controllerdata kan zijn, in plaats van dat CNCjsInterface::machineSettingsSnapshot() probeert alle mogelijke controllerarchitecturen achteraf bij elkaar te schrapen.
-
-Dat onderscheid is volgens mij nu de hoofdlijn van het hele issue.
+5. Consume mapped TinyG machine settings
+6. Request TinyG maximum feedrates after controller verification

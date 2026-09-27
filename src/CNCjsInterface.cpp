@@ -400,37 +400,79 @@ void CNCjsInterface::handleSerialportRead(
     }
 
 
+    consumeMachineData(
+        data
+    );
+}
+
+
+void CNCjsInterface::consumeMachineData(
+    const MachineData& data
+)
+{
     switch(data.type)
     {
         case MachineData::MACHINE_DATA_SETTINGS:
+        {
+            MachineSettings defaultSettings;
 
-            // Controller settings received through serial data.
-            //
-            // Currently only MachineSettings.maxFeedrate
-            // is relevant here.
 
-            // verwerking volgt in de TinyG max-feedrate commit
+            if(
+                data.settings.maxFeedrate.x !=
+                defaultSettings.maxFeedrate.x
+            )
+            {
+                machine_.settings.maxFeedrate.x =
+                    data.settings.maxFeedrate.x;
+            }
+
+
+            if(
+                data.settings.maxFeedrate.y !=
+                defaultSettings.maxFeedrate.y
+            )
+            {
+                machine_.settings.maxFeedrate.y =
+                    data.settings.maxFeedrate.y;
+            }
+
+
+            if(
+                data.settings.maxFeedrate.z !=
+                defaultSettings.maxFeedrate.z
+            )
+            {
+                machine_.settings.maxFeedrate.z =
+                    data.settings.maxFeedrate.z;
+            }
+
+
+            if(
+                data.settings.controllerType !=
+                defaultSettings.controllerType
+            )
+            {
+                machine_.settings.controllerType =
+                    data.settings.controllerType;
+            }
 
             break;
+        }
 
 
         case MachineData::MACHINE_DATA_STATE:
-
-            // MachineState transport is already supported by
-            // the architecture, but serialport:read state data
-            // is not consumed yet.
+        {
+            // Machine state received through serial data.
             //
-            // Future examples:
-            // spindle speed, overrides, controller-specific
-            // runtime information, etc.
+            // Consumption will be implemented when serial
+            // state data becomes relevant.
 
             break;
+        }
 
 
         case MachineData::MACHINE_DATA_NONE:
-
-            // No mapped machine data.
-
+        default:
             break;
     }
 }

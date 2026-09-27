@@ -210,6 +210,10 @@ private:
         const JsonArray& array
     );
 
+    void consumeMachineData(
+        const MachineData& data
+    );
+
 
     void handleControllerOpening(
         const char* controllerType
