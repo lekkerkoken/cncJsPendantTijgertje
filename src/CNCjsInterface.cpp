@@ -288,6 +288,41 @@ void CNCjsInterface::handleControllerOpening(
         );
 }
 
+void CNCjsInterface::initialiseController()
+{
+    SerialRequest requests[3];
+
+    int requestCount =
+        machineMapper_.mapControllerInitialisation(
+            cachedControllerType,
+            requests
+        );
+
+    bool success = true;
+
+    for(
+        int i = 0;
+        i < requestCount;
+        i++
+    )
+    {
+        if(
+            !core_.sendWrite(
+                requests[i].data.c_str()
+            )
+        )
+        {
+            success = false;
+        }
+    }
+
+    if(success)
+    {
+        controllerInitialisedThisSession_ =
+            true;
+    }
+}
+
 
 ControllerType
 CNCjsInterface::controllerTypeFromString(
@@ -353,6 +388,11 @@ void CNCjsInterface::controllerSettingsPublished()
     {
         return;
     }
+
+
+
+    initialiseController();
+
 
 
     switch(

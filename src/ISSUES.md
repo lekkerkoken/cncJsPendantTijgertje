@@ -1347,55 +1347,121 @@ en CNCjsInterface is de laag die die informatie samenbrengt.
 Dat vind ik een veel sterkere architectuur dan telkens opnieuw een settings snapshot uit Core mappen.
 
 
-Commit 6 — daarna
+Commit 6 — Request controller-specific serial initialization data
+Doel
 
-Dan komt inderdaad het oorspronkelijke request-gedeelte:
+Nadat de geselecteerde controller tijdens de huidige controllersessie is geverifieerd, moet de pendant de controller-specifieke serial gegevens kunnen opvragen die nodig zijn voor verdere initialisatie.
 
-Request TinyG maximum feedrates after controller verification
+CNCjsInterface bepaalt wanneer de initialisatie plaatsvindt.
+MachineMapper bepaalt welke serial requests daarvoor nodig zijn.
 
-De volledige flow is dan:
+De serial requests worden als SerialRequest-objecten door de mapper teruggegeven en vervolgens door CNCjsInterface via CNCjsClientCore naar de actieve controller gestuurd.
 
-                    TinyG
-                      │
-                      │ {"xfr":null}
-                      │ {"yfr":null}
-                      │ {"zfr":null}
-                      ▼
-              CNCjsClientCore
-                      │
-                serialport:read
-                      ▼
-              CNCjsInterface
-                      │
-                      ▼
-              MachineMapper
-                      │
-             TinyG interpretatie
-                      │
-                      ▼
-               MachineData
-                      │
-                      ▼
-              CNCjsInterface
-                      │
-                consume data
-                      ▼
-             MachineSettings
-                      │
-                      ▼
-             PendantController
+Architectuur
+controller verification
+        ↓
+CNCjsInterface
+        ↓
+MachineMapper
+        ↓
+SerialRequest[]
+        ↓
+CNCjsClientCore::sendWrite()
+        ↓
+controller
 
-En daarmee wordt het onderscheid tussen commits 4, 5 en 6 heel scherp:
+Daarbij geldt:
 
-Commit	Vraag die de code beantwoordt
-4	Wat betekent deze TinyG-response?
-5	Wat doe ik met de machinegegevens die de mapper heeft geproduceerd?
-6	Wanneer vraag ik de TinyG-gegevens op?
+CNCjsClientCore blijft volledig controller-onafhankelijk.
+CNCjsInterface bevat geen controller-specifieke serial commando's.
+MachineMapper bevat de controller-specifieke vertaling.
+SerialRequest bevat uitsluitend de te versturen serial data.
+SerialRequest
 
-Dat vind ik eigenlijk een veel betere commitstructuur dan mijn eerdere voorstel. Vooral omdat commit 5 nu een zelfstandige architectuurstap is: mapping en consumptie zijn daadwerkelijk twee verschillende verantwoordelijkheden.
+Nieuw bestand:
 
-Dus ik zou de actuele reeks vanaf hier simpelweg zo documenteren:
+struct SerialRequest
+{
+    String data;
+};
+MachineMapper
 
-4. Map TinyG maximum feedrates from serial responses
-5. Consume mapped TinyG machine settings
-6. Request TinyG maximum feedrates after controller verification
+Voeg toe:
+
+int mapControllerInitialisation(
+    ControllerType type,
+    SerialRequest* requests
+) const;
+
+De mapper bepaalt zelf hoeveel requests voor een controller nodig zijn.
+
+Voor deze commit:
+
+GRBL
+
+$#\r
+
+Dit geeft onder andere de WCS-informatie zoals:
+
+[G54:-0.001,0.002,0.000]
+
+TinyG
+
+{"xfr":null}\r
+{"yfr":null}\r
+{"zfr":null}\r
+
+Unknown
+
+Geen requests.
+
+Verantwoordelijkheden
+
+MachineMapper
+
+Kent:
+
+welke requests bij iedere ondersteunde controller horen;
+de exacte serial syntax;
+hoeveel requests nodig zijn.
+
+CNCjsInterface
+
+Kent:
+
+wanneer controller-initialisatie mag plaatsvinden;
+dat de mapper een aantal SerialRequests teruggeeft;
+hoe die requests via core_.sendWrite() worden verstuurd.
+
+Maar kent niet:
+
+$#;
+xfr;
+yfr;
+zfr;
+het aantal TinyG-requests.
+Buiten scope
+
+Deze commit verandert niet:
+
+CNCjsClientCore;
+serial response parsing;
+MachineData;
+MachineSettings;
+consumeMachineData();
+de bestaande TinyG max-feedrate mapping;
+de bestaande controller-verificatie.
+
+De responses die door deze requests ontstaan, worden in een volgende stap verwerkt door de bestaande serial-data flow.
+
+Eén detail zou ik nog expliciet vastleggen
+
+Ik zou in deze commit nog niet bepalen welke betekenis $# precies krijgt aan de MachineData-kant.
+
+We gebruiken $# nu bewust als GRBL-testrequest voor de nieuwe requestflow. Het feit dat daar G54, G55 enz. uitkomen, is voor commit 6 alleen bewijs dat de request daadwerkelijk controller-specifieke serial data kan opleveren.
+
+Dat voorkomt dat commit 6 ongemerkt verandert in:
+
+“Implement GRBL WCS support.”
+
+Dat is een heel andere commit.

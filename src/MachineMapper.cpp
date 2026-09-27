@@ -105,6 +105,38 @@ bool MachineMapper::mapSerialData(
     }
 }
 
+    // ========================================================
+    // CONTROLLER INITIALISATION AFTER IDENTIFICATION
+    // ========================================================
+
+int MachineMapper::mapControllerInitialisation(
+    ControllerType type,
+    SerialRequest* requests
+) const
+{
+    if(requests == nullptr)
+    {
+        return 0;
+    }
+
+    switch(type)
+    {
+        case CONTROLLER_GRBL:
+            requests[0].data = "$#\r";
+            return 1;
+
+        case CONTROLLER_TINYG:
+            requests[0].data = "{\"xfr\":null}\r";
+            requests[1].data = "{\"yfr\":null}\r";
+            requests[2].data = "{\"zfr\":null}\r";
+            return 3;
+
+        case CONTROLLER_UNKNOWN:
+        default:
+            return 0;
+    }
+}
+
 // ============================================================
 // CONTROLLER SETTINGS STATE
 // ============================================================

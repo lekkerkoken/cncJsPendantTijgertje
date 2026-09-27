@@ -15,6 +15,7 @@
 #include "ControllerStateSnapshot.h"
 #include "SenderStatusSnapshot.h"
 #include "JobSnapshot.h"
+#include "SerialRequest.h"
 
 #include <functional>
 
@@ -200,6 +201,10 @@ private:
     uint32_t handledControllerSettingsPublicationId_ =
         0;
 
+    bool controllerInitialisedThisSession_ =
+        false;
+
+    void initialiseController();
 
     void controllerSettingsPublished();
 

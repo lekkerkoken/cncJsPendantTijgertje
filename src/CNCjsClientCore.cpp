@@ -4418,18 +4418,11 @@ bool CNCjsClientCore::sendWrite(
     bool result =
         false;
 
-
-    if (
-        controllerReadyState
-    )
-    {
-        result =
-            sendWriteInternal(
-                activeControllerPortState.c_str(),
-                data
-            );
-    }
-
+    result =
+        sendWriteInternal(
+            activeControllerPortState.c_str(),
+            data
+        );
 
     unlock();
 
@@ -4447,15 +4440,6 @@ bool CNCjsClientCore::sendWriteInternal(
     const char* data
 )
 {
-    if (
-        !controllerSettingsReadyState ||
-        !controllerReadyState ||
-        !socketConnectedState
-    )
-    {
-        return false;
-    }
-
 
     if (
         portName == nullptr ||

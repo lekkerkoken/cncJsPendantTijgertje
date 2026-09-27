@@ -9,6 +9,7 @@
 #include "MachineSettings.h"
 #include "MachineState.h"
 #include "ControllerType.h"
+#include "SerialRequest.h"
 
 #include "ControllerSettingsSnapshot.h"
 #include "ControllerStateSnapshot.h"
@@ -34,6 +35,15 @@ public:
         const JsonArray& data,
         ControllerType type,
         MachineData& result
+    ) const;
+
+    // ========================================================
+    // CONTROLLER INITIALISATION AFTER IDENTIFICATION
+    // ========================================================
+
+    int mapControllerInitialisation(
+        ControllerType type,
+        SerialRequest* requests
     ) const;
 
     // ========================================================
