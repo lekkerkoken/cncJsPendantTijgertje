@@ -2447,13 +2447,6 @@ bool CNCjsClientCore::handleControllerIdentification(
     );
 
 
-    if(
-        controllerVerifiedThisSession_
-    )
-    {
-        return true;
-    }
-
 
     if(
         selectedControllerNameState.equals(
@@ -4192,6 +4185,9 @@ bool CNCjsClientCore::openControllerInternal(
 
 bool CNCjsClientCore::closeControllerInternal()
 {
+    Serial.println(
+        "[DEBUG] >>> closeControllerInternal() CALLED"
+    );
     if (
         !socketConnectedState
     )
