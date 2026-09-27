@@ -531,7 +531,7 @@ private:
     LatestStateTripleBuffer<JobSnapshot>
         jobBuffer_;
 
-    uint32_t controllerSettingsPublicationId_;
+    uint32_t controllerSettingsPublicationId_ = 1;
 
 
     void invalidateControllerState();

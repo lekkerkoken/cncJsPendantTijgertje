@@ -362,12 +362,12 @@ void CNCjsInterface::controllerSettingsPublished()
     uint32_t publicationId =
         core_.controllerSettingsPublicationId();
 
-
     if(
         publicationId ==
         handledControllerSettingsPublicationId_
     )
     {
+
         return;
     }
 
@@ -379,6 +379,11 @@ void CNCjsInterface::controllerSettingsPublished()
     ControllerSettingsSnapshot snapshot =
         core_.controllerSettingsSnapshot();
 
+    Serial.printf(
+        "[CNCjsInterface] controllerType='%s'\n",
+        snapshot.controllerType.c_str()
+    );
+
 
     if(
         !core_.handleControllerIdentification(
@@ -386,37 +391,77 @@ void CNCjsInterface::controllerSettingsPublished()
         )
     )
     {
+        Serial.println(
+            "[CNCjsInterface] Controller identification not accepted"
+        );
+
         return;
     }
 
+    Serial.println(
+        "[CNCjsInterface] Controller identification accepted"
+    );
 
 
-    initialiseController();
+    if(!controllerInitialisedThisSession_)
+    {
+        Serial.println(
+            "[CNCjsInterface] Initialising controller"
+        );
+
+        initialiseController();
+
+        controllerInitialisedThisSession_ = true;
+
+        Serial.println(
+            "[CNCjsInterface] Controller initialised"
+        );
+    }
+    else
+    {
+        Serial.println(
+            "[CNCjsInterface] Controller already initialised this session"
+        );
+    }
 
 
-
-    switch(
+    MachineMapper::SettingsState settingsState =
         machineMapper_.settingsState(
             snapshot
-        )
-    )
+        );
+
+    Serial.printf(
+        "[CNCjsInterface] settingsState=%d\n",
+        static_cast<int>(settingsState)
+    );
+
+
+    switch(settingsState)
     {
         case MachineMapper::CONTROLLER_DECLARATION_ONLY:
 
-            // Controller is known.
-            // Controller-specific settings are not available yet.
+            Serial.println(
+                "[CNCjsInterface] Controller known, settings not available"
+            );
 
             break;
 
 
         case MachineMapper::CONTROLLER_SETTINGS_AVAILABLE:
 
+            Serial.println(
+                "[CNCjsInterface] Controller settings available"
+            );
+
             core_.confirmControllerSettingsPublished();
+
+            Serial.println(
+                "[CNCjsInterface] Controller settings confirmed"
+            );
 
             break;
     }
 }
-
 
 // ============================================================
 // SERIAL DATA

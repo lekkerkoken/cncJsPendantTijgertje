@@ -2096,7 +2096,7 @@ void CNCjsClientCore::handleSocketEvent(
                 const char* controllerType =
                     array[1];
 
-                JsonObject settings =
+                JsonObject payload =
                     array[2];
 
                 ControllerSettingsSnapshot snapshot;
@@ -2110,11 +2110,11 @@ void CNCjsClientCore::handleSocketEvent(
                 }
 
                 if(
-                    !settings.isNull()
+                    !payload.isNull()
                 )
                 {
-                    snapshot.settings =
-                        settings;
+                    snapshot.payload =
+                        payload;
                 }
 
                 snapshot.valid =

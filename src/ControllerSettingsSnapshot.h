@@ -11,7 +11,7 @@ struct ControllerSettingsSnapshot
 
     String controllerType;
 
-    JsonDocument settings;
+    JsonDocument payload;
 
 
     void invalidate()
@@ -22,7 +22,7 @@ struct ControllerSettingsSnapshot
         controllerType =
             "";
 
-        settings.clear();
+        payload.clear();
     }
 };
 

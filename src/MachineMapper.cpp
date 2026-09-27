@@ -156,9 +156,9 @@ MachineMapper::settingsState(
         case CONTROLLER_GRBL:
         {
             if(
-                snapshot.settings["$110"].is<String>() &&
-                snapshot.settings["$111"].is<String>() &&
-                snapshot.settings["$112"].is<String>()
+                snapshot.payload["settings"]["$110"].is<String>() &&
+                snapshot.payload["settings"]["$111"].is<String>() &&
+                snapshot.payload["settings"]["$112"].is<String>()
             )
             {
                 return CONTROLLER_SETTINGS_AVAILABLE;
@@ -170,9 +170,9 @@ MachineMapper::settingsState(
         case CONTROLLER_TINYG:
         {
             if(
-                snapshot.settings["mfo"].is<int>() &&
-                snapshot.settings["mto"].is<int>() &&
-                snapshot.settings["sso"].is<int>()
+                snapshot.payload["mfo"].is<int>() &&
+                snapshot.payload["mto"].is<int>() &&
+                snapshot.payload["sso"].is<int>()
             )
             {
                 return CONTROLLER_SETTINGS_AVAILABLE;
@@ -217,7 +217,7 @@ MachineSettings MachineMapper::map(
 {
     MachineSettings settings;
 
-    if(snapshot.settings.isNull())
+    if(snapshot.payload.isNull())
     {
         return settings;
     }
@@ -231,20 +231,20 @@ MachineSettings MachineMapper::map(
     {
         case CONTROLLER_GRBL:
             settings.maxFeedrate.x =
-                snapshot.settings["$110"].as<float>();
+                snapshot.payload["settings"]["$110"].as<float>();
             settings.maxFeedrate.y =
-                snapshot.settings["$111"].as<float>();
+                snapshot.payload["settings"]["$111"].as<float>();
             settings.maxFeedrate.z =
-                snapshot.settings["$112"].as<float>();
+                snapshot.payload["settings"]["$112"].as<float>();
             break;
 
         case CONTROLLER_TINYG:
             settings.maxFeedrate.x =
-                snapshot.settings["xfr"].as<float>();
+                snapshot.payload["xfr"].as<float>();
             settings.maxFeedrate.y =
-                snapshot.settings["yfr"].as<float>();
+                snapshot.payload["yfr"].as<float>();
             settings.maxFeedrate.z =
-                snapshot.settings["zfr"].as<float>();
+                snapshot.payload["zfr"].as<float>();
             break;
 
         case CONTROLLER_UNKNOWN:
