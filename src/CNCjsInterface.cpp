@@ -271,6 +271,8 @@ void CNCjsInterface::handleControllerOpening(
     const char* controllerType
 )
 {
+    controllerInitialisedThisSession_ = false;
+    
     if(
         controllerType == nullptr
     )
@@ -320,6 +322,10 @@ void CNCjsInterface::initialiseController()
     {
         controllerInitialisedThisSession_ =
             true;
+
+        Serial.println(
+            "[CNCjsInterface] Controller initialised"
+        );
     }
 }
 
@@ -411,9 +417,7 @@ void CNCjsInterface::controllerSettingsPublished()
 
         initialiseController();
 
-        Serial.println(
-            "[CNCjsInterface] Controller initialised"
-        );
+
     }
     else
     {
