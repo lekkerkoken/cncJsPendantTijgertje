@@ -32,6 +32,7 @@ public:
 
     bool mapSerialData(
         const JsonArray& data,
+        ControllerType type,
         MachineData& result
     ) const;
 

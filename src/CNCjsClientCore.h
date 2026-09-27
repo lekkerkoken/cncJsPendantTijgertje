@@ -115,6 +115,12 @@ public:
     void setSerialportReadHandler(
         std::function<void(const JsonArray&)> handler
     );
+
+    void setControllerOpeningHandler(
+        std::function<void(const char*)> handler
+    );
+
+
     // ========================================================
     // SNAPSHOTS
     // ========================================================
@@ -591,6 +597,26 @@ private:
 
     bool controllerCorrectionAttemptedThisSession_ =
         false;
+
+
+    // ========================================================
+    // CONTROLLER OPENING HANDLER
+    // ========================================================
+    //
+    // Deze callback meldt aan de bovenliggende laag welk
+    // controller-type Core gaat openen.
+    //
+    // Core blijft eigenaar van de controller-state.
+    // CNCjsInterface kan hiermee zijn controller-context
+    // synchroniseren vóórdat serialport:read kan binnenkomen.
+    //
+    // ========================================================
+
+    std::function<void(const char*)> controllerOpeningHandler_;
+
+    void notifyControllerOpening(
+        const char* controllerType
+    );
 
 
     // ========================================================

@@ -17,6 +17,7 @@
 #include "JobSnapshot.h"
 
 #include <functional>
+
 class CNCjsInterface
 {
 public:
@@ -150,13 +151,8 @@ public:
         const String& gcode
     );
 
-    // bool sendGcode(
-    //     const char* port,
-    //     const char* gcode
-    // );
-
     using MachineDataHandler =
-    std::function<void(const MachineData&)>;
+        std::function<void(const MachineData&)>;
 
     bool sendCommand(
         const String& command,
@@ -192,9 +188,8 @@ public:
     bool gcodePause();
 
     bool nextWcs();
-    bool previousWcs();
 
-    // bool stop();
+    bool previousWcs();
 
     bool sendRealtime(
         uint8_t command
@@ -205,9 +200,9 @@ public:
 
 private:
 
+    uint32_t handledControllerSettingsPublicationId_ =
+        0;
 
-    
-    uint32_t handledControllerSettingsPublicationId_ = 0;
 
     void controllerSettingsPublished();
 
@@ -215,10 +210,20 @@ private:
         const JsonArray& array
     );
 
+
+    void handleControllerOpening(
+        const char* controllerType
+    );
+
+    ControllerType controllerTypeFromString(
+        const String& controllerType
+    ) const;
+
+
     CNCjsClientCore core_;
     MachineMapper machineMapper_;
     Machine machine_;
-    
+
     ControllerType cachedControllerType =
         CONTROLLER_UNKNOWN;
 };

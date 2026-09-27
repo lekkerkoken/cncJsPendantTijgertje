@@ -12,7 +12,8 @@ CNCjsInterface::snapshot() const
 }
 
 
-MachineState CNCjsInterface::machineStateSnapshot() const
+MachineState
+CNCjsInterface::machineStateSnapshot() const
 {
     return machine_.state;
 }
@@ -69,7 +70,18 @@ void CNCjsInterface::begin()
     core_.setSerialportReadHandler(
         [this](const JsonArray& array)
         {
-            handleSerialportRead(array);
+            handleSerialportRead(
+                array
+            );
+        }
+    );
+
+    core_.setControllerOpeningHandler(
+        [this](const char* controllerType)
+        {
+            handleControllerOpening(
+                controllerType
+            );
         }
     );
 
@@ -149,7 +161,8 @@ int CNCjsInterface::portCount() const
 }
 
 
-String CNCjsInterface::port(
+String
+CNCjsInterface::port(
     int index
 ) const
 {
@@ -169,7 +182,8 @@ int CNCjsInterface::controllerCount() const
 }
 
 
-String CNCjsInterface::controller(
+String
+CNCjsInterface::controller(
     int index
 ) const
 {
@@ -195,7 +209,8 @@ int CNCjsInterface::selectedController() const
 }
 
 
-String CNCjsInterface::selectedControllerName() const
+String
+CNCjsInterface::selectedControllerName() const
 {
     return core_.selectedControllerName();
 }
@@ -207,7 +222,8 @@ int CNCjsInterface::selectedPort() const
 }
 
 
-String CNCjsInterface::selectedPortName() const
+String
+CNCjsInterface::selectedPortName() const
 {
     return core_.selectedPortName();
 }
@@ -244,6 +260,61 @@ bool CNCjsInterface::controllerReady() const
 int CNCjsInterface::controllerBaudrate() const
 {
     return core_.controllerBaudrate();
+}
+
+
+// ============================================================
+// CONTROLLER OPENING
+// ============================================================
+
+void CNCjsInterface::handleControllerOpening(
+    const char* controllerType
+)
+{
+    if(
+        controllerType == nullptr
+    )
+    {
+        cachedControllerType =
+            CONTROLLER_UNKNOWN;
+
+        return;
+    }
+
+
+    cachedControllerType =
+        controllerTypeFromString(
+            String(controllerType)
+        );
+}
+
+
+ControllerType
+CNCjsInterface::controllerTypeFromString(
+    const String& controllerType
+) const
+{
+    if(
+        controllerType.equals(
+            "Grbl"
+        )
+    )
+    {
+        return CONTROLLER_GRBL;
+    }
+
+
+    if(
+        controllerType.equals(
+            "TinyG"
+        )
+    )
+    {
+        return CONTROLLER_TINYG;
+    }
+
+
+    return CONTROLLER_UNKNOWN;
 }
 
 
@@ -320,12 +391,14 @@ void CNCjsInterface::handleSerialportRead(
     if(
         !machineMapper_.mapSerialData(
             array,
+            cachedControllerType,
             data
         )
     )
     {
         return;
     }
+
 
     switch(data.type)
     {
@@ -361,6 +434,7 @@ void CNCjsInterface::handleSerialportRead(
             break;
     }
 }
+
 
 // ============================================================
 // CONTROLLER SETTINGS CACHE

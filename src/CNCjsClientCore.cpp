@@ -15,10 +15,6 @@ void CNCjsClientCore::begin()
 {
     instance =
         this;
-    // saveSelectedController(
-    //     3, 
-    //     "TinyG"
-    // );
 
     Serial.println();
     Serial.println("================================");
@@ -90,14 +86,6 @@ void CNCjsClientCore::begin()
         0;
 
 
-    /*
-        Controller identification is a session-level mechanism.
-
-        It is deliberately reset only during begin(), so a later
-        connection loss does not cause another automatic
-        controller selection.
-    */
-
     controllerVerifiedThisSession_ =
         false;
 
@@ -111,11 +99,6 @@ void CNCjsClientCore::begin()
     eventDebugWindowStartedAt =
         millis();
 
-
-    /*
-        Bij het starten is er nog geen geldige controller
-        en dus ook geen geldige latest state.
-    */
 
     invalidateControllerState();
 
@@ -189,6 +172,28 @@ void CNCjsClientCore::setSerialportReadHandler(
 )
 {
     serialportReadHandler_ = handler;
+}
+
+void CNCjsClientCore::setControllerOpeningHandler(
+    std::function<void(const char*)> handler
+)
+{
+    controllerOpeningHandler_ =
+        handler;
+}
+
+void CNCjsClientCore::notifyControllerOpening(
+    const char* controllerType
+)
+{
+    if (
+        controllerOpeningHandler_
+    )
+    {
+        controllerOpeningHandler_(
+            controllerType
+        );
+    }
 }
 
 
@@ -331,6 +336,7 @@ void CNCjsClientCore::confirmControllerSettingsPublished()
 
     updateControllerReadyState();
 }
+
 
 // ============================================================
 // INVALIDATE CONTROLLER SETTINGS
@@ -540,9 +546,6 @@ void CNCjsClientCore::networkTask()
         }
 
 
-        //debugReport();
-
-
         vTaskDelay(
             pdMS_TO_TICKS(
                 NETWORK_TASK_DELAY_MS
@@ -586,17 +589,11 @@ void CNCjsClientCore::enterConnectionState(
     ConnectionState state
 )
 {
-    ConnectionState previousState =
-        connectionState;
-
-
     connectionState =
         state;
 
     stateStartedAt =
         millis();
-
-
 
 
     switch (state)
@@ -1426,27 +1423,6 @@ void CNCjsClientCore::updateHeartbeat()
         millis();
 
 
-    /*
-        Controller heartbeat
-        --------------------
-
-        controller:state is het echte teken van leven.
-
-        Zolang we regelmatig controller:state ontvangen,
-        hoeven we niets te doen.
-
-        Pas wanneer de controller gedurende
-        TOLERABLE_SILENCE_DURATION stil is geweest,
-        vragen we actief om een statusreport.
-
-        lastHeartbeatPing voorkomt dat we bij iedere
-        network-task-iteratie opnieuw proberen te pingen.
-
-        Als de controller daarna weer een controller:state
-        stuurt, wordt lastCncjsActivity opnieuw gezet en
-        begint de stilteperiode opnieuw.
-    */
-
     if (
         now - lastCncjsActivity >=
         TOLERABLE_SILENCE_DURATION
@@ -1461,16 +1437,6 @@ void CNCjsClientCore::updateHeartbeat()
         }
     }
 
-
-    /*
-        Machine-state watchdog
-        ----------------------
-
-        Dit is bewust een volledig onafhankelijk mechanisme.
-
-        Deze watchdog kijkt niet naar CNCjs-activiteit,
-        maar naar echte machine-state activiteit.
-    */
 
     if (
         now - lastMachineStateTime >=
@@ -1725,6 +1691,7 @@ void CNCjsClientCore::handleSocketEvent(
 
             break;
         }
+
         case sIOtype_CONNECT:
         {
             socketConnectedState =
@@ -1840,25 +1807,8 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
-            // debugEvent(
-            //     eventName,
-            //     length
-            // );
-
-
-            /*
-                Any valid CNCjs event is communication activity.
-
-                The event does not need to have any particular
-                semantic meaning for the watchdog.
-            */
-
             cncjsActivityReceived();
 
-
-            // ------------------------------------------------
-            // STARTUP
-            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -1960,10 +1910,6 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
-            // ------------------------------------------------
-            // SERIAL PORT LIST
-            // ------------------------------------------------
-
             if (
                 strcmp(
                     eventName,
@@ -2062,10 +2008,6 @@ void CNCjsClientCore::handleSocketEvent(
             }
 
 
-            // ------------------------------------------------
-            // SERIAL PORT OPEN
-            // ------------------------------------------------
-
             if (
                 strcmp(
                     eventName,
@@ -2080,6 +2022,7 @@ void CNCjsClientCore::handleSocketEvent(
                 Serial.println(
                     static_cast<int>(connectionState)
                 );
+
                 JsonObject info =
                     array[1];
 
@@ -2126,9 +2069,6 @@ void CNCjsClientCore::handleSocketEvent(
                 break;
             }
 
-            // ------------------------------------------------
-            // CONTROLLER SETTINGS
-            // ------------------------------------------------
 
             if(
                 strcmp(
@@ -2136,21 +2076,23 @@ void CNCjsClientCore::handleSocketEvent(
                     "controller:settings"
                 ) == 0
             )
-            {Serial.println();
-Serial.println(
-    "========== RAW controller:settings =========="
-);
+            {
+                Serial.println();
+                Serial.println(
+                    "========== RAW controller:settings =========="
+                );
 
-serializeJsonPretty(
-    array,
-    Serial
-);
+                serializeJsonPretty(
+                    array,
+                    Serial
+                );
 
-Serial.println();
+                Serial.println();
 
-Serial.println(
-    "=============================================="
-);
+                Serial.println(
+                    "=============================================="
+                );
+
                 const char* controllerType =
                     array[1];
 
@@ -2267,9 +2209,6 @@ Serial.println(
                 break;
             }
 
-            // ------------------------------------------------
-            // CONTROLLER STATE
-            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -2337,10 +2276,6 @@ Serial.println(
             }
 
 
-            // ------------------------------------------------
-            // FEED STATUS
-            // ------------------------------------------------
-
             if (
                 strcmp(
                     eventName,
@@ -2378,10 +2313,6 @@ Serial.println(
             }
 
 
-            // ------------------------------------------------
-            // G-CODE UNLOAD
-            // ------------------------------------------------
-
             if (
                 strcmp(
                     eventName,
@@ -2394,10 +2325,6 @@ Serial.println(
                 break;
             }
 
-
-            // ------------------------------------------------
-            // G-CODE LOAD
-            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -2435,10 +2362,6 @@ Serial.println(
             }
 
 
-            // ------------------------------------------------
-            // GRBL STATE
-            // ------------------------------------------------
-
             if (
                 strcmp(
                     eventName,
@@ -2465,10 +2388,6 @@ Serial.println(
                 break;
             }
 
-
-            // ------------------------------------------------
-            // SERIAL PORT READ
-            // ------------------------------------------------
 
             if (
                 strcmp(
@@ -2574,10 +2493,6 @@ bool CNCjsClientCore::handleControllerIdentification(
     );
 
 
-    // ========================================================
-    // AL VERIFIED
-    // ========================================================
-
     if(
         controllerVerifiedThisSession_
     )
@@ -2585,10 +2500,6 @@ bool CNCjsClientCore::handleControllerIdentification(
         return true;
     }
 
-
-    // ========================================================
-    // MATCH
-    // ========================================================
 
     if(
         selectedControllerNameState.equals(
@@ -2607,16 +2518,10 @@ bool CNCjsClientCore::handleControllerIdentification(
     }
 
 
-    // ========================================================
-    // MISMATCH
-    // ========================================================
-
     Serial.println(
         "[CNCjs] Controller mismatch"
     );
 
-
-    // We corrigeren maximaal één keer per sessie.
 
     if(
         controllerCorrectionAttemptedThisSession_
@@ -2629,10 +2534,6 @@ bool CNCjsClientCore::handleControllerIdentification(
         return false;
     }
 
-
-    // ========================================================
-    // FIND DETECTED CONTROLLER
-    // ========================================================
 
     int detectedControllerIndex =
         findControllerByName(
@@ -2656,14 +2557,6 @@ bool CNCjsClientCore::handleControllerIdentification(
     }
 
 
-    // ========================================================
-    // SESSION-ONLY CORRECTION
-    // ========================================================
-    //
-    // Preferences worden hier NIET aangepast.
-    //
-    // ========================================================
-
     controllerCorrectionAttemptedThisSession_ =
         true;
 
@@ -2682,10 +2575,6 @@ bool CNCjsClientCore::handleControllerIdentification(
         selectedControllerNameState
     );
 
-
-    // ========================================================
-    // CLOSE CURRENT CONTROLLER
-    // ========================================================
 
     if(
         !closeControllerInternal()
@@ -2817,6 +2706,7 @@ void CNCjsClientCore::handleSerialportClose(
     }
 }
 
+
 // ============================================================
 // DEBUG EVENT
 // ============================================================
@@ -2878,6 +2768,8 @@ void CNCjsClientCore::debugEvent(
         eventDebug_.otherEvents++;
     }
 }
+
+
 // ============================================================
 // DEBUG REPORT
 // ============================================================
@@ -3345,12 +3237,12 @@ String CNCjsClientCore::loadSavedControllerName()
     }
 
     Serial.print(
-    "[CNCjs] loadSavedControllerName() = "
-);
+        "[CNCjs] loadSavedControllerName() = "
+    );
 
-Serial.println(
-    name
-);
+    Serial.println(
+        name
+    );
 
     preferences.end();
 
@@ -3686,11 +3578,6 @@ void CNCjsClientCore::loadControllerList()
             savedPortName.c_str()
         );
 
-
-    /*
-        A saved selection is valid only when BOTH entries
-        still exist in the lists supplied by CNCjs.
-    */
 
     if (
         controllerIndex >= 0 &&
@@ -4252,6 +4139,20 @@ bool CNCjsClientCore::openControllerInternal(
     }
 
 
+    /*
+        Inform the owning interface which controller is about
+        to be opened.
+
+        This happens before the open command is sent so that
+        the interface's controller context is already correct
+        when the first serialport:read event can arrive.
+    */
+
+    notifyControllerOpening(
+        controllerType
+    );
+
+
     controllerReadyState =
         false;
 
@@ -4262,12 +4163,6 @@ bool CNCjsClientCore::openControllerInternal(
         ConnectionState::OpeningController
     );
 
-
-    /*
-        The previous controller state, settings and feed
-        status belong to the previous controller. They must
-        not remain visible while the new controller is opening.
-    */
 
     invalidateControllerState();
 
@@ -4403,6 +4298,7 @@ bool CNCjsClientCore::closeControllerInternal()
     );
 }
 
+
 // ============================================================
 // SEND GCODE
 // ============================================================
@@ -4484,7 +4380,8 @@ bool CNCjsClientCore::sendGcodeInternal(
 {
     if (
         !controllerSettingsReadyState ||
-        !controllerReadyState || !socketConnectedState
+        !controllerReadyState ||
+        !socketConnectedState
     )
     {
         return false;
@@ -4546,6 +4443,7 @@ bool CNCjsClientCore::sendGcodeInternal(
         output
     );
 }
+
 
 // ============================================================
 // SEND WRITE
@@ -4661,6 +4559,7 @@ bool CNCjsClientCore::sendWriteInternal(
     );
 }
 
+
 // ============================================================
 // SEND COMMAND
 // ============================================================
@@ -4702,7 +4601,9 @@ bool CNCjsClientCore::sendCommandInternal(
 )
 {
     if(
-        !controllerSettingsReadyState || !controllerReadyState || !socketConnectedState
+        !controllerSettingsReadyState ||
+        !controllerReadyState ||
+        !socketConnectedState
     )
     {
         return false;
