@@ -411,8 +411,6 @@ void CNCjsInterface::controllerSettingsPublished()
 
         initialiseController();
 
-        controllerInitialisedThisSession_ = true;
-
         Serial.println(
             "[CNCjsInterface] Controller initialised"
         );
